@@ -131,8 +131,17 @@ const QuickCreateCustomerModal = ({ open, onClose, defaultName, customerType, bi
 
   useEffect(() => {
     if (open) {
-      setName(defaultName || "");
-      setMobile("");
+      const trimmed = (defaultName || "").trim();
+      // If the default string contains mostly digits (and optional spaces/pluses), assume it's a phone number
+      const isProbablyPhone = /^[\d\s\+\-]{6,}$/.test(trimmed) || /^\d+$/.test(trimmed);
+      
+      if (isProbablyPhone) {
+        setName("");
+        setMobile(trimmed);
+      } else {
+        setName(trimmed);
+        setMobile("");
+      }
       setGstNumber("");
       setError(null);
     }

@@ -10,12 +10,16 @@ import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import {
   HeaderSearchBar,
   HeaderNotifications,
+  HeaderAppMenu,
 } from "@/layouts/app/components/header";
 
 /**
  * Route-to-Title Dictionary & Formatter
  */
 const getPageTitle = (pathname) => {
+  if (pathname === "/dashboard/branch" || pathname === ROUTES.BRANCH_DASHBOARD) return "Branch Dashboard";
+  if (pathname === "/dashboard/company" || pathname === ROUTES.COMPANY_DASHBOARD) return "Company Dashboard";
+  if (pathname === "/dashboard/workspace" || pathname === ROUTES.WORKSPACE_DASHBOARD) return "Workspace Dashboard";
   if (!pathname || pathname === "/" || pathname === ROUTES.HOME || pathname.startsWith("/dashboard")) {
     return "Dashboard";
   }
@@ -593,8 +597,6 @@ const getBreadcrumbs = (pathname, isSetupComplete = false) => {
 
 
 import { ProductFacilityTableDialog } from "@/components";
-import workspaceProductService from "@/features/workspace-products/services/workspaceProductService";
-import useUser from "@/features/user/hooks/useUser";
 
 
 export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240 }) => {
@@ -710,6 +712,9 @@ export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240 }) => {
             <Layers className="size-3.5 text-primary-600" />
             <span>Stock Matrix</span>
           </button>
+
+          {/* Dotted Grid Quick App & Dashboard Menu */}
+          <HeaderAppMenu />
 
           {isSetupComplete && <HeaderNotifications />}
 

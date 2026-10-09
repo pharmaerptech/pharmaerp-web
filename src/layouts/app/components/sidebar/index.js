@@ -5,5 +5,6 @@ export { default as SidebarBranchSelector } from "./SidebarBranchSelector";
 export { default as SidebarWorkspaceHeader } from "./SidebarWorkspaceHeader";
 export { default as SidebarUserProfile } from "./SidebarUserProfile";
 export { default as SidebarScrollArea } from "./SidebarScrollArea";
+export { SidebarContextualStatusWidget } from "./SidebarContextualStatusWidget";
 
 

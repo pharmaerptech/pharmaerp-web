@@ -269,6 +269,9 @@ export const ROUTES = {
 
   // Dashboard
   DASHBOARD: "/dashboard",
+  BRANCH_DASHBOARD: "/dashboard/branch",
+  COMPANY_DASHBOARD: "/dashboard/company",
+  WORKSPACE_DASHBOARD: "/dashboard/workspace",
 
   // User Profile
   PROFILE: "/me",

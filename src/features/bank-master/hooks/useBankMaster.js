@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
@@ -56,40 +57,40 @@ const useBankMaster = () => {
   // ---------------------
   // Thunks
   // ---------------------
-  const fetchBankMasters = (params = {}) => {
+  const fetchBankMasters = useCallback((params = {}) => {
     return dispatch(getBankMasters(params)).unwrap();
-  };
+  }, [dispatch]);
 
-  const fetchBankMasterById = (bankId) => {
+  const fetchBankMasterById = useCallback((bankId) => {
     return dispatch(getBankMasterById(bankId)).unwrap();
-  };
+  }, [dispatch]);
 
-  const fetchBankMasterByName = (name) => {
+  const fetchBankMasterByName = useCallback((name) => {
     return dispatch(getBankMasterByName(name)).unwrap();
-  };
+  }, [dispatch]);
 
   // ---------------------
   // Local Actions
   // ---------------------
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch(clearBankMasterError());
-  };
+  }, [dispatch]);
 
-  const clearMessage = () => {
+  const clearMessage = useCallback(() => {
     dispatch(clearBankMasterMessage());
-  };
+  }, [dispatch]);
 
-  const saveCurrentBankMaster = (bankMaster) => {
+  const saveCurrentBankMaster = useCallback((bankMaster) => {
     dispatch(setCurrentBankMaster(bankMaster));
-  };
+  }, [dispatch]);
 
-  const removeCurrentBankMaster = () => {
+  const removeCurrentBankMaster = useCallback(() => {
     dispatch(clearCurrentBankMaster());
-  };
+  }, [dispatch]);
 
-  const removeBankMasters = () => {
+  const removeBankMasters = useCallback(() => {
     dispatch(clearBankMasters());
-  };
+  }, [dispatch]);
 
   // ---------------------
   // Public API

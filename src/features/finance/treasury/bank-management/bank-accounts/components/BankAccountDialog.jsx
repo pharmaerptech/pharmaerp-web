@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   UIModal,
   UIModalHeader,
@@ -225,10 +225,17 @@ export function BankAccountDialog({
   const [accountDetails, setAccountDetails] = useState(null);
   const [copiedKey, setCopiedKey] = useState(null);
 
+  const hasFetchedBankMastersRef = useRef(false);
+
   // Load bank masters list when modal opens
   useEffect(() => {
     if (isOpen) {
-      getBankMasters({ page: 1, limit: 100 }).catch(() => {});
+      if (!hasFetchedBankMastersRef.current) {
+        hasFetchedBankMastersRef.current = true;
+        getBankMasters({ page: 1, limit: 100 }).catch(() => {});
+      }
+    } else {
+      hasFetchedBankMastersRef.current = false;
     }
   }, [isOpen, getBankMasters]);
 

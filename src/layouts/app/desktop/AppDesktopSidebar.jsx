@@ -1,11 +1,9 @@
 // src/layouts/app/desktop/AppDesktopSidebar.jsx
 
-import React, { useMemo, useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { LogOut } from "lucide-react";
 import { ROUTES } from "@/constants";
 import useAuth from "@/features/auth/hooks/useAuth";
-import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
@@ -18,6 +16,7 @@ import {
   SidebarCompanySelector,
   SidebarUserProfile,
   SidebarScrollArea,
+  SidebarContextualStatusWidget,
 } from "../components/sidebar";
 import { filterNavByPermission } from "../components/sidebar/filterNavByPermission";
 
@@ -32,13 +31,11 @@ const AppDesktopSidebar = ({
   onCollapse,
   onClose,
 }) => {
-  const navigate = useNavigate();
   const { user, logout, clearCredentials } = useAuth();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const autoCloseTimerRef = useRef(null);
-  const { currentWorkspace } = useWorkspace();
   const { currentCompany } = useCompany();
   const { currentBranch } = useBranch();
   const { isSetupComplete, companyCompleted, branchCompleted } = useSetupStatus();
@@ -99,7 +96,6 @@ const AppDesktopSidebar = ({
           hasActiveBranch: !!currentBranch 
         },
       ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [can, canAny, isOwner, isSetupComplete, companyCompleted, branchCompleted, currentCompany, currentBranch],
   );
 
@@ -178,8 +174,9 @@ const AppDesktopSidebar = ({
           </nav>
         </SidebarScrollArea>
 
-        {/* ── BOTTOM: User Profile ───────────────────────────────────── */}
+        {/* ── BOTTOM: Context Status Widget & User Profile ───────────── */}
         <div className="shrink-0">
+          <SidebarContextualStatusWidget collapsed={collapsed} />
           <SidebarUserProfile
             user={user}
             collapsed={collapsed}

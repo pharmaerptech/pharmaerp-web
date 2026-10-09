@@ -71,6 +71,7 @@ const FinancialPeriodsDesktopPage = ({
   handleCreate,
   handleRefresh,
 }) => {
+  const { can } = usePermission();
   const currentActivePeriod = useMemo(() => {
     return financialPeriods.find((p) => p.isCurrent)?.periodCode || "-";
   }, [financialPeriods]);
@@ -211,7 +212,6 @@ const FinancialPeriodsDesktopPage = ({
       align: "center",
       minWidth: 180,
       render: (_, p) => {
-        const { can } = usePermission();
         if (!can("financial-period:update")) {
           return <AppText variant="body2" sx={tableValueMutedSx}>-</AppText>;
         }
@@ -268,7 +268,7 @@ const FinancialPeriodsDesktopPage = ({
         );
       },
     },
-  ], [isUpdating, handleUpdateStatus]);
+  ], [isUpdating, handleUpdateStatus, can]);
 
   return (
     <section className="min-h-[calc(100vh-58px)] bg-bg px-5 py-4">

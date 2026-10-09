@@ -1,25 +1,15 @@
 // src/layouts/app/components/sidebar/sidebarNavConfig.js
 
 import {
-  LayoutDashboard,
   Building2,
   Users,
-  Package,
   ShoppingCart,
-  DollarSign,
-  Settings,
   HelpCircle,
   Boxes,
-  Database,
   Layers,
   Sparkles,
-  FlaskConical,
-  Ruler,
-  FileSpreadsheet,
   Receipt,
   Truck,
-  Store,
-  PieChart,
   Landmark,
   Wallet,
   ArrowLeftRight,
@@ -31,9 +21,7 @@ import {
   FileText,
   BarChart3,
   GitBranch,
-  ShieldAlert,
   ShieldCheck,
-  Contact,
   Clock,
   FileUp,
   RefreshCw,
@@ -53,25 +41,6 @@ import { ROUTES } from "@/constants";
 // Items WITHOUT a permission/permissions key are always visible to all authenticated users.
 
 export const SIDEBAR_NAV_GROUPS = [
-  {
-    id: "overview",
-    label: "Home",
-    items: [
-      {
-        id: "dashboard",
-        label: "Dashboard",
-        path: ROUTES.DASHBOARD,
-        icon: LayoutDashboard,
-      },
-      {
-        id: "setup-center",
-        label: "Setup Center",
-        path: ROUTES.SETUP_CENTER,
-        icon: Sparkles,
-        requireOwner: true,
-      },
-    ],
-  },
   {
     id: "daily-ops",
     label: "Daily Ops",
@@ -397,6 +366,13 @@ export const SIDEBAR_NAV_GROUPS = [
     id: "account",
     label: "Account",
     items: [
+      {
+        id: "setup-center",
+        label: "Setup Center",
+        path: ROUTES.SETUP_CENTER,
+        icon: Sparkles,
+        requireOwner: true,
+      },
       {
         id: "help",
         label: "Help & Support",

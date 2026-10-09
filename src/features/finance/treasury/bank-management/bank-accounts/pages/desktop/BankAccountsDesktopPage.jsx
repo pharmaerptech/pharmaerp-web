@@ -149,6 +149,7 @@ const BankAccountsDesktopPage = ({
   clearMessage,
 }) => {
   const navigate = useNavigate();
+  const { can } = usePermission();
   const [copiedId, setCopiedId] = useState(null);
 
   const handleCopyNumber = (accountNumber, id) => {
@@ -186,7 +187,8 @@ const BankAccountsDesktopPage = ({
     return accounts.slice(start, start + pageSize);
   }, [accounts, currentPage, pageSize]);
 
-  const columns = [
+  const columns = useMemo(
+    () => [
     {
       id: "accountDetails",
       key: "displayName",
@@ -325,7 +327,6 @@ const BankAccountsDesktopPage = ({
       align: "right",
       width: 80,
       render: (_, account) => {
-        const { can } = usePermission();
         const menuItems = [
           {
             id: "view",
@@ -376,7 +377,14 @@ const BankAccountsDesktopPage = ({
         );
       },
     },
-  ];
+  ], [
+    can,
+    copiedId,
+    handleViewDetails,
+    handleEditAccount,
+    handleDeleteAccount,
+    handleSetPrimary,
+  ]);
 
   return (
     <section className="min-h-[calc(100vh-58px)] bg-bg px-6 py-5">

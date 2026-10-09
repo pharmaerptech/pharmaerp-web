@@ -545,6 +545,9 @@ export const ENDPOINTS = {
 
   DASHBOARD: {
     OVERVIEW: "/dashboard/overview",
+    BRANCH: "/dashboard/branch",
+    COMPANY: "/dashboard/company",
+    WORKSPACE: "/dashboard/workspace",
   },
 };
 

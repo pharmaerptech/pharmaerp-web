@@ -15,6 +15,7 @@ import {
   Palette,
   Lock,
   CreditCard,
+  Store,
 } from "lucide-react";
 
 import { ROUTES } from "@/constants";
@@ -56,6 +57,33 @@ const flattenNavItems = (items, prefix = "") => {
  * Additional direct quick actions with explicit permission requirements.
  */
 const QUICK_ACTIONS = [
+  {
+    id: "nav-branch-dashboard",
+    label: "Branch Dashboard",
+    fullLabel: "Dashboards › Branch Dashboard",
+    path: ROUTES.BRANCH_DASHBOARD,
+    icon: Store,
+    category: "Dashboards",
+    keywords: ["branch dashboard", "daily sales", "registers", "shift dashboard"],
+  },
+  {
+    id: "nav-company-dashboard",
+    label: "Company Dashboard",
+    fullLabel: "Dashboards › Company Dashboard",
+    path: ROUTES.COMPANY_DASHBOARD,
+    icon: Building2,
+    category: "Dashboards",
+    keywords: ["company dashboard", "financials", "multi branch", "gst overview"],
+  },
+  {
+    id: "nav-workspace-dashboard",
+    label: "Workspace Dashboard",
+    fullLabel: "Dashboards › Workspace Dashboard",
+    path: ROUTES.WORKSPACE_DASHBOARD,
+    icon: Layers,
+    category: "Dashboards",
+    keywords: ["workspace dashboard", "organization", "plan", "quota", "usage"],
+  },
   {
     id: "action-create-company",
     label: "Create Company",

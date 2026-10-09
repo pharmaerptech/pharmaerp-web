@@ -1,6 +1,6 @@
 // src/layouts/app/mobile/AppMobileHeader.jsx
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,6 +16,7 @@ import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import {
   HeaderNotifications,
   HeaderProfileDropdown,
+  HeaderAppMenu,
 } from "@/layouts/app/components/header";
 import { getAccessibleSearchCommands } from "@/layouts/app/components/header/accessibleSearchCommands";
 import { UIIconButton } from "@/components/ui";
@@ -140,8 +141,10 @@ const AppMobileHeader = ({ onMenuClick }) => {
           </AnimatePresence>
         </div>
 
-        {/* Right: Search & Notifications (only if setup is complete), Profile */}
+        {/* Right: Search, App Menu, Notifications, Profile */}
         <div className="flex shrink-0 items-center gap-1.5">
+          <HeaderAppMenu />
+
           {isSetupComplete && (
             <>
               <UIIconButton
