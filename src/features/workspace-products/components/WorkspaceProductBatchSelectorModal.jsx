@@ -646,7 +646,7 @@ export const WorkspaceProductBatchSelectorModal = ({
               <input
                 ref={totalQtyInputRef}
                 type="number"
-                disabled={maxTotalStock == 0}
+                disabled={maxTotalStock == 0 || isLoading}
                 min="1"
                 max={maxTotalStock || 999}
                 value={maxTotalStock == 0 ? 0 : totalQty}
@@ -656,7 +656,9 @@ export const WorkspaceProductBatchSelectorModal = ({
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    handleConfirmAdd();
+                    if (!isLoading && totalAllocatedQty > 0 && maxTotalStock > 0) {
+                      handleConfirmAdd();
+                    }
                   }
                 }}
                 className="w-16 text-center font-mono font-extrabold text-base text-text bg-transparent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -818,7 +820,7 @@ export const WorkspaceProductBatchSelectorModal = ({
             <UIButton
               variant="primary"
               size="md"
-              disabled={totalAllocatedQty === 0 || maxTotalStock == 0}
+              disabled={totalAllocatedQty === 0 || maxTotalStock == 0 || isLoading}
               onClick={handleConfirmAdd}
               rightIcon={<ShoppingCart className="size-4" />}
               className="font-bold shadow-sm px-5"

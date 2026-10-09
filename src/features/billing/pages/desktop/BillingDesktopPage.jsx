@@ -47,6 +47,10 @@ export const BillingDesktopPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("all");
+  const [selectedDateFilter, setSelectedDateFilter] = useState("all");
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [toastMessage, setToastMessage] = useState(null);
@@ -56,17 +60,58 @@ export const BillingDesktopPage = () => {
   const [totalInvoices, setTotalInvoices] = useState(0);
 
   const { currentWorkspace } = useWorkspace();
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedSearch(searchQuery), 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    if (currentWorkspace) {
+      setCurrentPage(1);
+    }
+  }, [selectedStatus, selectedPaymentMethod, selectedDateFilter, customStartDate, customEndDate, debouncedSearch, currentWorkspace]);
 
   useEffect(() => {
     if (currentWorkspace) {
       fetchInvoicesFromBackend();
     }
-  }, [currentPage, currentWorkspace]);
+  }, [currentPage, selectedStatus, selectedPaymentMethod, selectedDateFilter, customStartDate, customEndDate, debouncedSearch, currentWorkspace]);
 
   const fetchInvoicesFromBackend = async () => {
     setIsLoading(true);
     try {
-      const salesRes = await invoiceService.getAllCustomerSales({ page: currentPage, limit: 5 });
+      const params = {
+        page: currentPage,
+        limit: 5,
+        search: debouncedSearch || undefined,
+        status: selectedStatus !== "all" ? selectedStatus : undefined,
+        paymentMethod: selectedPaymentMethod !== "all" ? selectedPaymentMethod : undefined,
+      };
+
+      if (selectedDateFilter !== "all") {
+        const now = new Date();
+        if (selectedDateFilter === "today") {
+          params.startDate = new Date(now.setHours(0, 0, 0, 0)).toISOString();
+          params.endDate = new Date(now.setHours(23, 59, 59, 999)).toISOString();
+        } else if (selectedDateFilter === "last7days") {
+          const sevenDaysAgo = new Date(now.setDate(now.getDate() - 7));
+          sevenDaysAgo.setHours(0, 0, 0, 0);
+          params.startDate = sevenDaysAgo.toISOString();
+          params.endDate = new Date().toISOString();
+        } else if (selectedDateFilter === "thisMonth") {
+          const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+          const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+          params.startDate = firstDay.toISOString();
+          params.endDate = lastDay.toISOString();
+        } else if (selectedDateFilter === "custom") {
+          if (customStartDate) params.startDate = new Date(customStartDate).toISOString();
+          if (customEndDate) params.endDate = new Date(customEndDate).toISOString();
+        }
+      }
+
+      const salesRes = await invoiceService.getAllCustomerSales(params);
       const result = salesRes.data?.data || {};
       const salesData = result.data || [];
       const salesList = Array.isArray(salesData) ? salesData : [];
@@ -74,6 +119,9 @@ export const BillingDesktopPage = () => {
       if (result.meta && result.meta.total && result.meta.limit) {
         setTotalPages(Math.ceil(result.meta.total / result.meta.limit));
         setTotalInvoices(result.meta.total);
+      } else {
+        setTotalPages(1);
+        setTotalInvoices(salesList.length);
       }
 
       let allInvoices = [];
@@ -87,6 +135,7 @@ export const BillingDesktopPage = () => {
           phone: s.customerPhone || "9876543210",
           doctor: s.doctor || "Dr. Self",
           issueDate: s.date ? new Date(s.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "Today",
+          rawDate: s.date ? new Date(s.date) : new Date(),
           dueDate: s.dueDate ? new Date(s.dueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "Today",
           itemCount: Array.isArray(s.items) ? s.items.length : 1,
           amount: Number(s.grandTotal || s.totalAmount || s.subtotal || 0),
@@ -117,20 +166,14 @@ export const BillingDesktopPage = () => {
   };
 
   const statusTabs = ["all", "Paid", "Pending", "Overdue", "Cancelled"];
-
-  const filteredInvoices = useMemo(() => {
-    return invoices.filter((inv) => {
-      const matchesSearch =
-        inv.invoiceNo.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        inv.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        inv.phone.includes(searchQuery);
-
-      const matchesStatus =
-        selectedStatus === "all" || inv.status === selectedStatus;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [invoices, searchQuery, selectedStatus]);
+  const paymentMethodOptions = ["all", "Cash", "Card", "UPI", "Bank Transfer", "Credit"];
+  const dateOptions = [
+    { label: "All Time", value: "all" },
+    { label: "Today", value: "today" },
+    { label: "Last 7 Days", value: "last7days" },
+    { label: "This Month", value: "thisMonth" },
+    { label: "Custom Range", value: "custom" },
+  ];
 
   const handleCreateSuccess = (newInv) => {
     setInvoices([newInv, ...invoices]);
@@ -347,16 +390,60 @@ export const BillingDesktopPage = () => {
         <UICard variant="default" className="p-5 sm:p-6 rounded-2xl bg-surface border-border shadow-xs space-y-4">
           {/* Filter Bar */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-border/70">
-            {/* Search Input */}
-            <div className="relative min-w-[240px] sm:min-w-[280px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-muted" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by invoice #, customer or phone..."
-                className="w-full rounded-xl border border-border bg-surface-alt/70 pl-9 pr-3 py-2 text-xs text-text placeholder:text-text-muted focus:border-primary focus:bg-surface focus:outline-none"
-              />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
+              {/* Search Input */}
+              <div className="relative min-w-[240px] sm:min-w-[280px]">
+                <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-muted" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by invoice #, customer or phone..."
+                  className="w-full rounded-xl border border-border bg-surface-alt/70 pl-9 pr-3 py-2 text-xs text-text placeholder:text-text-muted focus:border-primary focus:bg-surface focus:outline-none"
+                />
+              </div>
+
+              {/* Date Filter */}
+              <div className="flex items-center gap-2">
+                <select
+                  value={selectedDateFilter}
+                  onChange={(e) => setSelectedDateFilter(e.target.value)}
+                  className="rounded-xl border border-border bg-surface-alt/70 px-3 py-2 text-xs text-text focus:border-primary focus:bg-surface focus:outline-none cursor-pointer"
+                >
+                  {dateOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+
+                {selectedDateFilter === "custom" && (
+                  <div className="flex items-center gap-2 animate-in fade-in-50 slide-in-from-left-2 duration-200">
+                    <input
+                      type="date"
+                      value={customStartDate}
+                      onChange={(e) => setCustomStartDate(e.target.value)}
+                      className="rounded-xl border border-border bg-surface-alt/70 px-3 py-2 text-xs text-text focus:border-primary focus:bg-surface focus:outline-none w-[130px]"
+                    />
+                    <span className="text-text-muted text-xs">to</span>
+                    <input
+                      type="date"
+                      value={customEndDate}
+                      onChange={(e) => setCustomEndDate(e.target.value)}
+                      className="rounded-xl border border-border bg-surface-alt/70 px-3 py-2 text-xs text-text focus:border-primary focus:bg-surface focus:outline-none w-[130px]"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Payment Method Filter */}
+              <select
+                value={selectedPaymentMethod}
+                onChange={(e) => setSelectedPaymentMethod(e.target.value)}
+                className="rounded-xl border border-border bg-surface-alt/70 px-3 py-2 text-xs text-text focus:border-primary focus:bg-surface focus:outline-none cursor-pointer"
+              >
+                {paymentMethodOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt === "all" ? "All Payments" : opt}</option>
+                ))}
+              </select>
             </div>
 
             {/* Status Filter Tabs */}
@@ -402,8 +489,8 @@ export const BillingDesktopPage = () => {
                       <p className="text-xs font-semibold">Loading live invoices from backend...</p>
                     </td>
                   </tr>
-                ) : filteredInvoices.length > 0 ? (
-                  filteredInvoices.map((inv) => (
+                ) : invoices.length > 0 ? (
+                  invoices.map((inv) => (
                     <tr
                       key={inv.id}
                       className="group hover:bg-surface-hover/70 transition-colors"
