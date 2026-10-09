@@ -468,15 +468,15 @@ const getBreadcrumbs = (pathname, isSetupComplete = false) => {
   if (pathname.startsWith("/finance/chart-of-accounts/account-groups")) {
     return [
       root,
-      { label: "Chart of Accounts", to: ROUTES.ACCOUNT_GROUPS },
+      { label: "Finance", to: ROUTES.FINANCE },
       { label: "Account Groups", to: null },
     ];
   }
   if (pathname.startsWith("/finance/chart-of-accounts/accounts")) {
     return [
       root,
-      { label: "Chart of Accounts", to: ROUTES.ACCOUNT_GROUPS },
-      { label: "Accounts List", to: null },
+      { label: "Finance", to: ROUTES.FINANCE },
+      { label: "Accounts", to: null },
     ];
   }
   if (pathname.startsWith("/finance/account-balances")) {

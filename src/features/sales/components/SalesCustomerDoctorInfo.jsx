@@ -1,7 +1,14 @@
+// src/features/sales/components/SalesCustomerDoctorInfo.jsx
+// Phase 2: Compact horizontal POS strip — replaces multi-row grid form.
+// Logic: 100% identical (same props, same callbacks, same B2cCustomerSearchBar).
+
 import React, { useRef } from "react";
+import { Stethoscope, Calendar } from "lucide-react";
 import { B2cCustomerSearchBar } from "@/features/parties/customers/components/B2cCustomerSearchBar";
+import { cn } from "@/lib/utils";
 
 export const SalesCustomerDoctorInfo = ({
+  customerSearchBarRef,
   selectedCustomer,
   onSelectCustomer,
   customerName,
@@ -14,32 +21,28 @@ export const SalesCustomerDoctorInfo = ({
   onChangeSaleDate,
   onAddNewCustomer,
 }) => {
-  const searchBarRef = useRef(null);
+  const internalRef = useRef(null);
+  const activeRef = customerSearchBarRef || internalRef;
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 w-full items-end">
-      {/* 1. Name / Search */}
-      <div className="w-full">
-        <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block mb-1">
-          Patient / Customer Name *
+    <div className="flex items-end gap-3 flex-wrap">
+
+      {/* 1. Patient / Customer Name (search) */}
+      <div className="flex-1 min-w-[180px] space-y-0.5">
+        <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">
+          Patient / Customer *
         </span>
         <B2cCustomerSearchBar
-          ref={searchBarRef}
+          ref={activeRef}
           value={customerName}
           selectedCustomer={selectedCustomer}
           onSelectCustomer={(cust) => {
             onSelectCustomer(cust);
-            if (cust?.name) {
-              onChangeCustomerName(cust.name);
-            }
-            if (cust?.phone) {
-              onChangeCustomerPhone(cust.phone);
-            }
+            if (cust?.name) onChangeCustomerName(cust.name);
+            if (cust?.phone) onChangeCustomerPhone(cust.phone);
           }}
           onInputChange={(val) => {
-            if (selectedCustomer) {
-               onSelectCustomer(null);
-            }
+            if (selectedCustomer) onSelectCustomer(null);
             onChangeCustomerName(val);
           }}
           showAddNewAction={true}
@@ -49,41 +52,42 @@ export const SalesCustomerDoctorInfo = ({
         />
       </div>
 
-      {/* 2. Doctor */}
-      <div className="w-full">
-        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-          Doctor Name
+      {/* 2. Doctor Name */}
+      <div className="w-[160px] space-y-0.5">
+        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+          Doctor
         </span>
-        <input
-          type="text"
-          value={doctorName}
-          onChange={(e) => onChangeDoctorName(e.target.value)}
-          className="w-full h-[38px] rounded-xl border border-border px-3 text-sm bg-surface text-text shadow-sm focus:ring-1 focus:ring-emerald-500 outline-none transition-shadow"
-          placeholder="Dr. Name"
-        />
+        <div className="relative">
+          <input
+            type="text"
+            value={doctorName}
+            onChange={(e) => onChangeDoctorName(e.target.value)}
+            className="w-full h-[34px] rounded-lg border border-border pl-7 pr-2 text-[12px] bg-surface text-text focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all placeholder:text-text-muted/50"
+            placeholder="Dr. Name"
+          />
+          <Stethoscope className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-text-muted pointer-events-none" />
+        </div>
       </div>
 
-      {/* 3. Date */}
-      <div className="w-full flex items-center gap-3">
-        <div className="flex-1">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-            Sale Date
-          </span>
+      {/* 3. Sale Date (read-only chip) */}
+      <div className="w-[140px] space-y-0.5">
+        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+          Sale Date
+        </span>
+        <div className="relative">
           <input
             type="date"
             value={saleDate}
             readOnly
             disabled
-            className="w-full h-[38px] rounded-xl border border-border px-3 text-sm bg-surface-alt text-text-muted shadow-sm outline-none cursor-not-allowed"
+            className="w-full h-[34px] rounded-lg border border-border pl-7 pr-2 text-[12px] bg-surface-alt text-text-muted cursor-not-allowed outline-none"
           />
-        </div>
-        <div className="text-xs text-text-muted shrink-0 text-right bg-surface-alt/70 px-3 h-[38px] flex flex-col justify-center rounded-xl border border-border/60">
-          <span className="block text-[10px] font-bold uppercase tracking-wider text-text-muted leading-tight">
-            Mode
-          </span>
-          <span className="font-bold text-text leading-tight">B2C</span>
+          <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-text-muted pointer-events-none" />
         </div>
       </div>
+
     </div>
   );
 };
+
+export default SalesCustomerDoctorInfo;

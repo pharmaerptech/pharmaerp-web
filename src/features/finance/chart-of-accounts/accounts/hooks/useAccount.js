@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
@@ -19,6 +20,7 @@ import {
 
 import {
   selectAccounts,
+  selectTotalAccounts,
   selectCurrentAccount,
   selectManagedAccount,
   selectAccountStatus,
@@ -35,6 +37,7 @@ const useAccount = () => {
   const dispatch = useDispatch();
 
   const accounts = useSelector(selectAccounts);
+  const totalAccounts = useSelector(selectTotalAccounts);
   const currentAccount = useSelector(selectCurrentAccount);
   const managedAccount = useSelector(selectManagedAccount);
 
@@ -52,57 +55,58 @@ const useAccount = () => {
 
   const deleteAccountStatus = useSelector(selectDeleteAccountStatus);
 
-  const submitCreateAccount = (payload) => {
+  const submitCreateAccount = useCallback((payload) => {
     return dispatch(createAccount(payload)).unwrap();
-  };
+  }, [dispatch]);
 
-  const fetchAccounts = (params = {}) => {
+  const fetchAccounts = useCallback((params = {}) => {
     return dispatch(getAccounts(params)).unwrap();
-  };
+  }, [dispatch]);
 
-  const fetchAccountById = (accountId) => {
+  const fetchAccountById = useCallback((accountId) => {
     return dispatch(getAccountById(accountId)).unwrap();
-  };
+  }, [dispatch]);
 
-  const submitUpdateAccount = (accountId, payload) => {
+  const submitUpdateAccount = useCallback((accountId, payload) => {
     return dispatch(
       updateAccount({
         accountId,
         payload,
       }),
     ).unwrap();
-  };
+  }, [dispatch]);
 
-  const submitDeleteAccount = (accountId) => {
+  const submitDeleteAccount = useCallback((accountId) => {
     return dispatch(deleteAccount(accountId)).unwrap();
-  };
+  }, [dispatch]);
 
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch(clearAccountError());
-  };
+  }, [dispatch]);
 
-  const clearMessage = () => {
+  const clearMessage = useCallback(() => {
     dispatch(clearAccountMessage());
-  };
+  }, [dispatch]);
 
-  const saveCurrentAccount = (payload) => {
+  const saveCurrentAccount = useCallback((payload) => {
     dispatch(setCurrentAccount(payload));
-  };
+  }, [dispatch]);
 
-  const removeCurrentAccount = () => {
+  const removeCurrentAccount = useCallback(() => {
     dispatch(clearCurrentAccount());
-  };
+  }, [dispatch]);
 
-  const removeAccounts = () => {
+  const removeAccounts = useCallback(() => {
     dispatch(clearAccounts());
-  };
+  }, [dispatch]);
 
-  const removeManagedAccount = () => {
+  const removeManagedAccount = useCallback(() => {
     dispatch(clearManagedAccount());
-  };
+  }, [dispatch]);
 
   return {
     accounts,
+    totalAccounts,
     currentAccount,
     managedAccount,
 

@@ -12,6 +12,7 @@ import {
 
 const initialState = {
   accounts: [],
+  totalAccounts: 0,
   currentAccount: null,
   managedAccount: null,
 
@@ -100,6 +101,7 @@ const accountSlice = createSlice({
         state.getAccountsStatus = API_STATUS.SUCCESS;
 
         state.accounts = action.payload?.accounts || [];
+        state.totalAccounts = action.payload?.total ?? (action.payload?.accounts?.length || 0);
 
         state.message = "Accounts fetched successfully";
       })

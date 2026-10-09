@@ -9,6 +9,7 @@ import {
   FiAlertTriangle,
   FiMoreVertical,
   FiRefreshCw,
+  FiEdit2,
 } from "react-icons/fi";
 import { LuWallet } from "react-icons/lu";
 
@@ -61,6 +62,7 @@ const ChequesMobilePage = ({
   handleCancel,
   handleViewDetails,
   handleCreateNew,
+  handleEditCheque,
   handleRefresh,
 }) => {
   const showPagination = cheques.length > 0;
@@ -219,6 +221,15 @@ const ChequesMobilePage = ({
                     onClick: () => handleViewDetails(c._id),
                   },
                 ];
+
+                if (c.status === "PENDING" && handleEditCheque) {
+                  menuItems.push({
+                    id: "edit",
+                    label: "Edit Cheque",
+                    icon: <FiEdit2 />,
+                    onClick: () => handleEditCheque(c._id),
+                  });
+                }
 
                 if (isReceived && isPending) {
                   menuItems.push({

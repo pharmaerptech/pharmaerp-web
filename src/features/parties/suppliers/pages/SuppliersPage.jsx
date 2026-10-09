@@ -5,12 +5,13 @@ import { useNavigate } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
-import { AppConfirmModal } from "@/components";
+import { UIConfirmDialog } from "@/components/ui";
 
 import useSupplier from "../hooks/useSupplier";
 import useCompany from "@/features/company/hooks/useCompany";
 import SuppliersMobilePage from "./mobile/SuppliersMobilePage";
 import SuppliersDesktopPage from "./desktop/SuppliersDesktopPage";
+import SupplierDialog from "../components/SupplierDialog";
 
 const initialFilters = {
   search: "",
@@ -72,6 +73,8 @@ const SuppliersPage = () => {
     total,
     stats: serverStats,
     getSuppliers,
+    createSupplier,
+    updateSupplier,
     deleteSupplier,
     getSuppliersStatus,
     deleteSupplierStatus,
@@ -85,6 +88,12 @@ const SuppliersPage = () => {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState("grid");
+
+  const [dialogState, setDialogState] = useState({
+    isOpen: false,
+    mode: "create",
+    supplierData: null,
+  });
 
   const isLoading = getSuppliersStatus === API_STATUS.LOADING;
   const isDeleting = deleteSupplierStatus === API_STATUS.LOADING;
@@ -235,28 +244,20 @@ const SuppliersPage = () => {
   }, []);
 
   const handleCreateSupplier = useCallback(() => {
-    navigate(ROUTES.CREATE_SUPPLIER);
-  }, [navigate]);
+    setDialogState({ isOpen: true, mode: "create", supplierData: null });
+  }, []);
 
-  const handleViewSupplier = useCallback(
-    (supplier) => {
-      if (!supplier?._id) return;
-      if (typeof ROUTES.SUPPLIER_DETAILS === "function") {
-        navigate(ROUTES.SUPPLIER_DETAILS(supplier._id));
-      }
-    },
-    [navigate],
-  );
+  const handleViewSupplier = useCallback((supplier) => {
+    setDialogState({ isOpen: true, mode: "view", supplierData: supplier });
+  }, []);
 
-  const handleEditSupplier = useCallback(
-    (supplier) => {
-      if (!supplier?._id) return;
-      if (typeof ROUTES.EDIT_SUPPLIER === "function") {
-        navigate(ROUTES.EDIT_SUPPLIER(supplier._id));
-      }
-    },
-    [navigate],
-  );
+  const handleEditSupplier = useCallback((supplier) => {
+    setDialogState({ isOpen: true, mode: "edit", supplierData: supplier });
+  }, []);
+
+  const handleCloseDialog = useCallback(() => {
+    setDialogState((prev) => ({ ...prev, isOpen: false }));
+  }, []);
 
   const handleRequestDeleteSupplier = useCallback((supplier) => {
     setSelectedSupplier(supplier || null);
@@ -336,25 +337,29 @@ const SuppliersPage = () => {
       )}
 
 
-      <AppConfirmModal
-        open={isDeleteModalOpen}
+      <SupplierDialog
+        isOpen={dialogState.isOpen}
+        onClose={handleCloseDialog}
+        mode={dialogState.mode}
+        supplierData={dialogState.supplierData}
+        onSubmitCreate={createSupplier}
+        onSubmitUpdate={updateSupplier}
+        onSuccess={fetchSuppliers}
+      />
+
+      <UIConfirmDialog
+        isOpen={isDeleteModalOpen}
         onClose={handleCloseDeleteModal}
-        onCancel={handleCloseDeleteModal}
         onConfirm={handleConfirmDeleteSupplier}
-        title="Delete Supplier Record"
-        message={
+        title="Delete Supplier Profile"
+        description={
           selectedSupplier
-            ? `Delete ${selectedSupplier.displayName}?`
-            : "Delete Supplier?"
+            ? `Are you sure you want to delete ${selectedSupplier.displayName || selectedSupplier.businessName || selectedSupplier.name}? Associated purchase bills and ledger entries will remain preserved.`
+            : "Are you sure you want to delete this supplier?"
         }
-        description="This will execute a soft-delete process on your workspace supplier profile. Connected invoice/purchase records will remain preserved."
-        variant="error"
-        confirmLabel="Delete Supplier"
-        cancelLabel="Keep Profile"
-        loading={isDeleting}
-        confirmDisabled={isDeleting}
-        cancelDisabled={isDeleting}
-        closeOnBackdrop={!isDeleting}
+        confirmText="Delete Supplier"
+        variant="danger"
+        isLoading={isDeleting}
       />
     </>
   );

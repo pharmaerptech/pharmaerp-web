@@ -807,11 +807,11 @@ const closeDialog = () => setDialogState((prev) => ({ ...prev, isOpen: false }))
 - (future) Dashboard → quick bank balance view
 
 **Tasks**:
-- [ ] **T02-T1**: Create `BankAccountDialog.jsx` with create/edit/view modes
-- [ ] **T02-T2**: Update `BankAccountsPage.jsx` — replace navigate calls with dialog state
-- [ ] **T02-T3**: Update `BankAccountsDesktopPage.jsx` and `BankAccountsMobilePage.jsx` — receive new dialog handlers in props
-- [ ] **T02-T4**: Update `bankAccountRoutes.jsx` — remove 3 routes, keep 1
-- [ ] **T02-T5**: Delete 9 page files listed above
+- [x] **T02-T1**: Create `BankAccountDialog.jsx` with create/edit/view modes
+- [x] **T02-T2**: Update `BankAccountsPage.jsx` — replace navigate calls with dialog state
+- [x] **T02-T3**: Update `BankAccountsDesktopPage.jsx` and `BankAccountsMobilePage.jsx` — receive new dialog handlers in props
+- [x] **T02-T4**: Update `bankAccountRoutes.jsx` — remove 3 routes, keep 1
+- [x] **T02-T5**: Delete 9 page files listed above
 
 ---
 
@@ -889,9 +889,9 @@ src/features/finance/treasury/cheque-management/components/ChequeDialog.jsx
 ```
 
 **Tasks**:
-- [ ] **T04-T1**: Create `ChequeDialog.jsx`
-- [ ] **T04-T2**: Update `ChequesPage.jsx`
-- [ ] **T04-T3**: Remove routes, delete page files
+- [x] **T04-T1**: Create `ChequeDialog.jsx`
+- [x] **T04-T2**: Update `ChequesPage.jsx`
+- [x] **T04-T3**: Remove routes, delete page files
 
 ---
 
@@ -931,9 +931,9 @@ src/features/finance/treasury/payment-qr/components/PaymentQrDialog.jsx
 ```
 
 **Tasks**:
-- [ ] **T05-T1**: Create `PaymentQrDialog.jsx`
-- [ ] **T05-T2**: Update `PaymentQrsPage.jsx`
-- [ ] **T05-T3**: Remove 3 routes, delete 9 page files
+- [x] **T05-T1**: Create `PaymentQrDialog.jsx`
+- [x] **T05-T2**: Update `PaymentQrsPage.jsx`
+- [x] **T05-T3**: Remove 3 routes, delete 9 page files
 
 ---
 

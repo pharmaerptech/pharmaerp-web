@@ -308,8 +308,7 @@ const AccountGroupsDesktopPage = ({
               variant="text"
               items={[
                 { label: "Dashboard" },
-                { label: "Finance & Accounting" },
-                { label: "Chart Of Accounts", onClick: handleBackToCOA },
+                { label: "Finance & Accounting", onClick: handleBackToCOA },
                 { label: "Account Groups", current: true },
               ]}
               sx={breadcrumbSx}

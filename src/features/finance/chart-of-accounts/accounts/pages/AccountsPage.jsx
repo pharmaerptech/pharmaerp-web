@@ -10,6 +10,7 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES, API_STATUS } from "@/constants";
 import { useIsMobile } from "@/hooks";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { UIConfirmDialog } from "@/components/ui";
 
 import useAccountGroup from "../../account-groups/hooks/useAccountGroup";
 import useAccount from "../hooks/useAccount";
@@ -28,9 +29,11 @@ const AccountsPage = () => {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const { currentBranch } = useBranch();
+  const hasFetchedGroupsRef = useRef(false);
 
   const {
     accounts,
+    totalAccounts,
     getAccounts,
     getAccountsStatus,
     createAccount,
@@ -54,7 +57,21 @@ const AccountsPage = () => {
     accountData: null,
   });
 
-  const fetchAccountsAndGroups = useCallback(() => {
+  const [deleteConfirm, setDeleteConfirm] = useState({
+    isOpen: false,
+    accountId: null,
+    accountName: "",
+    isDeleting: false,
+  });
+
+  // Fetch account groups once on mount for classification dropdowns
+  useEffect(() => {
+    if (hasFetchedGroupsRef.current) return;
+    hasFetchedGroupsRef.current = true;
+    getAccountGroups({ all: true }).catch(() => {});
+  }, [getAccountGroups]);
+
+  const fetchAccountsList = useCallback(() => {
     const query = {
       page: currentPage,
       limit: pageSize,
@@ -66,12 +83,11 @@ const AccountsPage = () => {
     getAccounts(query).catch((err) =>
       console.error("Failed to load accounts:", err)
     );
-    getAccountGroups({ all: true }).catch(() => {});
-  }, [currentPage, pageSize, filters, getAccounts, getAccountGroups]);
+  }, [currentPage, pageSize, filters, getAccounts]);
 
   useEffect(() => {
-    fetchAccountsAndGroups();
-  }, [fetchAccountsAndGroups]);
+    fetchAccountsList();
+  }, [fetchAccountsList]);
 
   const handleFilterChange = useCallback((name, value) => {
     setFilters((prev) => ({ ...prev, [name]: value }));
@@ -97,30 +113,40 @@ const AccountsPage = () => {
     return chips;
   }, [filters]);
 
-  const filteredAccounts = useMemo(() => {
+  const mappedAccounts = useMemo(() => {
     if (!Array.isArray(accounts)) return [];
-    return accounts;
-  }, [accounts]);
+    return accounts.map((acc) => {
+      const gObj = acc.accountGroupId;
+      const gName = typeof gObj === "object" ? gObj?.groupName : null;
+      const matching = accountGroups.find(
+        (g) => (g._id || g.id) === acc.accountGroupId
+      );
+      return {
+        ...acc,
+        name: acc.accountName || acc.name || "-",
+        code: acc.accountCode || acc.code || "-",
+        underGroup: gName || matching?.groupName || "-",
+        type: acc.accountNature || acc.type || "-",
+        nature: (acc.openingBalanceType || "dr").toUpperCase() === "DR" ? "Debit" : "Credit",
+        status: acc.status || "active",
+      };
+    });
+  }, [accounts, accountGroups]);
 
-  const totalCount = filteredAccounts.length;
+  const totalCount = totalAccounts || mappedAccounts.length;
   const totalPages = Math.ceil(totalCount / pageSize) || 1;
-
-  const paginatedAccounts = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return filteredAccounts.slice(start, start + pageSize);
-  }, [filteredAccounts, currentPage, pageSize]);
 
   const isLoading = getAccountsStatus === API_STATUS.LOADING;
   const hasError = getAccountsStatus === API_STATUS.ERROR;
 
   const stats = useMemo(() => {
-    const all = Array.isArray(accounts) ? accounts : [];
-    return [
-      { id: "total", title: "Total Accounts", value: all.length, colorVariant: "primary" },
-      { id: "active", title: "Active", value: all.filter((a) => a.status === "active").length, colorVariant: "success" },
-      { id: "inactive", title: "Inactive", value: all.filter((a) => a.status === "inactive").length, colorVariant: "neutral" },
-    ];
-  }, [accounts]);
+    const all = Array.isArray(mappedAccounts) ? mappedAccounts : [];
+    return {
+      totalAccounts: totalCount,
+      activeAccounts: all.filter((a) => a.status === "active").length,
+      inactiveAccounts: all.filter((a) => a.status === "inactive").length,
+    };
+  }, [mappedAccounts, totalCount]);
 
   const handleCreateAccount = useCallback(() => {
     setDialogState({ isOpen: true, mode: "create", accountData: null });
@@ -143,20 +169,35 @@ const AccountsPage = () => {
   );
 
   const handleDeleteAccount = useCallback(
-    async (accountId) => {
-      try {
-        await deleteAccount(accountId);
-        fetchAccountsAndGroups();
-      } catch (err) {
-        console.error(err);
-      }
+    (accountId) => {
+      const target = accounts.find((a) => a._id === accountId || a.id === accountId);
+      setDeleteConfirm({
+        isOpen: true,
+        accountId,
+        accountName: target?.accountName || target?.name || "this account",
+        isDeleting: false,
+      });
     },
-    [deleteAccount, fetchAccountsAndGroups],
+    [accounts],
   );
 
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteConfirm.accountId) return;
+    setDeleteConfirm((prev) => ({ ...prev, isDeleting: true }));
+    try {
+      await deleteAccount(deleteConfirm.accountId);
+      setDeleteConfirm({ isOpen: false, accountId: null, accountName: "", isDeleting: false });
+      fetchAccountsList();
+    } catch (err) {
+      console.error(err);
+      setDeleteConfirm((prev) => ({ ...prev, isDeleting: false }));
+    }
+  }, [deleteConfirm.accountId, deleteAccount, fetchAccountsList]);
+
   const handleRefresh = useCallback(() => {
-    fetchAccountsAndGroups();
-  }, [fetchAccountsAndGroups]);
+    fetchAccountsList();
+    getAccountGroups({ all: true }).catch(() => {});
+  }, [fetchAccountsList, getAccountGroups]);
 
   const accountTypeOptions = useMemo(
     () => [
@@ -180,7 +221,7 @@ const AccountsPage = () => {
   );
 
   const pageProps = {
-    accounts: paginatedAccounts,
+    accounts: mappedAccounts,
     totalCount,
     currentPage,
     pageSize,
@@ -209,7 +250,7 @@ const AccountsPage = () => {
     handleEditAccount,
     handleDeleteAccount,
     handleRefresh,
-    handleBackToCOA: () => navigate(ROUTES.CHART_OF_ACCOUNTS),
+    handleBackToCOA: () => navigate(ROUTES.FINANCE),
   };
 
   return (
@@ -228,7 +269,21 @@ const AccountsPage = () => {
         accountGroups={accountGroups}
         onSubmitCreate={createAccount}
         onSubmitUpdate={updateAccount}
-        onSuccess={fetchAccountsAndGroups}
+        onSuccess={() => {
+          fetchAccountsList();
+          getAccountGroups({ all: true }).catch(() => {});
+        }}
+      />
+
+      <UIConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ isOpen: false, accountId: null, accountName: "", isDeleting: false })}
+        onConfirm={handleConfirmDelete}
+        title="Delete Account?"
+        description={`Are you sure you want to delete ${deleteConfirm.accountName}? This action cannot be undone.`}
+        intent="danger"
+        confirmLabel="Delete Account"
+        isLoading={deleteConfirm.isDeleting}
       />
     </>
   );

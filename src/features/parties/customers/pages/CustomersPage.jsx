@@ -5,13 +5,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
-import { AppConfirmModal } from "@/components";
+import { UIConfirmDialog } from "@/components/ui";
 
 import useCustomer from "../hooks/useCustomer";
 import useCompany from "@/features/company/hooks/useCompany";
 import CustomersMobilePage from "./mobile/CustomersMobilePage";
 import CustomersDesktopPage from "./desktop/CustomersDesktopPage";
-
 import CustomerDialog from "../components/CustomerDialog";
 
 const initialFilters = {
@@ -77,6 +76,8 @@ const CustomersPage = () => {
   const {
     customers,
     getCustomers,
+    createCustomer,
+    updateCustomer,
     deleteCustomer,
     getCustomersStatus,
     deleteCustomerStatus,
@@ -94,6 +95,12 @@ const CustomersPage = () => {
   const [viewMode, setViewMode] = useState("grid");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
+
+  const [dialogState, setDialogState] = useState({
+    isOpen: false,
+    mode: "create",
+    customerData: null,
+  });
 
   const isLoading = getCustomersStatus === API_STATUS.LOADING;
   const isDeleting = deleteCustomerStatus === API_STATUS.LOADING;
@@ -295,28 +302,20 @@ const CustomersPage = () => {
   }, []);
 
   const handleCreateCustomer = useCallback(() => {
-    navigate(ROUTES.CREATE_CUSTOMER);
-  }, [navigate]);
+    setDialogState({ isOpen: true, mode: "create", customerData: null });
+  }, []);
 
-  const handleViewCustomer = useCallback(
-    (customer) => {
-      if (!customer?._id) return;
-      if (typeof ROUTES.CUSTOMER_DETAILS === "function") {
-        navigate(ROUTES.CUSTOMER_DETAILS(customer._id));
-      }
-    },
-    [navigate],
-  );
+  const handleViewCustomer = useCallback((customer) => {
+    setDialogState({ isOpen: true, mode: "view", customerData: customer });
+  }, []);
 
-  const handleEditCustomer = useCallback(
-    (customer) => {
-      if (!customer?._id) return;
-      if (typeof ROUTES.EDIT_CUSTOMER === "function") {
-        navigate(ROUTES.EDIT_CUSTOMER(customer._id));
-      }
-    },
-    [navigate],
-  );
+  const handleEditCustomer = useCallback((customer) => {
+    setDialogState({ isOpen: true, mode: "edit", customerData: customer });
+  }, []);
+
+  const handleCloseDialog = useCallback(() => {
+    setDialogState((prev) => ({ ...prev, isOpen: false }));
+  }, []);
 
   const handleRequestDeleteCustomer = useCallback((customer) => {
     setSelectedCustomer(customer || null);
@@ -395,25 +394,29 @@ const CustomersPage = () => {
         <CustomersDesktopPage {...pageProps} />
       )}
 
-      <AppConfirmModal
-        open={isDeleteModalOpen}
+      <CustomerDialog
+        isOpen={dialogState.isOpen}
+        onClose={handleCloseDialog}
+        mode={dialogState.mode}
+        customerData={dialogState.customerData}
+        onSubmitCreate={createCustomer}
+        onSubmitUpdate={updateCustomer}
+        onSuccess={fetchCustomers}
+      />
+
+      <UIConfirmDialog
+        isOpen={isDeleteModalOpen}
         onClose={handleCloseDeleteModal}
-        onCancel={handleCloseDeleteModal}
         onConfirm={handleConfirmDeleteCustomer}
-        title="Delete Customer Record"
-        message={
+        title="Delete Customer Profile"
+        description={
           selectedCustomer
-            ? `Delete ${selectedCustomer.displayName}?`
-            : "Delete Customer?"
+            ? `Are you sure you want to delete ${selectedCustomer.displayName || selectedCustomer.name}? Associated sales invoices and transaction records will remain preserved in historical statements.`
+            : "Are you sure you want to delete this customer?"
         }
-        description="This will execute a soft-delete process on your workspace customer profile. Connected invoice transactions will remain preserved."
-        variant="error"
-        confirmLabel="Delete Customer"
-        cancelLabel="Keep Profile"
-        loading={isDeleting}
-        confirmDisabled={isDeleting}
-        cancelDisabled={isDeleting}
-        closeOnBackdrop={!isDeleting}
+        confirmText="Delete Customer"
+        variant="danger"
+        isLoading={isDeleting}
       />
     </>
   );

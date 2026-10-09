@@ -241,6 +241,7 @@ const CreateTransferOrderPage = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onSelectProduct={handleSelectWorkspaceProduct}
+                branchId={sourceBranchId || null}
                 placeholder="Search products by name, SKU, or barcode to add..."
               />
               {!sourceBranchId && (

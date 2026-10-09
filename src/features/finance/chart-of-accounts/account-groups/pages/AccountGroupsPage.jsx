@@ -3,11 +3,13 @@ import { useNavigate } from "react-router-dom";
 
 import { ROUTES, API_STATUS } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import { UIConfirmDialog } from "@/components/ui";
 
 import useAccountGroup from "../hooks/useAccountGroup";
 import useAccount from "../../accounts/hooks/useAccount";
 import AccountGroupsDesktopPage from "./desktop/AccountGroupsDesktopPage";
 import AccountGroupsMobilePage from "./mobile/AccountGroupsMobilePage";
+import AccountGroupDialog from "../components/AccountGroupDialog";
 
 const initialFilters = {
   search: "",
@@ -26,6 +28,8 @@ const AccountGroupsPage = () => {
     accountGroups = [],
     getAccountGroups,
     getAccountGroupsStatus,
+    createAccountGroup,
+    updateAccountGroup,
     deleteAccountGroup,
     message,
     error,
@@ -42,6 +46,19 @@ const AccountGroupsPage = () => {
   const [filters, setFilters] = useState(initialFilters);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+
+  const [dialogState, setDialogState] = useState({
+    isOpen: false,
+    mode: "create",
+    groupData: null,
+  });
+
+  const [deleteConfirm, setDeleteConfirm] = useState({
+    isOpen: false,
+    groupId: null,
+    groupName: "",
+    isDeleting: false,
+  });
 
   const fetchGroupsAndAccounts = useCallback(async () => {
     try {
@@ -219,29 +236,56 @@ const AccountGroupsPage = () => {
   }, []);
 
   const handleCreateGroup = useCallback(() => {
-    navigate(ROUTES.CREATE_ACCOUNT_GROUP);
-  }, [navigate]);
+    setDialogState({ isOpen: true, mode: "create", groupData: null });
+  }, []);
 
-  const handleViewGroup = useCallback((groupId) => {
-    if (typeof ROUTES.ACCOUNT_GROUP_DETAILS === "function") {
-      navigate(ROUTES.ACCOUNT_GROUP_DETAILS(groupId));
-    }
-  }, [navigate]);
+  const handleViewGroup = useCallback(
+    (groupId) => {
+      const target = accountGroups.find(
+        (g) => g._id === groupId || g.id === groupId
+      );
+      setDialogState({ isOpen: true, mode: "view", groupData: target || null });
+    },
+    [accountGroups]
+  );
 
-  const handleEditGroup = useCallback((groupId) => {
-    if (typeof ROUTES.EDIT_ACCOUNT_GROUP === "function") {
-      navigate(ROUTES.EDIT_ACCOUNT_GROUP(groupId));
-    }
-  }, [navigate]);
+  const handleEditGroup = useCallback(
+    (groupId) => {
+      const target = accountGroups.find(
+        (g) => g._id === groupId || g.id === groupId
+      );
+      setDialogState({ isOpen: true, mode: "edit", groupData: target || null });
+    },
+    [accountGroups]
+  );
 
-  const handleDeleteGroup = useCallback(async (groupId) => {
+  const handleDeleteGroup = useCallback(
+    (groupId) => {
+      const target = accountGroups.find(
+        (g) => g._id === groupId || g.id === groupId
+      );
+      setDeleteConfirm({
+        isOpen: true,
+        groupId,
+        groupName: target?.groupName || target?.name || "this account group",
+        isDeleting: false,
+      });
+    },
+    [accountGroups]
+  );
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!deleteConfirm.groupId) return;
+    setDeleteConfirm((prev) => ({ ...prev, isDeleting: true }));
     try {
-      await deleteAccountGroup(groupId);
+      await deleteAccountGroup(deleteConfirm.groupId);
+      setDeleteConfirm({ isOpen: false, groupId: null, groupName: "", isDeleting: false });
       fetchGroupsAndAccounts();
     } catch (err) {
       console.error(err);
+      setDeleteConfirm((prev) => ({ ...prev, isDeleting: false }));
     }
-  }, [deleteAccountGroup, fetchGroupsAndAccounts]);
+  }, [deleteConfirm.groupId, deleteAccountGroup, fetchGroupsAndAccounts]);
 
   const handleRefresh = useCallback(() => {
     fetchGroupsAndAccounts();
@@ -255,11 +299,14 @@ const AccountGroupsPage = () => {
     return opts;
   }, [accountGroups]);
 
-  const statusOptions = useMemo(() => [
-    { label: "Status: All", value: "all" },
-    { label: "Active", value: "active" },
-    { label: "Inactive", value: "inactive" },
-  ], []);
+  const statusOptions = useMemo(
+    () => [
+      { label: "Status: All", value: "all" },
+      { label: "Active", value: "active" },
+      { label: "Inactive", value: "inactive" },
+    ],
+    []
+  );
 
   const pageProps = {
     accountGroups: paginatedGroups,
@@ -293,14 +340,47 @@ const AccountGroupsPage = () => {
     handleDeleteGroup,
     handleRefresh,
     handleBackToCOA: useCallback(() => {
-      navigate(ROUTES.CHART_OF_ACCOUNTS);
+      navigate(ROUTES.FINANCE);
     }, [navigate]),
   };
 
-  return isMobile ? (
-    <AccountGroupsMobilePage {...pageProps} />
-  ) : (
-    <AccountGroupsDesktopPage {...pageProps} />
+  return (
+    <>
+      {isMobile ? (
+        <AccountGroupsMobilePage {...pageProps} />
+      ) : (
+        <AccountGroupsDesktopPage {...pageProps} />
+      )}
+
+      <AccountGroupDialog
+        isOpen={dialogState.isOpen}
+        onClose={() => setDialogState((prev) => ({ ...prev, isOpen: false }))}
+        mode={dialogState.mode}
+        groupData={dialogState.groupData}
+        accountGroups={accountGroups}
+        onSubmitCreate={createAccountGroup}
+        onSubmitUpdate={updateAccountGroup}
+        onSuccess={fetchGroupsAndAccounts}
+      />
+
+      <UIConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        onClose={() =>
+          setDeleteConfirm({
+            isOpen: false,
+            groupId: null,
+            groupName: "",
+            isDeleting: false,
+          })
+        }
+        onConfirm={handleConfirmDelete}
+        title="Delete Account Group?"
+        description={`Are you sure you want to delete ${deleteConfirm.groupName}? Any associated accounts should be migrated first.`}
+        intent="danger"
+        confirmLabel="Delete Group"
+        isLoading={deleteConfirm.isDeleting}
+      />
+    </>
   );
 };
 

@@ -224,7 +224,7 @@ const TreasuryPage = () => {
       {
         id: "addBankAccount",
         title: "Add Bank Account",
-        path: ROUTES.CREATE_BANK_ACCOUNT,
+        path: ROUTES.BANK_ACCOUNTS,
         colorVariant: "success",
         permission: "bank-account:create",
       },

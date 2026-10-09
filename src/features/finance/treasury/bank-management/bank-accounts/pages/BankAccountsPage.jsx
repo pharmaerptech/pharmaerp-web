@@ -71,7 +71,9 @@ const mapBankAccountForView = (account) => {
   };
 };
 
+import BankAccountDialog from "../components/BankAccountDialog";
 import { UIConfirmDialog } from "@/components/ui";
+
 const BankAccountsPage = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -87,6 +89,13 @@ const BankAccountsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Dialog state for create/edit/view
+  const [dialogState, setDialogState] = useState({
+    isOpen: false,
+    mode: "create",
+    entityId: null,
+  });
+
   // Confirm delete state
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -101,7 +110,9 @@ const BankAccountsPage = () => {
     error,
     message,
     getBankAccounts,
-
+    getBankAccountById,
+    createBankAccount,
+    updateBankAccount,
     deleteBankAccount,
     setPrimaryBankAccount,
     clearError,
@@ -306,32 +317,26 @@ const BankAccountsPage = () => {
   }, []);
 
   const handleAddAccount = useCallback(() => {
-    navigate(ROUTES.CREATE_BANK_ACCOUNT);
-  }, [navigate]);
+    setDialogState({ isOpen: true, mode: "create", entityId: null });
+  }, []);
 
-  const handleEditAccount = useCallback(
-    (account) => {
-      if (!account?._id || account?._id.startsWith("mock-")) return;
-      navigate(ROUTES.EDIT_BANK_ACCOUNT(account._id));
-    },
-    [navigate],
-  );
+  const handleEditAccount = useCallback((account) => {
+    if (!account?._id) return;
+    setDialogState({ isOpen: true, mode: "edit", entityId: account._id });
+  }, []);
 
-  const handleViewDetails = useCallback(
-    (account) => {
-      if (!account?._id || account?._id.startsWith("mock-")) return;
-      navigate(ROUTES.BANK_ACCOUNT_DETAILS(account._id));
-    },
-    [navigate],
-  );
+  const handleViewDetails = useCallback((account) => {
+    if (!account?._id) return;
+    setDialogState({ isOpen: true, mode: "view", entityId: account._id });
+  }, []);
+
+  const handleCloseDialog = useCallback(() => {
+    setDialogState((prev) => ({ ...prev, isOpen: false }));
+  }, []);
 
   const handleSetPrimary = useCallback(
     async (account) => {
       if (!account?._id) return;
-      if (account._id.startsWith("mock-")) {
-        // Mock set primary locally
-        return;
-      }
       try {
         await setPrimaryBankAccount(account._id);
         fetchAccountsData();
@@ -344,10 +349,6 @@ const BankAccountsPage = () => {
 
   const handleDeleteAccount = useCallback((account) => {
     if (!account?._id) return;
-    if (account._id.startsWith("mock-")) {
-      alert("Mock accounts cannot be deleted.");
-      return;
-    }
     setConfirmState({ isOpen: true, accountId: account._id });
   }, []);
 
@@ -400,6 +401,17 @@ const BankAccountsPage = () => {
       ) : (
         <BankAccountsDesktopPage {...pageProps} />
       )}
+
+      <BankAccountDialog
+        isOpen={dialogState.isOpen}
+        onClose={handleCloseDialog}
+        mode={dialogState.mode}
+        entityId={dialogState.entityId}
+        onSubmitCreate={createBankAccount}
+        onSubmitUpdate={updateBankAccount}
+        onFetchById={getBankAccountById}
+        onSuccess={fetchAccountsData}
+      />
 
       <UIConfirmDialog
         isOpen={confirmState.isOpen}

@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
@@ -52,54 +53,54 @@ const useAccountGroup = () => {
 
   const deleteAccountGroupStatus = useSelector(selectDeleteAccountGroupStatus);
 
-  const submitCreateAccountGroup = (payload) => {
+  const submitCreateAccountGroup = useCallback((payload) => {
     return dispatch(createAccountGroup(payload)).unwrap();
-  };
+  }, [dispatch]);
 
-  const fetchAccountGroups = (params = {}) => {
+  const fetchAccountGroups = useCallback((params = {}) => {
     return dispatch(getAccountGroups(params)).unwrap();
-  };
+  }, [dispatch]);
 
-  const fetchAccountGroupById = (accountGroupId) => {
+  const fetchAccountGroupById = useCallback((accountGroupId) => {
     return dispatch(getAccountGroupById(accountGroupId)).unwrap();
-  };
+  }, [dispatch]);
 
-  const submitUpdateAccountGroup = (accountGroupId, payload) => {
+  const submitUpdateAccountGroup = useCallback((accountGroupId, payload) => {
     return dispatch(
       updateAccountGroup({
         accountGroupId,
         payload,
       }),
     ).unwrap();
-  };
+  }, [dispatch]);
 
-  const submitDeleteAccountGroup = (accountGroupId) => {
+  const submitDeleteAccountGroup = useCallback((accountGroupId) => {
     return dispatch(deleteAccountGroup(accountGroupId)).unwrap();
-  };
+  }, [dispatch]);
 
-  const clearError = () => {
+  const clearError = useCallback(() => {
     dispatch(clearAccountGroupError());
-  };
+  }, [dispatch]);
 
-  const clearMessage = () => {
+  const clearMessage = useCallback(() => {
     dispatch(clearAccountGroupMessage());
-  };
+  }, [dispatch]);
 
-  const saveCurrentAccountGroup = (payload) => {
+  const saveCurrentAccountGroup = useCallback((payload) => {
     dispatch(setCurrentAccountGroup(payload));
-  };
+  }, [dispatch]);
 
-  const removeCurrentAccountGroup = () => {
+  const removeCurrentAccountGroup = useCallback(() => {
     dispatch(clearCurrentAccountGroup());
-  };
+  }, [dispatch]);
 
-  const removeAccountGroups = () => {
+  const removeAccountGroups = useCallback(() => {
     dispatch(clearAccountGroups());
-  };
+  }, [dispatch]);
 
-  const removeManagedAccountGroup = () => {
+  const removeManagedAccountGroup = useCallback(() => {
     dispatch(clearManagedAccountGroup());
-  };
+  }, [dispatch]);
 
   return {
     accountGroups,

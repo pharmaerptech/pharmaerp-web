@@ -59,12 +59,13 @@ const DesktopHeroSection = () => {
               }}
             >
               <span className="block whitespace-nowrap">
-                Simplify Your Pharmacy.              </span>
+                Simplify Your Pharmacy.{" "}
+              </span>
               <span className="block whitespace-nowrap text-primary">
                 Grow Your Business.
               </span>
               <span className="block whitespace-nowrap text-primary">
-                In uat branch
+                In Dev(Ansh) branch
               </span>
             </AppHeading>
 

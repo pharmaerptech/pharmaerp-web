@@ -8,7 +8,6 @@ import usePaymentQr from "../hooks/usePaymentQr";
 import PaymentQrsDesktopPage from "./desktop/PaymentQrsDesktopPage";
 import PaymentQrsMobilePage from "./mobile/PaymentQrsMobilePage";
 
-
 import PaymentQrDialog from "../components/PaymentQrDialog";
 import { UIConfirmDialog } from "@/components/ui";
 
@@ -24,6 +23,18 @@ const PaymentQrsPage = () => {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
 
+  const [dialogState, setDialogState] = useState({
+    isOpen: false,
+    mode: "create",
+    entityId: null,
+    qrData: null,
+  });
+
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    qrId: null,
+  });
+
   const {
     paymentQrs,
     getPaymentQrsStatus,
@@ -32,6 +43,9 @@ const PaymentQrsPage = () => {
     error: serverError,
     message: serverMessage,
     getPaymentQrs,
+    getPaymentQrById,
+    createPaymentQr,
+    updatePaymentQr,
     deletePaymentQr,
     setPrimaryPaymentQr,
     clearError,
@@ -80,7 +94,7 @@ const PaymentQrsPage = () => {
     fetchPaymentQrs();
   }, [filters.page, filters.limit, filters.status, filters.provider]);
 
-  // Handle Search Input (debounce if necessary, or trigger on filter update)
+  // Handle Search Input
   useEffect(() => {
     const handler = setTimeout(() => {
       setFilters((prev) => ({ ...prev, page: 1 }));
@@ -141,30 +155,56 @@ const PaymentQrsPage = () => {
   }, [fetchPaymentQrs]);
 
   const handleCreateQr = useCallback(() => {
-    navigate(ROUTES.CREATE_PAYMENT_QR);
-  }, [navigate]);
+    setDialogState({
+      isOpen: true,
+      mode: "create",
+      entityId: null,
+      qrData: null,
+    });
+  }, []);
 
-  const handleEditQr = useCallback((id) => {
-    navigate(ROUTES.EDIT_PAYMENT_QR(id));
-  }, [navigate]);
+  const handleEditQr = useCallback((qr) => {
+    const id = typeof qr === "string" ? qr : qr?._id;
+    const data = typeof qr === "object" ? qr : null;
+    setDialogState({
+      isOpen: true,
+      mode: "edit",
+      entityId: id,
+      qrData: data,
+    });
+  }, []);
 
-  const handleViewDetails = useCallback((id) => {
-    navigate(ROUTES.PAYMENT_QR_DETAILS(id));
-  }, [navigate]);
+  const handleViewDetails = useCallback((qr) => {
+    const id = typeof qr === "string" ? qr : qr?._id;
+    const data = typeof qr === "object" ? qr : null;
+    setDialogState({
+      isOpen: true,
+      mode: "view",
+      entityId: id,
+      qrData: data,
+    });
+  }, []);
 
-  const handleDeleteQr = useCallback(
-    async (id) => {
-      if (window.confirm("Are you sure you want to delete this UPI QR account?")) {
-        try {
-          await deletePaymentQr(id);
-          fetchPaymentQrs();
-        } catch (err) {
-          console.error("Failed to delete QR register:", err);
-        }
-      }
-    },
-    [deletePaymentQr, fetchPaymentQrs]
-  );
+  const handleCloseDialog = useCallback(() => {
+    setDialogState((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleDeleteQr = useCallback((qr) => {
+    const id = typeof qr === "string" ? qr : qr?._id;
+    if (!id) return;
+    setConfirmState({ isOpen: true, qrId: id });
+  }, []);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!confirmState.qrId) return;
+    try {
+      await deletePaymentQr(confirmState.qrId);
+      setConfirmState({ isOpen: false, qrId: null });
+      fetchPaymentQrs();
+    } catch (err) {
+      console.error("Failed to delete QR register:", err);
+    }
+  }, [confirmState.qrId, deletePaymentQr, fetchPaymentQrs]);
 
   const handleSetPrimary = useCallback(
     async (id) => {
@@ -183,7 +223,6 @@ const PaymentQrsPage = () => {
     deletePaymentQrStatus === API_STATUS.LOADING ||
     setPrimaryPaymentQrStatus === API_STATUS.LOADING;
 
-  // Active filter chips mapper
   const activeFilterChips = useMemo(() => {
     const chips = [];
     if (filters.status !== "all") {
@@ -195,7 +234,6 @@ const PaymentQrsPage = () => {
     return chips;
   }, [filters.status, filters.provider]);
 
-  // Statistics
   const stats = useMemo(() => {
     const list = paymentQrs || [];
     return {
@@ -232,10 +270,36 @@ const PaymentQrsPage = () => {
     clearMessage,
   };
 
-  return isMobile ? (
-    <PaymentQrsMobilePage {...pageProps} />
-  ) : (
-    <PaymentQrsDesktopPage {...pageProps} />
+  return (
+    <>
+      {isMobile ? (
+        <PaymentQrsMobilePage {...pageProps} />
+      ) : (
+        <PaymentQrsDesktopPage {...pageProps} />
+      )}
+
+      <PaymentQrDialog
+        isOpen={dialogState.isOpen}
+        onClose={handleCloseDialog}
+        mode={dialogState.mode}
+        entityId={dialogState.entityId}
+        qrData={dialogState.qrData}
+        onSubmitCreate={createPaymentQr}
+        onSubmitUpdate={updatePaymentQr}
+        onFetchById={getPaymentQrById}
+        onSuccess={fetchPaymentQrs}
+      />
+
+      <UIConfirmDialog
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState({ isOpen: false, qrId: null })}
+        onConfirm={handleConfirmDelete}
+        title="Delete Payment QR"
+        description="Are you sure you want to delete this UPI QR code? This action cannot be undone."
+        confirmText="Delete QR"
+        variant="danger"
+      />
+    </>
   );
 };
 

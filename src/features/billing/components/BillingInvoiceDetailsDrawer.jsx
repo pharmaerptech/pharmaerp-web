@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Printer,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   MapPin,
   Clock,
   ShieldCheck,
+  Edit2,
 } from "lucide-react";
 import { UIModal, UIButton, UIBadge } from "@/components/ui";
 import { PermissionGate } from "@/components/common/PermissionGate";
@@ -24,6 +26,7 @@ export const BillingInvoiceDetailsDrawer = ({
   onMarkPaid,
   onCancelInvoice,
 }) => {
+  const navigate = useNavigate();
   if (!isOpen || !invoice) return null;
 
   const handlePrint = () => {
@@ -252,6 +255,19 @@ export const BillingInvoiceDetailsDrawer = ({
             >
               Print Invoice
             </UIButton>
+
+            {invoice.status !== "Cancelled" && (
+              <PermissionGate permission="bill:update">
+                <UIButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate("/sales", { state: { invoice } })}
+                  leftIcon={<Edit2 className="size-4" />}
+                >
+                  Edit Bill
+                </UIButton>
+              </PermissionGate>
+            )}
 
             {invoice.status !== "Cancelled" && (
               <PermissionGate permission="bill:delete">

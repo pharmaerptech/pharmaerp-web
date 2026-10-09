@@ -1,6 +1,8 @@
 export const selectAccount = (state) => state.account;
 
 export const selectAccounts = (state) => state.account.accounts;
+export const selectTotalAccounts = (state) =>
+  state.account.totalAccounts ?? state.account.accounts?.length ?? 0;
 
 export const selectCurrentAccount = (state) => state.account.currentAccount;
 

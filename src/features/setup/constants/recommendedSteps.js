@@ -22,7 +22,7 @@ export const recommendedSteps = [
     title: "Add Suppliers & Vendors",
     category: "PROCUREMENT",
     description: "Register pharmaceutical wholesale distributors, drug license details, and payment credit terms.",
-    route: ROUTES.CREATE_SUPPLIER || "/parties/suppliers/create",
+    route: ROUTES.SUPPLIERS,
     badge: "Recommended",
     badgeVariant: "info",
     colorVariant: "info",

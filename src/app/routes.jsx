@@ -55,7 +55,6 @@ import marketplaceProductRoutes from "@/features/marketplace/products/routes/mar
 import customerRoutes from "@/features/parties/customers/routes/customerRoutes";
 import supplierRoutes from "@/features/parties/suppliers/routes/supplierRoutes";
 import financeRoutes from "@/features/finance/routes/financeRoutes";
-import chartOfAccountsRoutes from "@/features/finance/chart-of-accounts/routes/chartOfAccountsRoutes";
 import journalVoucherRoutes from "@/features/finance/journal-vouchers/routes/journalVoucherRoutes";
 import accountGroupRoutes from "@/features/finance/chart-of-accounts/account-groups/routes/accountGroupRoutes";
 import accountRoutes from "@/features/finance/chart-of-accounts/accounts/routes/accountRoutes";
@@ -287,20 +286,6 @@ export const router = createBrowserRouter([
                   "journal-voucher:view",
                   "ledger:view",
                   "report:view",
-                ]}
-              >
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...chartOfAccountsRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard
-                permissions={[
-                  "account:view",
-                  "account-group:view",
-                  "account-balance:view",
                 ]}
               >
                 {route.element}

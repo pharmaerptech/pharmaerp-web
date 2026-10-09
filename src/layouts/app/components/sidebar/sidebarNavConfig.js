@@ -295,14 +295,6 @@ export const SIDEBAR_NAV_GROUPS = [
         ],
         children: [
           {
-            id: "chart-of-accounts-hub",
-            label: "Chart of Accounts Hub",
-            path: ROUTES.CHART_OF_ACCOUNTS,
-            icon: Layers,
-            permission: "account:view",
-            keywords: ["chart of accounts hub", "coa overview", "coa"],
-          },
-          {
             id: "account-groups",
             label: "Account Groups",
             path: ROUTES.ACCOUNT_GROUPS,

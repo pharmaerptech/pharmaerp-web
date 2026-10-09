@@ -267,6 +267,7 @@ export const SalesMobilePage = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onSelectProduct={handleSelectWorkspaceProduct}
+              branchId={currentBranch?._id || currentBranch?.id || null}
               placeholder="Search workspace product..."
               size="sm"
               showDetailsPreview

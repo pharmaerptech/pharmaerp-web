@@ -160,15 +160,42 @@ const ChequesPage = () => {
 
   const handleViewDetails = useCallback(
     (chequeId) => {
-      navigate(ROUTES.CHEQUE_DETAILS(chequeId));
+      const target = cheques?.find(
+        (c) => c._id === chequeId || c.id === chequeId
+      );
+      setDialogState({
+        isOpen: true,
+        mode: "view",
+        entityId: chequeId,
+        chequeData: target || null,
+      });
     },
-    [navigate]
+    [cheques]
   );
 
   const handleCreateNew = useCallback(() => {
-    navigate(ROUTES.CREATE_CHEQUE);
-  }, [navigate]);
+    setDialogState({
+      isOpen: true,
+      mode: "create",
+      entityId: null,
+      chequeData: null,
+    });
+  }, []);
 
+  const handleEditCheque = useCallback(
+    (chequeId) => {
+      const target = cheques?.find(
+        (c) => c._id === chequeId || c.id === chequeId
+      );
+      setDialogState({
+        isOpen: true,
+        mode: "edit",
+        entityId: chequeId,
+        chequeData: target || null,
+      });
+    },
+    [cheques]
+  );
 
   const isLoading = getChequesStatus === API_STATUS.LOADING;
 
@@ -201,13 +228,35 @@ const ChequesPage = () => {
     handleCancel,
     handleViewDetails,
     handleCreateNew,
+    handleEditCheque,
     handleRefresh,
   };
 
-  return isMobile ? (
-    <ChequesMobilePage {...pageProps} />
-  ) : (
-    <ChequesDesktopPage {...pageProps} />
+  return (
+    <>
+      {isMobile ? (
+        <ChequesMobilePage {...pageProps} />
+      ) : (
+        <ChequesDesktopPage {...pageProps} />
+      )}
+
+      <ChequeDialog
+        isOpen={dialogState.isOpen}
+        onClose={() => setDialogState((prev) => ({ ...prev, isOpen: false }))}
+        mode={dialogState.mode}
+        entityId={dialogState.entityId}
+        chequeData={dialogState.chequeData}
+        onSubmitCreate={createCheque}
+        onDepositCheque={handleDeposit}
+        onClearCheque={handleClear}
+        onBounceCheque={handleBounce}
+        onCancelCheque={handleCancel}
+        onSuccess={() => {
+          fetchChequesData();
+          setDialogState((prev) => ({ ...prev, isOpen: false }));
+        }}
+      />
+    </>
   );
 };
 

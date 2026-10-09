@@ -16,6 +16,7 @@ import {
 } from "@/components/ui";
 import { PermissionGate } from "@/components/common/PermissionGate";
 import { cn } from "@/lib/utils";
+import invoiceService from "@/features/sales/services/invoiceService";
 import { BILLING_STATS, INVOICE_RECORDS } from "../../constants/billingData";
 import { BillingCreateInvoiceModal } from "../../components/BillingCreateInvoiceModal";
 import { BillingInvoiceDetailsDrawer } from "../../components/BillingInvoiceDetailsDrawer";

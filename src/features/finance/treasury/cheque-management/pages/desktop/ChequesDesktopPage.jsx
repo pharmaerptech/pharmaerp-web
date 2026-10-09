@@ -11,6 +11,7 @@ import {
   FiTrendingUp,
   FiMoreVertical,
   FiRefreshCw,
+  FiEdit2,
 } from "react-icons/fi";
 
 import {
@@ -67,6 +68,7 @@ const ChequesDesktopPage = ({
   handleCancel,
   handleViewDetails,
   handleCreateNew,
+  handleEditCheque,
   handleRefresh,
 }) => {
   const navigate = useNavigate();
@@ -200,6 +202,15 @@ const ChequesDesktopPage = ({
           },
         ];
 
+        if (c.status === "PENDING" && handleEditCheque) {
+          menuItems.push({
+            id: "edit",
+            label: "Edit Cheque",
+            icon: <FiEdit2 />,
+            onClick: () => handleEditCheque(c._id),
+          });
+        }
+
         // Deposit: received + pending
         if (isReceived && isPending) {
           menuItems.push({
@@ -266,7 +277,7 @@ const ChequesDesktopPage = ({
         );
       },
     },
-  ], [handleViewDetails, handleDeposit, handleClear, handleBounce, handleCancel]);
+  ], [handleViewDetails, handleEditCheque, handleDeposit, handleClear, handleBounce, handleCancel]);
 
   const showPagination = totalCheques > pageSize;
 

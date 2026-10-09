@@ -50,11 +50,18 @@ const FinancePage = () => {
   const financeModules = useMemo(() => {
     return [
       {
-        id: "chartOfAccounts",
-        title: "Chart Of Accounts",
-        description: "Create and manage your chart of accounts",
+        id: "accounts",
+        title: "Accounts",
+        description: "General ledger accounts and classification",
         colorVariant: "success",
-        path: ROUTES.CHART_OF_ACCOUNTS,
+        path: ROUTES.ACCOUNTS,
+      },
+      {
+        id: "accountGroups",
+        title: "Account Groups",
+        description: "Group hierarchy and account classification",
+        colorVariant: "info",
+        path: ROUTES.ACCOUNT_GROUPS,
       },
       {
         id: "financialPeriods",

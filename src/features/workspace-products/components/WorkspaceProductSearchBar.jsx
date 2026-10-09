@@ -5,6 +5,7 @@ import { Search, X, Loader2, Package, Tag, Building2, Info, CheckCircle2, AlertC
 import { cn } from "@/lib/utils";
 import workspaceProductService from "../services/workspaceProductService";
 import WorkspaceProductDetailsModal from "./WorkspaceProductDetailsModal";
+import useBranch from "@/features/branch/hooks/useBranch";
 
 /**
  * WorkspaceProductSearchBar
@@ -16,6 +17,7 @@ export const WorkspaceProductSearchBar = forwardRef(
     {
       value: controlledValue,
       defaultValue = "",
+      branchId: requestedBranchId,
       onChange,
       onSelectProduct,
       onProductDetailsLoaded,
@@ -39,6 +41,11 @@ export const WorkspaceProductSearchBar = forwardRef(
     },
     ref
   ) => {
+    const { currentBranch } = useBranch();
+    const branchId =
+      requestedBranchId !== undefined
+        ? requestedBranchId
+        : currentBranch?._id || currentBranch?.id || null;
     const isControlled = controlledValue !== undefined;
     const [searchTerm, setSearchTerm] = useState(defaultValue);
     const currentValue = isControlled ? controlledValue : searchTerm;
@@ -57,6 +64,7 @@ export const WorkspaceProductSearchBar = forwardRef(
     const inputRef = useRef(null);
     const containerRef = useRef(null);
     const listRef = useRef(null);
+    const searchRequestIdRef = useRef(0);
 
     useImperativeHandle(ref, () => ({
       focus: () => inputRef.current?.focus(),
@@ -68,6 +76,8 @@ export const WorkspaceProductSearchBar = forwardRef(
     // Debounced search query
     const executeSearch = useCallback(
       async (query) => {
+        const requestId = ++searchRequestIdRef.current;
+
         // Sanitize query by stripping non-alphanumeric characters (symbols like -, /, spaces, etc.)
         const cleanedQuery = (query || "").replace(/[^a-zA-Z0-9]/g, "").trim();
 
@@ -75,6 +85,12 @@ export const WorkspaceProductSearchBar = forwardRef(
           setResults([]);
           setIsLoading(false);
           setError(null);
+          return;
+        }
+
+        if (branchId === null) {
+          setResults([]);
+          setIsLoading(false);
           return;
         }
 
@@ -86,24 +102,38 @@ export const WorkspaceProductSearchBar = forwardRef(
           const params = {
             search: cleanedQuery || query.trim(),
             limit,
+            summary: true,
           };
+          if (branchId) params.branchId = branchId;
           if (productType) params.productType = productType;
           if (statusFilter && statusFilter !== "all") params.status = statusFilter;
 
           const response = await workspaceProductService.getWorkspaceProducts(params);
           const productsList = response.data?.data?.products || response.data?.data || response.data?.products || [];
 
-          setResults(Array.isArray(productsList) ? productsList : []);
+          if (requestId === searchRequestIdRef.current) {
+            setResults(Array.isArray(productsList) ? productsList : []);
+          }
         } catch (err) {
           console.error("Error searching workspace products:", err);
-          setError(err?.response?.data?.message || err.message || "Failed to search workspace products");
-          setResults([]);
+          if (requestId === searchRequestIdRef.current) {
+            setError(err?.response?.data?.message || err.message || "Failed to search workspace products");
+            setResults([]);
+          }
         } finally {
-          setIsLoading(false);
+          if (requestId === searchRequestIdRef.current) {
+            setIsLoading(false);
+          }
         }
       },
-      [limit, productType, statusFilter]
+      [branchId, limit, productType, statusFilter]
     );
+
+    useEffect(() => {
+      searchRequestIdRef.current += 1;
+      setResults([]);
+      setIsLoading(false);
+    }, [branchId]);
 
     // Debounce watcher
     useEffect(() => {
@@ -111,6 +141,7 @@ export const WorkspaceProductSearchBar = forwardRef(
         if (currentValue && currentValue.trim()) {
           executeSearch(currentValue);
         } else {
+          searchRequestIdRef.current += 1;
           setResults([]);
           setIsLoading(false);
         }

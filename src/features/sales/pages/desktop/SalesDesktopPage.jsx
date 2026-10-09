@@ -163,35 +163,65 @@ const QuickCreateCustomerModal = ({ open, onClose, defaultName, customerType, bi
   };
 
   return (
-    <UIModal isOpen={open} onClose={onClose} className="max-w-md">
+    <UIModal isOpen={open} onClose={onClose} size="sm">
       <form onSubmit={handleSubmit}>
         <UIModalHeader>
-          <UIModalTitle>Create Quick {billingMode === "B2C" ? "B2C" : "B2B"} Customer</UIModalTitle>
-          <UIModalDescription>Add a new customer on the fly.</UIModalDescription>
+          <UIModalTitle>
+            Add {billingMode === "B2C" ? "Retail Customer" : "B2B Party"}
+          </UIModalTitle>
+          <UIModalDescription>
+            Create a quick customer record to proceed with billing.
+          </UIModalDescription>
         </UIModalHeader>
         <UIModalBody className="space-y-4 p-5">
-          {error && <div className="text-error text-sm font-semibold">{error}</div>}
-          <div>
-            <label className="text-xs font-bold text-text-muted">Customer Name *</label>
-            <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. John Doe or Acme Corp" required className="w-full mt-1 h-9 rounded-lg border border-border px-3 text-sm bg-surface-alt text-text" autoFocus />
+          {error && (
+            <div className="p-3 rounded-xl bg-error-soft/60 border border-error/30 text-error text-xs font-semibold">
+              {error}
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block">
+              {billingMode === "B2C" ? "Patient / Customer Name" : "Party / Business Name"} *
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder={billingMode === "B2C" ? "e.g. John Doe" : "e.g. Acme Medical Corp"}
+              required
+              autoFocus
+              className="w-full h-9 rounded-lg border border-border px-3 text-sm bg-surface text-text focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all"
+            />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold text-text-muted">Mobile Number</label>
-              <input type="text" value={mobile} onChange={e => setMobile(e.target.value)} placeholder="Optional" className="w-full mt-1 h-9 rounded-lg border border-border px-3 text-sm bg-surface-alt text-text" />
+          <div className={cn("grid gap-4", billingMode === "B2B" ? "grid-cols-2" : "grid-cols-1")}>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block">Mobile</label>
+              <input
+                type="text"
+                value={mobile}
+                onChange={e => setMobile(e.target.value)}
+                placeholder="Optional"
+                className="w-full h-9 rounded-lg border border-border px-3 text-sm bg-surface text-text focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all"
+              />
             </div>
             {billingMode === "B2B" && (
-              <div>
-                <label className="text-xs font-bold text-text-muted">GST Number</label>
-                <input type="text" value={gstNumber} onChange={e => setGstNumber(e.target.value)} placeholder="Optional" className="w-full mt-1 h-9 rounded-lg border border-border px-3 text-sm bg-surface-alt text-text uppercase" />
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-text-muted uppercase tracking-wider block">GST Number</label>
+                <input
+                  type="text"
+                  value={gstNumber}
+                  onChange={e => setGstNumber(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full h-9 rounded-lg border border-border px-3 text-sm bg-surface text-text uppercase focus:border-primary focus:ring-1 focus:ring-primary/30 outline-none transition-all"
+                />
               </div>
             )}
           </div>
         </UIModalBody>
         <UIModalFooter>
           <UIButton type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>Cancel</UIButton>
-          <UIButton type="submit" variant="primary" disabled={isSubmitting || !name.trim()}>
-            {isSubmitting ? "Creating..." : "Create Customer"}
+          <UIButton type="submit" variant="primary" isLoading={isSubmitting} loadingText="Creating..." disabled={isSubmitting || !name.trim()}>
+            Create {billingMode === "B2C" ? "Customer" : "Party"}
           </UIButton>
         </UIModalFooter>
       </form>
@@ -749,6 +779,14 @@ export const SalesDesktopPage = () => {
     });
     setIsReceiptOpen(true);
     setCart([]);
+    setSelectedB2cCustomer(null);
+    setSelectedB2bParty(null);
+    setCustomerName("");
+    setCustomerPhone("");
+    setDoctorName("");
+    setShowCustomerHistory(false);
+    customerSearchBarRef.current?.clear?.();
+    b2bCustomerSearchBarRef.current?.clear?.();
     setToastMessage(`✅ ${billingMode} Invoice ${saleData.invoiceNo} created & saved in backend.`);
     setTimeout(() => setToastMessage(null), 4000);
   };
@@ -828,536 +866,551 @@ export const SalesDesktopPage = () => {
   }
 
   return (
-    <section className="h-[100dvh] w-full bg-bg flex flex-col font-sans overflow-hidden">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <motion.div
-          initial={{ opacity: 0, y: -20, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -20 }}
-          className="fixed top-6 right-8 z-[9999] flex items-center gap-2.5 rounded-2xl border border-primary/30 bg-surface/95 px-4 py-3 text-sm font-semibold text-text shadow-xl backdrop-blur-md"
-        >
-          <CheckCircle2 className="size-5 text-primary shrink-0" />
-          <span>{toastMessage}</span>
-        </motion.div>
-      )}
+    <section className="-m-6 h-[calc(100dvh-58px)] max-h-[calc(100dvh-58px)] w-[calc(100%+3rem)] bg-bg flex flex-col font-sans overflow-hidden">
 
-      {/* Top Header & B2C / B2B Selector */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-surface p-4 border-b border-border shadow-2xs z-20 shrink-0">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-primary animate-pulse" />
-            <h1 className="text-2xl font-extrabold text-text tracking-tight">
-              POS Billing Terminal
-            </h1>
-            <span
-              className={cn(
-                "ml-2 px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider border",
-                billingMode === "B2B"
-                  ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
-                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
-              )}
-            >
-              {billingMode === "B2B" ? "B2B Commercial Mode" : "B2C Retail Mode"}
+      {/* ── TOAST NOTIFICATION ───────────────────────── */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -16, scale: 0.96 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2.5 rounded-2xl border border-primary/25 bg-surface/98 px-5 py-2.5 text-sm font-semibold text-text shadow-xl backdrop-blur-md whitespace-nowrap pointer-events-none"
+          >
+            <CheckCircle2 className="size-4 text-primary shrink-0" />
+            <span>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── TOP BAR ────────────────────────────────────── */}
+      <div className="h-14 shrink-0 flex items-center justify-between px-4 gap-4 bg-surface border-b border-border z-20">
+        {/* Left: Brand + Shift indicator */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className="size-2 rounded-full bg-success animate-pulse shrink-0" />
+          <h1 className="text-[15px] font-extrabold text-text tracking-tight whitespace-nowrap">
+            POS Billing
+          </h1>
+          <span
+            className={cn(
+              "px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider border whitespace-nowrap shrink-0",
+              billingMode === "B2B"
+                ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+                : "bg-primary/10 text-primary border-primary/20"
+            )}
+          >
+            {billingMode === "B2B" ? "B2B Commercial" : "B2C Retail"}
+          </span>
+          {activeShift?.date && (
+            <span className="hidden sm:flex items-center gap-1 text-[11px] font-medium text-text-muted bg-surface-alt px-2.5 py-1 rounded-lg border border-border shrink-0">
+              <RefreshCw className="size-3 text-primary" />
+              {new Date(activeShift.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
             </span>
-          </div>
-          <p className="text-xs text-text-muted mt-0.5">
-            Switch between Consumer (B2C) & Commercial Party (B2B Wholesaler / Retailer) invoicing
-          </p>
+          )}
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          
+        {/* Center: B2C / B2B Mode Toggle */}
+        <div className="flex items-center gap-1 bg-surface-alt p-1 rounded-xl border border-border shrink-0">
+          <button
+            type="button"
+            onClick={() => setBillingMode("B2C")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+              billingMode === "B2C"
+                ? "bg-surface text-primary shadow-xs border border-border"
+                : "text-text-muted hover:text-text"
+            )}
+          >
+            <User className="size-3.5" />
+            <span>B2C Retail</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => { setBillingMode("B2B"); }}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
+              billingMode === "B2B"
+                ? "bg-surface text-purple-600 dark:text-purple-400 shadow-xs border border-border"
+                : "text-text-muted hover:text-text"
+            )}
+          >
+            <Building2 className="size-3.5" />
+            <span>B2B Commercial</span>
+          </button>
+        </div>
 
-          {/* Billing Mode Switcher (B2C vs B2B) */}
-          <div className="flex items-center gap-2 bg-surface-alt p-1.5 rounded-xl border border-border">
-            <button
-              type="button"
-              onClick={() => setBillingMode("B2C")}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                billingMode === "B2C"
-                  ? "bg-surface text-primary shadow-xs border border-border"
-                  : "text-text-muted hover:text-text"
-              )}
-            >
-              <User className="size-4" />
-              <span>B2C Retail Billing</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setBillingMode("B2B");
-              }}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                billingMode === "B2B"
-                  ? "bg-surface text-purple-600 dark:text-purple-400 shadow-xs border border-border"
-                  : "text-text-muted hover:text-text"
-              )}
-            >
-              <Building2 className="size-4" />
-              <span>B2B Commercial Billing</span>
-            </button>
-          </div>
+        {/* Right: History toggle + shortcut hint */}
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="hidden md:flex items-center gap-1 text-[10.5px] text-text-muted bg-surface-alt px-2 py-1 rounded-lg border border-border font-mono select-none">
+            <kbd className="font-bold text-text">Ctrl</kbd>+<kbd className="font-bold text-text">↵</kbd>
+            <span className="font-sans ml-0.5">Checkout</span>
+          </span>
+          <UIIconButton
+            icon={<History className="size-4" />}
+            variant={showCustomerHistory ? "soft" : "ghost"}
+            size="sm"
+            title="Toggle Customer History"
+            onClick={() => setShowCustomerHistory(!showCustomerHistory)}
+          />
         </div>
       </div>
 
-      {/* Full-width Customer Search Area */}
-      <div className="p-4 border-b border-border bg-surface z-10 shrink-0 w-full">
-        {billingMode === "B2C" ? (
-          /* B2C Retail Customer Search Bar */
-          <SalesCustomerDoctorInfo
-            selectedCustomer={selectedB2cCustomer}
-            onSelectCustomer={setSelectedB2cCustomer}
-            customerName={customerName}
-            onChangeCustomerName={setCustomerName}
-            customerPhone={customerPhone}
-            onChangeCustomerPhone={setCustomerPhone}
-            doctorName={doctorName}
-            onChangeDoctorName={setDoctorName}
-            saleDate={saleDate}
-            onChangeSaleDate={setSaleDate}
-            onAddNewCustomer={(name) => {
-              setQuickCreateCustomerName(name);
-              setQuickCreateCustomerType("other");
-              setIsQuickCreateCustomerModalOpen(true);
-            }}
-          />
-        ) : (
-          /* B2B Commercial Party Bar (Wholesaler vs Retailer) */
-          <div className="space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-              <div className="flex flex-col gap-3 flex-1 max-w-xl">
-                <div className="w-full">
-                  <span className="text-[10px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider block mb-1">
-                    Search & Select Commercial Party (B2B)
-                  </span>
-                  <B2bCustomerSearchBar
-                    ref={b2bCustomerSearchBarRef}
-                    selectedCustomer={selectedB2bParty}
-                    onSelectCustomer={(party) => {
-                      setSelectedB2bParty(party);
-                      setTimeout(() => searchBarRef.current?.focus(), 80);
-                    }}
-                    b2bPartyType={b2bPartyType}
-                    showAddNewAction={true}
-                    onAddNewCustomer={(name) => {
-                      setQuickCreateCustomerName(name);
-                      setQuickCreateCustomerType(b2bPartyType === "wholesaler" ? "wholesale" : "retail");
-                      setIsQuickCreateCustomerModalOpen(true);
-                    }}
-                    placeholder="Search B2B party by name, GST, or phone..."
-                    size="sm"
-                  />
-                </div>
+      {/* ── MAIN BODY ───────────────────────────────────── */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
 
-                {/* Party Type Filter (Wholesaler vs Retailer) */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-text-muted uppercase tracking-wider mr-1">
-                    Party Type:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setB2bPartyType("all")}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                      b2bPartyType === "all"
-                        ? "bg-purple-600 text-white shadow-xs"
-                        : "bg-surface-alt text-text-muted hover:text-text border border-border"
-                    )}
-                  >
-                    All B2B Parties
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setB2bPartyType("wholesaler")}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                      b2bPartyType === "wholesaler"
-                        ? "bg-purple-600 text-white shadow-xs"
-                        : "bg-surface-alt text-text-muted hover:text-text border border-border"
-                    )}
-                  >
-                    <Briefcase className="size-3.5" />
-                    Wholesaler
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setB2bPartyType("retailer")}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
-                      b2bPartyType === "retailer"
-                        ? "bg-purple-600 text-white shadow-xs"
-                        : "bg-surface-alt text-text-muted hover:text-text border border-border"
-                    )}
-                  >
-                    <Store className="size-3.5" />
-                    Retailer
-                  </button>
-                </div>
+        {/* ── LEFT PANEL: Customer strip + Search + Cart ── */}
+        <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+
+          {/* Customer Strip */}
+          <div className="shrink-0 border-b border-border bg-surface">
+            {billingMode === "B2C" ? (
+              <div className="px-4 py-2.5">
+                <SalesCustomerDoctorInfo
+                  customerSearchBarRef={customerSearchBarRef}
+                  selectedCustomer={selectedB2cCustomer}
+                  onSelectCustomer={setSelectedB2cCustomer}
+                  customerName={customerName}
+                  onChangeCustomerName={setCustomerName}
+                  customerPhone={customerPhone}
+                  onChangeCustomerPhone={setCustomerPhone}
+                  doctorName={doctorName}
+                  onChangeDoctorName={setDoctorName}
+                  saleDate={saleDate}
+                  onChangeSaleDate={setSaleDate}
+                  onAddNewCustomer={(name) => {
+                    setQuickCreateCustomerName(name);
+                    setQuickCreateCustomerType("other");
+                    setIsQuickCreateCustomerModalOpen(true);
+                  }}
+                />
               </div>
-
-              <div className="text-xs text-text-muted shrink-0 text-right bg-surface-alt/70 px-3 py-2 rounded-xl border border-border/60">
-                <span className="block text-[10px] font-bold uppercase tracking-wider text-text-muted">
-                  Invoice Mode
-                </span>
-                <span className="font-bold text-text">Commercial Tax Invoice</span>
-              </div>
-            </div>
-
-            {/* B2B Selected Party Specs Card */}
-            {selectedB2bParty && (
-              <div className="flex items-center gap-4 px-1 py-2 text-xs">
-                <div>
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider mr-1.5">
-                    Credit:
-                  </span>
-                  <span className="font-bold text-danger">
-                    {(selectedB2bParty.outstandingAmount || selectedB2bParty.openingBalance || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" })} {(selectedB2bParty.balanceType || selectedB2bParty.openingBalanceType || "DR").toUpperCase()}
-                  </span>
-                </div>
-                
-                {(selectedB2bParty.creditLimit > 0) && (
-                  <div>
-                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider mr-1.5">
-                      Credit Limit:
-                    </span>
-                    <span className="font-bold text-text">
-                      {selectedB2bParty.creditLimit.toLocaleString("en-IN", { style: "currency", currency: "INR" })}
-                    </span>
+            ) : (
+              /* B2B Party Strip */
+              <div className="px-4 py-2.5 space-y-2">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex-1 min-w-[200px]">
+                    <B2bCustomerSearchBar
+                      ref={b2bCustomerSearchBarRef}
+                      selectedCustomer={selectedB2bParty}
+                      onSelectCustomer={(party) => {
+                        setSelectedB2bParty(party);
+                        setTimeout(() => searchBarRef.current?.focus(), 80);
+                      }}
+                      b2bPartyType={b2bPartyType}
+                      showAddNewAction={true}
+                      onAddNewCustomer={(name) => {
+                        setQuickCreateCustomerName(name);
+                        setQuickCreateCustomerType(b2bPartyType === "wholesaler" ? "wholesale" : "retail");
+                        setIsQuickCreateCustomerModalOpen(true);
+                      }}
+                      placeholder="Search B2B party by name, GST, or phone..."
+                      size="sm"
+                    />
                   </div>
-                )}
-
-                {(selectedB2bParty.creditDays > 0) && (
-                  <div>
-                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider mr-1.5">
-                      Credit Days:
-                    </span>
-                    <span className="font-bold text-text">
-                      {selectedB2bParty.creditDays}
-                    </span>
+                  {/* Party type filter chips */}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {[
+                      { value: "all", label: "All", icon: null },
+                      { value: "wholesaler", label: "Wholesaler", icon: <Briefcase className="size-3" /> },
+                      { value: "retailer", label: "Retailer", icon: <Store className="size-3" /> },
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setB2bPartyType(opt.value)}
+                        className={cn(
+                          "flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all cursor-pointer",
+                          b2bPartyType === opt.value
+                            ? "bg-purple-600 text-white shadow-xs"
+                            : "bg-surface-alt text-text-muted hover:text-text border border-border"
+                        )}
+                      >
+                        {opt.icon}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {/* B2B selected party credit info */}
+                {selectedB2bParty && (
+                  <div className="flex items-center gap-3 text-[11px] flex-wrap">
+                    <span className="font-bold text-text">{selectedB2bParty.name}</span>
+                    {((selectedB2bParty.outstandingAmount || selectedB2bParty.openingBalance) > 0) && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-error-soft/50 border border-error/20 font-mono font-bold text-error">
+                        Credit: {(selectedB2bParty.outstandingAmount || selectedB2bParty.openingBalance || 0).toLocaleString("en-IN", { style: "currency", currency: "INR" })} {(selectedB2bParty.balanceType || selectedB2bParty.openingBalanceType || "DR").toUpperCase()}
+                      </span>
+                    )}
+                    {(selectedB2bParty.creditLimit > 0) && (
+                      <span className="text-text-muted">
+                        Limit: <span className="font-bold text-text">{selectedB2bParty.creditLimit.toLocaleString("en-IN", { style: "currency", currency: "INR" })}</span>
+                      </span>
+                    )}
+                    {(selectedB2bParty.creditDays > 0) && (
+                      <span className="text-text-muted">
+                        Days: <span className="font-bold text-text">{selectedB2bParty.creditDays}d</span>
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
             )}
           </div>
-        )}
-          
-      </div>
-      <div className="flex-1 flex overflow-hidden">
 
-        {/* Main POS Area (Right, flex-1) */}
-        <div className="flex-1 flex flex-col p-4 md:p-6 overflow-y-auto bg-surface-alt/50">
-          <div className="w-full">
-        <UICard
-          variant="default"
-          className="p-6 rounded-2xl bg-surface border-border shadow-xs flex flex-col justify-between min-h-[620px] space-y-5"
-        >
-          <div className="space-y-4">
-            {/* Line 1: Cart Header with Billed To Info */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-border/70">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20">
-                  <ShoppingCart className="size-5.5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-extrabold text-text">
-                      {billingMode === "B2B" ? "B2B Tax Invoice Cart" : "Retail Sale Cart"}
-                    </h2>
-                    <span className="rounded-full bg-primary-soft text-primary px-2.5 py-0.5 text-xs font-extrabold font-mono">
-                      {cartItemCount} Items
-                    </span>
-                  </div>
-                  <p className="text-xs text-text-muted mt-0.5">
-                    <span className="font-semibold text-text">Billed To: </span>
-                    {activeCustomer ? (
-                      <>
-                        <span className="font-extrabold text-primary">{billingMode === "B2C" ? (customerName || activeCustomer?.name || "Walk-in") : activeCustomer.name}</span>
-                          {(billingMode === "B2C" ? (customerPhone || activeCustomer?.phone) : activeCustomer.phone) && (
-                            <span className="font-mono text-text-muted"> ({billingMode === "B2C" ? (customerPhone || activeCustomer?.phone) : activeCustomer.phone})</span>
-                          )}
-                      </>
-                    ) : (
-                      <span
-                        onClick={() => customerSearchBarRef.current?.focus()}
-                        className="font-bold text-amber-600 dark:text-amber-400 cursor-pointer hover:underline"
-                      >
-                        No Customer Selected (Type to Search Customer First)
-                      </span>
+          {/* Product Search Bar */}
+          <div className="shrink-0 px-3 py-2.5 border-b border-border bg-surface-alt/30">
+            <WorkspaceProductSearchBar
+              ref={searchBarRef}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onSelectProduct={handleSelectWorkspaceProduct}
+              branchId={currentBranch?._id || currentBranch?.id || null}
+              placeholder="Scan barcode or search product / medicine by name, SKU, brand..."
+              size="md"
+              showDetailsPreview
+            />
+          </div>
+
+          {/* ── CART TABLE — only this section scrolls ── */}
+          <div className="flex-1 overflow-y-auto">
+            {cart.length > 0 ? (
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-neutral-100/98 dark:bg-neutral-800/98 border-b border-border text-[10px] font-bold text-text-muted uppercase tracking-wider select-none">
+                    <th className="py-2 px-2 text-center w-8">#</th>
+                    <th className="py-2 px-2 min-w-[160px]">Item</th>
+                    <th className="py-2 px-2 w-[72px]">Batch</th>
+                    <th className="py-2 px-1.5 w-[48px]">Pack</th>
+                    <th className="py-2 px-1.5 w-[52px]">Rack</th>
+                    <th className="py-2 px-1.5 w-[48px] font-mono">HSN</th>
+                    <th className="py-2 px-1.5 w-[48px] font-mono">GST%</th>
+                    {billingMode === "B2C" ? (
+                      <th className="py-2 px-1.5 w-[48px] font-mono">Rate%</th>
+                    ) : cart.some((i) => Number(i.schemeDiscountPercent) > 0) && (
+                      <th className="py-2 px-1.5 w-[56px] font-mono">Schm%</th>
                     )}
+                    <th className="py-2 px-1.5 w-[64px] font-mono text-right">MRP</th>
+                    <th className="py-2 px-1.5 w-[64px] font-mono text-right">Rate</th>
+                    {billingMode !== "B2C" && <th className="py-2 px-1.5 w-[52px] font-mono text-center">Disc%</th>}
+                    <th className="py-2 px-1.5 w-[100px] font-mono text-center">Qty</th>
+                    <th className="py-2 px-1.5 w-[52px] font-mono">Expiry</th>
+                    <th className="py-2 px-2 w-[72px] font-mono text-right">Amount</th>
+                    <th className="py-2 px-1.5 w-8 text-center"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {cart.map((item, idx) => {
+                    const lineAmt = getItemAmount(item);
+                    return (
+                      <tr key={item.id} className="hover:bg-surface-hover/60 transition-colors group">
+                        {/* # */}
+                        <td className="py-1.5 px-2 text-center text-text-muted font-mono text-[10px]">{idx + 1}</td>
+
+                        {/* Item Name */}
+                        <td className="py-1.5 px-2">
+                          <span className="font-bold text-text block truncate text-[11px] leading-tight">{item.name}</span>
+                          <span className="text-[10px] text-text-muted block truncate">{item.brand} · {item.category}</span>
+                        </td>
+
+                        {/* Batch */}
+                        <td className="py-1.5 px-2 font-mono text-[10.5px] text-text-muted font-semibold truncate">{item.batch}</td>
+
+                        {/* Pack */}
+                        <td className="py-1.5 px-1.5 text-[10.5px] text-text-muted truncate">{item.pack}</td>
+
+                        {/* Rack */}
+                        <td className="py-1.5 px-1.5 font-mono text-[10.5px] text-primary font-bold truncate">{item.rack}</td>
+
+                        {/* HSN */}
+                        <td className="py-1.5 px-1.5 font-mono text-[10.5px] text-text-muted">{item.hsn}</td>
+
+                        {/* GST % */}
+                        <td className="py-1.5 px-1.5 font-mono text-[10.5px] font-bold text-purple-600 dark:text-purple-400">
+                          {item.gst !== undefined && item.gst !== null ? `${item.gst}%` : `${getGstRate(item)}%`}
+                        </td>
+
+                        {/* Rate % (B2C) / Scheme % (B2B) */}
+                        {billingMode === "B2C" ? (
+                          <td className="py-1.5 px-1.5 font-mono text-[10.5px] text-success font-semibold">
+                            {item.rateCPercentage !== undefined && item.rateCPercentage !== null ? `${item.rateCPercentage}%` : item.ratePct}
+                          </td>
+                        ) : cart.some((i) => Number(i.schemeDiscountPercent) > 0) && (() => {
+                          const schemeCheck = computeSchemeDiscount(Number(item.qty) || 1, Number(item.schemeDiscountPercent) || 0);
+                          return (
+                            <td className="py-1.5 px-1.5 font-mono text-[10.5px] text-success font-semibold">
+                              {schemeCheck.schemeApply ? item.schemeDiscountPercent : "—"}
+                            </td>
+                          );
+                        })()}
+
+                        {/* MRP */}
+                        <td className="py-1.5 px-1.5 font-mono text-right text-[10.5px] text-text-muted">
+                          ₹{Number(item.mrp).toFixed(2)}
+                        </td>
+
+                        {/* Rate */}
+                        <td className="py-1.5 px-1.5 font-mono text-right text-[10.5px] font-bold text-text">
+                          ₹{Number(item.price).toFixed(2)}
+                        </td>
+
+                        {/* Disc % (B2B only) */}
+                        {billingMode !== "B2C" && (
+                          <td className="py-1.5 px-1.5 text-center">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={item.disc ?? 0}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => handleUpdateItemDisc(item.id, e.target.value)}
+                              onBlur={(e) => handleBlurItemDisc(item.id, e.target.value)}
+                              className="w-11 text-center rounded border border-border bg-surface px-1 py-0.5 font-mono text-[10.5px] text-text focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                          </td>
+                        )}
+
+                        {/* Qty Stepper */}
+                        <td className="py-1.5 px-1.5 text-center">
+                          <div className="inline-flex items-center gap-0.5 bg-surface-alt rounded-lg border border-border p-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateQty(item.id, -1)}
+                              className="size-5 rounded flex items-center justify-center hover:bg-surface-hover text-text-muted hover:text-text cursor-pointer transition-colors"
+                            >
+                              <Minus className="size-3" />
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.qty}
+                              onFocus={(e) => e.target.select()}
+                              onChange={(e) => handleSetQty(item.id, e.target.value)}
+                              onBlur={(e) => handleBlurQty(item.id, e.target.value)}
+                              className="w-9 text-center bg-transparent border-0 font-mono font-bold text-[11px] text-text outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                            <button
+                              type="button"
+                              disabled={Number(item.qty) >= Number(item.stock ?? 999999)}
+                              onClick={() => handleUpdateQty(item.id, 1)}
+                              className={cn(
+                                "size-5 rounded flex items-center justify-center transition-colors",
+                                Number(item.qty) >= Number(item.stock ?? 999999)
+                                  ? "opacity-30 cursor-not-allowed text-text-muted"
+                                  : "hover:bg-surface-hover text-text-muted hover:text-text cursor-pointer"
+                              )}
+                            >
+                              <Plus className="size-3" />
+                            </button>
+                          </div>
+                        </td>
+
+                        {/* Expiry */}
+                        <td className="py-1.5 px-1.5 font-mono text-[10.5px] text-text font-semibold">
+                          {item.expiry || item.expDate || item.expiryDate || "—"}
+                        </td>
+
+                        {/* Amount */}
+                        <td className="py-1.5 px-2 font-mono text-right font-extrabold text-primary text-[11px] tabular-nums">
+                          ₹{lineAmt.toFixed(2)}
+                        </td>
+
+                        {/* Remove */}
+                        <td className="py-1.5 px-1.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveItem(item.id)}
+                            className="text-text-muted hover:text-error transition-colors p-1 cursor-pointer rounded opacity-0 group-hover:opacity-100"
+                            title="Remove item"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : (
+              /* Empty state */
+              <div className="flex flex-col items-center justify-center h-full py-16 gap-4">
+                <div className="size-16 rounded-2xl bg-surface-alt flex items-center justify-center border border-border">
+                  <Barcode className="size-8 text-text-muted opacity-40" />
+                </div>
+                <div className="text-center space-y-1">
+                  <p className="text-sm font-bold text-text-muted">Cart is empty</p>
+                  <p className="text-xs text-text-muted/70">
+                    Search or scan a product to add it to the bill
                   </p>
                 </div>
               </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── RIGHT PANEL (Fixed 340px Width, Never Shifts Left Section) ── */}
+        <div className="w-[340px] shrink-0 h-full max-h-full flex flex-col border-l border-border bg-surface overflow-hidden">
+          {!showCustomerHistory ? (
+            /* Order Summary */
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {/* Billed To Header */}
+              <div className="px-4 pt-3.5 pb-2.5 border-b border-border/70 shrink-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">Billed To</span>
+                  <UIBadge
+                    className={cn(
+                      "text-[10px] font-bold border",
+                      billingMode === "B2B"
+                        ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20"
+                        : "bg-primary/10 text-primary border-primary/20"
+                    )}
+                  >
+                    {billingMode}
+                  </UIBadge>
+                </div>
+                <div className="space-y-0.5">
+                  <p className={cn(
+                    "font-extrabold text-sm leading-tight",
+                    activeCustomer ? "text-text" : "text-text-muted/60 italic text-xs"
+                  )}>
+                    {billingMode === "B2C"
+                      ? (customerName || activeCustomer?.name || "No customer selected")
+                      : (activeCustomer?.name || "No party selected")}
+                  </p>
+                  {(billingMode === "B2C" ? (customerPhone || activeCustomer?.phone) : activeCustomer?.phone) && (
+                    <p className="text-[11px] font-mono text-text-muted">
+                      {billingMode === "B2C" ? (customerPhone || activeCustomer?.phone) : activeCustomer?.phone}
+                    </p>
+                  )}
+                  {billingMode === "B2C" && doctorName && (
+                    <p className="text-[11px] text-text-muted">Dr. {doctorName}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Order Summary */}
+              <div className="flex-1 overflow-y-auto min-h-0 px-4 py-2.5 space-y-1.5">
+                {/* Items count row */}
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-xs text-text-muted flex items-center gap-1.5">
+                    <ShoppingCart className="size-3.5" />
+                    Items in cart
+                  </span>
+                  <span className="text-xs font-bold text-text font-mono">{cartItemCount}</span>
+                </div>
+
+                <div className="border-t border-border/60" />
+
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-xs text-text-muted">Subtotal</span>
+                  <span className="text-xs font-bold text-text font-mono tabular-nums">₹{cartSubtotal.toFixed(2)}</span>
+                </div>
+
+                {billingMode === "B2B" && estTax > 0 && (
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-xs text-text-muted">Est. GST</span>
+                    <span className="text-xs font-semibold text-purple-600 dark:text-purple-400 font-mono tabular-nums">+₹{estTax.toFixed(2)}</span>
+                  </div>
+                )}
+
+                <div className="border-t border-border/60 my-1" />
+
+                {/* Grand Total highlight */}
+                <div className="bg-primary/8 rounded-xl border border-primary/15 p-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-primary/70">Grand Total</p>
+                    <p className="text-2xl font-black text-text tabular-nums font-mono leading-none mt-0.5">
+                      ₹{cartGrandTotal.toLocaleString("en-IN")}
+                    </p>
+                  </div>
+                  <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <Receipt className="size-5 text-primary" />
+                  </div>
+                </div>
+
+                {/* Cart Items Quick Preview */}
+                {cart.length > 0 && (
+                  <div className="mt-2 space-y-0.5">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-1.5">Cart Items</p>
+                    {cart.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between text-[11px] py-0.5">
+                        <span className="text-text-muted truncate max-w-[190px]">
+                          {item.name} <span className="font-mono text-text-muted">×{item.qty}</span>
+                        </span>
+                        <span className="font-mono font-bold text-text tabular-nums shrink-0 ml-2">₹{getItemAmount(item).toFixed(0)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* Customer History Panel in the SAME EXACT 340px container */
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0 bg-surface">
+                <div className="flex items-center gap-2">
+                  <History className="size-4 text-primary" />
+                  <span className="text-sm font-bold text-text">Customer History</span>
+                </div>
+                <UIButton
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setShowCustomerHistory(false)}
+                  startIcon={<ChevronLeft className="size-3.5" />}
+                  className="text-xs font-bold text-primary cursor-pointer"
+                >
+                  Summary
+                </UIButton>
+              </div>
+              <div className="flex-1 overflow-y-auto bg-surface-alt/40 min-h-0">
+                <SalesCustomerSidebar
+                  customer={billingMode === 'B2C' ? (activeCustomer || { name: customerName, phone: customerPhone }) : activeCustomer}
+                  onAddProduct={handleAddFromHistory}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── PERMANENT BOTTOM CTA: Checkout + Clear Cart Side-by-Side ── */}
+          <div className="p-3 border-t border-border/70 bg-surface shrink-0 sticky bottom-0 z-10">
+            <div className="flex items-center gap-2">
+              <PermissionGate
+                permission="pos:create"
+                fallback={
+                  <UIButton variant="primary" size="lg" className="flex-1" disabled>
+                    Checkout (pos:create required)
+                  </UIButton>
+                }
+              >
+                <UIButton
+                  variant="primary"
+                  size="lg"
+                  disabled={cart.length === 0}
+                  onClick={handleProceedToCheckout}
+                  endIcon={<Receipt className="size-4.5" />}
+                  className="flex-1 h-11 text-sm font-bold"
+                >
+                  {cart.length === 0
+                    ? "Add items to checkout"
+                    : `Checkout · ₹${cartGrandTotal.toLocaleString("en-IN")}`}
+                </UIButton>
+              </PermissionGate>
 
               {cart.length > 0 && (
                 <button
                   type="button"
                   onClick={handleClearCart}
-                  className="text-xs font-semibold text-error hover:underline flex items-center gap-1 cursor-pointer"
+                  className="h-11 px-3 rounded-xl border border-error/30 bg-error-soft/30 hover:bg-error-soft/60 text-error flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                  title="Clear Cart"
+                  aria-label="Clear Cart"
                 >
                   <Trash2 className="size-4" />
-                  <span>Clear Cart</span>
                 </button>
               )}
             </div>
-
-            {/* Line 2: Workspace Product Search Bar directly in Cart */}
-            <div>
-              <WorkspaceProductSearchBar
-                ref={searchBarRef}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onSelectProduct={handleSelectWorkspaceProduct}
-                placeholder="Scan barcode or search product / medicine by name, SKU, brand..."
-                size="md"
-                showDetailsPreview
-              />
-            </div>
-
-            {/* High-Density 14-Column POS Cart Table */}
-            <div className="overflow-x-auto rounded-xl border border-border bg-surface-alt/30 max-h-[380px]">
-              {cart.length > 0 ? (
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-border bg-surface-alt/80 text-[10.5px] font-bold text-text-muted uppercase tracking-wider select-none">
-                      <th className="py-2.5 px-3">Item Name</th>
-                      <th className="py-2.5 px-2">Batch</th>
-                      <th className="py-2.5 px-2">Pack</th>
-                      <th className="py-2.5 px-2">Rack</th>
-                      <th className="py-2.5 px-2 font-mono">HSN</th>
-                      <th className="py-2.5 px-2 font-mono">GST %</th>
-                      {billingMode === "B2C" ? (
-                        <th className="py-2.5 px-2 font-mono">Rate %</th>
-                      ) : cart.some((i) => Number(i.schemeDiscountPercent) > 0) && (
-                        <th className="py-2.5 px-2 font-mono">Scheme Disc %</th>
-                      )}
-                      <th className="py-2.5 px-2 font-mono text-right">MRP</th>
-                      <th className="py-2.5 px-2 font-mono text-right">Rate</th>
-                      {billingMode !== "B2C" && <th className="py-2.5 px-2 font-mono text-center">Disc %</th>}
-                      <th className="py-2.5 px-2 font-mono text-center">Qty</th>
-                      <th className="py-2.5 px-2 font-mono">Expiry</th>
-                      <th className="py-2.5 px-3 font-mono text-right">Amount</th>
-                      <th className="py-2.5 px-2 text-center">Act</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {cart.map((item) => {
-                      const lineAmt = getItemAmount(item);
-
-                      return (
-                        <tr key={item.id} className="hover:bg-surface-hover/80 transition-colors">
-                          {/* 1. Item Name */}
-                          <td className="py-2 px-3">
-                            <span className="font-bold text-text text-xs block truncate max-w-[200px]">
-                              {item.name}
-                            </span>
-                            <span className="text-[10px] text-text-muted block">
-                              {item.brand} • {item.category}
-                            </span>
-                          </td>
-
-                          {/* 2. Batch */}
-                          <td className="py-2 px-2 font-mono text-[11px] text-text-muted font-semibold">
-                            {item.batch}
-                          </td>
-
-                          {/* 3. Pack */}
-                          <td className="py-2 px-2 font-medium text-text-muted">
-                            {item.pack}
-                          </td>
-
-                          {/* 4. Rack */}
-                          <td className="py-2 px-2 font-mono text-[11px] text-primary font-bold">
-                            {item.rack}
-                          </td>
-
-                          {/* 5. HSN */}
-                          <td className="py-2 px-2 font-mono text-[11px] text-text-muted">
-                            {item.hsn}
-                          </td>
-
-                          {/* 6. GST % */}
-                          <td className="py-2 px-2 font-mono text-[11px] font-bold text-purple-600 dark:text-purple-400">
-                            {item.gst !== undefined && item.gst !== null ? `${item.gst}%` : `${getGstRate(item)}%`}
-                          </td>
-
-                          {/* 7. Rate % (B2C) / Scheme Disc % (B2B, only if applied) */}
-                          {billingMode === "B2C" ? (
-                            <td className="py-2 px-2 font-mono text-[11px] text-emerald-600 font-semibold">
-                              {item.rateCPercentage !== undefined && item.rateCPercentage !== null ? `${item.rateCPercentage}%` : item.ratePct}
-                            </td>
-                          ) : cart.some((i) => Number(i.schemeDiscountPercent) > 0) && (() => {
-                            const schemeCheck = computeSchemeDiscount(Number(item.qty) || 1, Number(item.schemeDiscountPercent) || 0);
-                            return (
-                              <td className="py-2 px-2 font-mono text-[11px] text-emerald-600 font-semibold">
-                                {schemeCheck.schemeApply ? item.schemeDiscountPercent : "-"}
-                              </td>
-                            );
-                          })()}
-
-                          {/* 8. MRP */}
-                          <td className="py-2 px-2 font-mono text-right text-text font-medium">
-                            ₹{Number(item.mrp).toFixed(2)}
-                          </td>
-
-                          {/* 9. Rate */}
-                          <td className="py-2 px-2 font-mono text-right font-bold text-text">
-                            ₹{Number(item.price).toFixed(2)}
-                          </td>
-
-                          {/* 10. Disc % (B2B only — separate editable discount) */}
-                          {billingMode !== "B2C" && (
-                            <td className="py-2 px-2 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                value={item.disc ?? 0}
-                                onFocus={(e) => e.target.select()}
-                                onChange={(e) => handleUpdateItemDisc(item.id, e.target.value)}
-                                onBlur={(e) => handleBlurItemDisc(item.id, e.target.value)}
-                                className="w-12 text-center rounded border border-border bg-surface px-1 py-0.5 font-mono text-xs text-text focus:border-primary focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                            </td>
-                          )}
-
-                          {/* 11. Qty */}
-                          <td className="py-2 px-2 text-center">
-                            <div className="inline-flex items-center gap-1 bg-surface rounded-md border border-border p-0.5">
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateQty(item.id, -1)}
-                                className="size-5 rounded flex items-center justify-center hover:bg-surface-hover text-text-muted hover:text-text cursor-pointer"
-                              >
-                                <Minus className="size-3" />
-                              </button>
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.qty}
-                                onFocus={(e) => e.target.select()}
-                                onChange={(e) => handleSetQty(item.id, e.target.value)}
-                                onBlur={(e) => handleBlurQty(item.id, e.target.value)}
-                                className="w-11 text-center bg-transparent border-0 font-mono font-bold text-xs text-text outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                              />
-                              <button
-                                type="button"
-                                disabled={Number(item.qty) >= Number(item.stock ?? 999999)}
-                                onClick={() => handleUpdateQty(item.id, 1)}
-                                className={cn(
-                                  "size-5 rounded flex items-center justify-center transition-colors",
-                                  Number(item.qty) >= Number(item.stock ?? 999999)
-                                    ? "opacity-30 cursor-not-allowed text-text-muted"
-                                    : "hover:bg-surface-hover text-text-muted hover:text-text cursor-pointer"
-                                )}
-                              >
-                                <Plus className="size-3" />
-                              </button>
-                            </div>
-                          </td>
-
-                          {/* 12. Expiry */}
-                          <td className="py-2 px-2 font-mono text-[11px] text-text font-semibold">
-                            {item.expiry || item.expDate || item.expiryDate || "11/32"}
-                          </td>
-
-                          {/* 13. Amount */}
-                          <td className="py-2 px-3 font-mono text-right font-extrabold text-primary text-xs tabular-nums">
-                            ₹{lineAmt.toFixed(2)}
-                          </td>
-
-                          {/* 14. Act */}
-                          <td className="py-2 px-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveItem(item.id)}
-                              className="text-text-muted hover:text-error transition-colors p-1 cursor-pointer"
-                              title="Remove item"
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="py-12 text-center text-text-muted space-y-2">
-                  <ShoppingCart className="size-8 mx-auto opacity-40 text-text-muted" />
-                  <p className="text-xs font-semibold">Sale Cart is empty</p>
-                  <p className="text-[11px] text-text-muted">
-                    Use the search bar above to scan or search medicines directly into cart
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Cart Footer Calculation & Checkout Button */}
-          <div className="pt-4 border-t border-border/70 space-y-3">
-            <PermissionGate
-              permission="pos:create"
-              fallback={
-                <UIButton variant="primary" size="md" className="w-full justify-center" disabled>
-                  Checkout (Requires pos:create)
-                </UIButton>
-              }
-            >
-              <UIButton
-                variant="primary"
-                size="md"
-                className="w-full justify-center text-sm font-bold shadow-sm"
-                disabled={cart.length === 0}
-                onClick={handleProceedToCheckout}
-                rightIcon={<Receipt className="size-4" />}
-              >
-                Proceed to {billingMode} Checkout (₹{cartGrandTotal}) <span className="ml-1.5 opacity-80 text-xs font-mono font-normal">(Ctrl + ↵)</span>
-              </UIButton>
-            </PermissionGate>
-          </div>
-        </UICard>
           </div>
         </div>
-      
-          {/* Floating History Toggle Button */}
-          <button
-            type="button"
-            onClick={() => setShowCustomerHistory(!showCustomerHistory)}
-            className={`absolute top-1/2 -translate-y-1/2 z-50 flex items-center justify-center size-10 rounded-full border shadow-md transition-all cursor-pointer ${
-              showCustomerHistory
-                ? "right-[320px] lg:right-[384px] bg-primary text-white border-primary/20 hover:bg-primary/90 hover:scale-105"
-                : "right-4 bg-surface text-text border-border hover:bg-surface-hover hover:scale-105"
-            }`}
-            title="Toggle Customer History"
-          >
-            {showCustomerHistory ? <ChevronRight className="size-5" /> : <ChevronLeft className="size-5" />}
-          </button>
+      </div>
 
-          {/* Right Sidebar - Customer History */}
-          <AnimatePresence>
-            {showCustomerHistory && (
-              <motion.div 
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: "auto", opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
-                className="w-80 lg:w-96 border-l border-border bg-surface flex flex-col shadow-[inset_1px_0_0_0_rgba(0,0,0,0.05)] z-10 shrink-0"
-              >
-                <div className="flex-1 overflow-y-auto bg-surface-alt/50">
-                   <SalesCustomerSidebar 
-                      customer={billingMode === 'B2C' ? (activeCustomer || { name: customerName, phone: customerPhone }) : activeCustomer}
-                      onAddProduct={handleAddFromHistory}
-                   />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        {/* Checkout Modal */}
+      {/* ── MODALS ─────────────────────────────────────── */}
       <SalesCheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
@@ -1374,14 +1427,21 @@ export const SalesDesktopPage = () => {
         onCompleteSale={handleCompleteSale}
       />
 
-      {/* Printable Receipt Modal */}
       <SalesReceiptModal
         isOpen={isReceiptOpen}
-        onClose={() => setIsReceiptOpen(false)}
+        onClose={() => {
+          setIsReceiptOpen(false);
+          setTimeout(() => {
+            if (billingMode === "B2C") {
+              customerSearchBarRef.current?.focus?.();
+            } else {
+              b2bCustomerSearchBarRef.current?.focus?.();
+            }
+          }, 100);
+        }}
         saleData={completedSale}
       />
 
-      {/* Workspace Branch Batch Selector Modal */}
       <WorkspaceProductBatchSelectorModal
         open={isBatchModalOpen}
         onClose={() => setIsBatchModalOpen(false)}
@@ -1409,4 +1469,3 @@ export const SalesDesktopPage = () => {
 };
 
 export default SalesDesktopPage;
-

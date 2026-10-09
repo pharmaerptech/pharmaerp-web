@@ -46,6 +46,7 @@ import { API_STATUS } from "@/constants";
 import { getOpenBusinessDay } from "@/features/operations/business-days/store/businessDayThunk";
 import OpenBusinessDayDialog from "@/features/operations/business-days/components/OpenBusinessDayDialog";
 import { CreateShiftDialog } from "@/features/operations/shifts/components/CreateShiftDialog";
+import { POSCashDenominationModal } from "../components/POSCashDenominationModal";
 import { UIBadge, UIButton } from "@/components/ui";
 import { CalendarDays, ArrowRight, Sparkles } from "lucide-react";
 /* ─────────────── CONSTANTS ─────────────── */
@@ -189,6 +190,11 @@ export const POSTerminalPage = () => {
 
   /* ── Cash Account (branch-scoped) ── */
   const [systemDefaultAccount, setSystemDefaultAccount] = useState(null);
+
+  /* ── Cash Denomination Modal ── */
+  const [isDenominationModalOpen, setIsDenominationModalOpen] = useState(false);
+  const [invoiceDenominations, setInvoiceDenominations] = useState(initialInvoice?.denominations || []);
+  const [invoiceReturnedDenominations, setInvoiceReturnedDenominations] = useState(initialInvoice?.returnedDenominations || []);
 
   useEffect(() => {
     if (!currentBranch?._id) return;
@@ -605,7 +611,27 @@ export const POSTerminalPage = () => {
   }, [cartItems, discount, discountType, cashTendered]);
 
   /* ────────────────── SUBMIT BILL ────────────────── */
-  const handleSubmitBill = async () => {
+  const handleSubmitBill = () => {
+    if (cartItems.length === 0) {
+      setToast({ type: "error", message: "Add at least one product to the cart." });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    if (paymentMethod === "Cash") {
+      setIsDenominationModalOpen(true);
+    } else {
+      finalizeBill([], []);
+    }
+  };
+
+  const handleDenominationSubmit = (denominations, returnedDenominations) => {
+    setInvoiceDenominations(denominations);
+    setInvoiceReturnedDenominations(returnedDenominations);
+    setIsDenominationModalOpen(false);
+    finalizeBill(denominations, returnedDenominations);
+  };
+  const finalizeBill = async (finalDenominations = [], finalReturnedDenominations = []) => {
 
     if (cartItems.length === 0) {
       setToast({ type: "error", message: "Add at least one product to the cart." });
@@ -660,10 +686,14 @@ export const POSTerminalPage = () => {
           ? [{
               paymentType: "cash",
               amount: calculations.grandTotal,
+              denominations: finalDenominations,
+              returnedDenominations: finalReturnedDenominations
             }]
           : paymentMethod === "UPI"
           ? [{ paymentType: "upi", amount: calculations.grandTotal }]
           : [],
+        denominations: finalDenominations,
+        returnedDenominations: finalReturnedDenominations
       };
 
       if (customerId) {
@@ -1473,9 +1503,17 @@ export const POSTerminalPage = () => {
         mode="view"
         customerData={selectedParty}
       />
+
+      <POSCashDenominationModal
+        isOpen={isDenominationModalOpen}
+        onClose={() => setIsDenominationModalOpen(false)}
+        onSubmit={handleDenominationSubmit}
+        initialDenominations={invoiceDenominations}
+        initialReturnedDenominations={invoiceReturnedDenominations}
+        requiredAmount={calculations.grandTotal}
+      />
     </div>
   );
 };
 
 export default POSTerminalPage;
-

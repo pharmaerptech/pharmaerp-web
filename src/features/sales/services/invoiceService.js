@@ -16,6 +16,11 @@ const invoiceService = {
   updateCustomerSale(customerId, invoiceId, payload) {
     return apiClient.put(`${ENDPOINTS.SALES.INVOICES.BY_CUSTOMER(customerId)}/${invoiceId}`, payload);
   },
+
+  cancelCustomerSale(invoiceId) {
+    return apiClient.put(`/sales/invoices/${invoiceId}/cancel`);
+  },
+
 };
 
 export default invoiceService;

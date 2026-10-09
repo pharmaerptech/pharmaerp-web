@@ -158,16 +158,22 @@ export const BillingDesktopPage = () => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const handleCancelInvoice = (invId) => {
-    setInvoices((prev) =>
-      prev.map((inv) =>
-        inv.id === invId ? { ...inv, status: "Cancelled", balance: 0 } : inv
-      )
-    );
-    if (selectedInvoice && selectedInvoice.id === invId) {
-      setSelectedInvoice((prev) => ({ ...prev, status: "Cancelled", balance: 0 }));
+  const handleCancelInvoice = async (invId) => {
+    try {
+      await invoiceService.cancelCustomerSale(invId);
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === invId ? { ...inv, status: "Cancelled", balance: 0 } : inv
+        )
+      );
+      if (selectedInvoice && selectedInvoice.id === invId) {
+        setSelectedInvoice((prev) => ({ ...prev, status: "Cancelled", balance: 0 }));
+      }
+      setToastMessage("✅ Invoice cancelled successfully.");
+    } catch (error) {
+      console.error(error);
+      setToastMessage("❌ Failed to cancel invoice.");
     }
-    setToastMessage("⚠️ Invoice cancelled.");
     setTimeout(() => setToastMessage(null), 3000);
   };
 
