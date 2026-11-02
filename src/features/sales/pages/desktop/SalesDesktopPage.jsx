@@ -534,7 +534,6 @@ export const SalesDesktopPage = () => {
   const [isHeldBillsModalOpen, setIsHeldBillsModalOpen] = useState(false);
   const [pendingResumeBill, setPendingResumeBill] = useState(null);
   const [isResumeConflictOpen, setIsResumeConflictOpen] = useState(false);
-  const [isReturnInvoice, setIsReturnInvoice] = useState(false);
 
   const { openBusinessDay, getOpenBusinessDayStatus } = useSelector((state) => state.businessDay);
   const [isBusinessDayModalOpen, setIsBusinessDayModalOpen] = useState(false);
@@ -955,104 +954,18 @@ export const SalesDesktopPage = () => {
     });
   };
 
-  const handleAddFromHistory = async (productId, historyItem, invoice) => {
+  const handleAddFromHistory = async (productId) => {
     try {
-      // 1. Normal sales mode (selling from warehouse stock):
-      // Opens batch selector modal so user can pick which inventory batch to sell
-      if (!isReturnInvoice || !historyItem) {
-        if (!productId) return;
-        const actualProdId = typeof productId === "object" ? (productId._id || productId.id) : productId;
-        const res = await workspaceProductService.getWorkspaceProductById(actualProdId);
-        const product = res.data?.data || res.data;
-        if (product) {
-          handleSelectWorkspaceProduct(product);
-        }
-        return;
+      if (!productId) return;
+      const actualProdId = typeof productId === "object" ? (productId._id || productId.id) : productId;
+      const res = await workspaceProductService.getWorkspaceProductById(actualProdId);
+      const product = res.data?.data || res.data;
+      if (product) {
+        handleSelectWorkspaceProduct(product);
       }
-
-      // 2. Return Invoice mode:
-      // Directly pick up item and all details present in the customer's purchase history without opening batch modal
-      const actualProdId = typeof productId === "object"
-        ? (productId._id || productId.id)
-        : (productId || historyItem.productId);
-
-      let productMeta = null;
-      if (actualProdId) {
-        try {
-          const res = await workspaceProductService.getWorkspaceProductById(actualProdId);
-          productMeta = res.data?.data || res.data;
-        } catch {
-          // Gracefully fallback to historyItem fields
-        }
-      }
-
-      const soldBatch = historyItem.batch || "STANDARD";
-      const soldPrice = Number(historyItem.price ?? historyItem.rate ?? 0);
-      const soldMrp = Number(historyItem.mrp ?? productMeta?.mrp ?? soldPrice);
-      const soldQty = Number(historyItem.qty) || 1;
-      const soldDisc = Number(historyItem.disc ?? 0);
-      const rawBatchId = historyItem.batchId || historyItem.batch_id || (historyItem.batch && typeof historyItem.batch === 'object' && (historyItem.batch._id || historyItem.batch.id)) || (typeof historyItem.batch === 'string' && historyItem.batch.length === 24 ? historyItem.batch : undefined);
-      const branchIdForReturn = invoice?.branchId || currentBranch?._id || currentBranch?.id || undefined;
-
-      const returnItem = {
-        id: `return-${invoice?.invoiceNo || 'inv'}-${actualProdId}-${soldBatch}`,
-        productId: actualProdId,
-        batchId: rawBatchId,
-        batchNo: soldBatch,
-        branchId: branchIdForReturn,
-        name: historyItem.name || historyItem.productName || productMeta?.displayName || productMeta?.name || "Product",
-        brand: historyItem.brand || productMeta?.brand || productMeta?.displayManufacturer || productMeta?.manufacturer || "Pharma",
-        category: historyItem.category || productMeta?.category || productMeta?.displayCategory || "Tablet",
-        batch: soldBatch,
-        pack: historyItem.pack || productMeta?.pack || productMeta?.packaging || productMeta?.displayDosageForm || "10S",
-        rack: historyItem.rack || productMeta?.rack || productMeta?.shelfLocation || "—",
-        hsn: historyItem.hsn || getHsnCode(productMeta),
-        gst: historyItem.gst ?? (productMeta ? getGstRate(productMeta) : 5),
-        ratePct: historyItem.ratePct || (productMeta?.rateCPercentage !== undefined && productMeta.rateCPercentage !== null ? `${productMeta.rateCPercentage}%` : "16%"),
-        rateCPercentage: historyItem.rateCPercentage ?? productMeta?.rateCPercentage,
-        expiry: historyItem.expiry || historyItem.expiryDate || getExpiryString(productMeta),
-        stock: soldQty, // Capped at the exact quantity sold on this invoice
-        maxReturnQty: soldQty,
-        originalSoldQty: soldQty,
-        mrp: soldMrp,
-        price: soldPrice,
-        rate: soldPrice,
-        disc: soldDisc,
-        qty: 1, // Default 1, user can increment up to soldQty
-        originalInvoiceNo: invoice?.invoiceNo,
-        originalInvoiceId: invoice?._id || invoice?.id,
-        originalInvoiceDate: invoice?.date,
-        isReturnItem: true,
-        workspaceProduct: productMeta,
-      };
-
-      setCart((prev) => {
-        const existingIdx = prev.findIndex((i) => i.id === returnItem.id);
-        if (existingIdx >= 0) {
-          const currentQty = Number(prev[existingIdx].qty) || 1;
-          const maxQty = Number(returnItem.maxReturnQty || returnItem.originalSoldQty || 999);
-          if (currentQty >= maxQty) {
-            setToastMessage(`Cannot return more than purchased quantity (${maxQty}) from Bill #${invoice?.invoiceNo || ""}`);
-            setTimeout(() => setToastMessage(null), 3000);
-            return prev;
-          }
-          const updated = [...prev];
-          updated[existingIdx] = {
-            ...updated[existingIdx],
-            qty: currentQty + 1,
-          };
-          return updated;
-        }
-        return [...prev, returnItem];
-      });
-
-      setToastMessage(
-        `Returned item "${returnItem.name}" (Batch: ${returnItem.batch}) picked from Bill #${invoice?.invoiceNo || ""}`
-      );
-      setTimeout(() => setToastMessage(null), 3000);
     } catch (err) {
-      console.error("Failed to pick return item from history:", err);
-      setToastMessage("Failed to pick return item details");
+      console.error("Failed to select product from customer history:", err);
+      setToastMessage("Failed to load product details");
       setTimeout(() => setToastMessage(null), 3000);
     }
   };
@@ -1105,7 +1018,6 @@ export const SalesDesktopPage = () => {
         const finalItem = {
           ...item,
           price: basePrice,
-          isReturnItem: Boolean(isReturnInvoice || item.isReturnItem),
           branchId: item.branchId || currentBranch?._id || currentBranch?.id || undefined,
           batchNo: item.batchNo || (typeof item.batch === 'string' ? item.batch : undefined),
         };
@@ -1291,24 +1203,10 @@ export const SalesDesktopPage = () => {
         doctorId: selectedDoctor?._id || selectedDoctor?.id || saleData.doctorId || null,
         date: activeShift?.date ? new Date(activeShift.date).toISOString() : new Date().toISOString(),
         shiftId: activeShift?._id || saleData.shiftId || null,
-        isReturn: Boolean(isReturnInvoice || saleData.isReturn),
-        returnType: saleData.returnType || (isReturnInvoice ? (saleData.payments?.[0]?.paymentType === "Advance" ? "advance_credit" : (saleData.payments?.[0]?.paymentType === "Credit" ? "credit_note" : "cash_refund")) : undefined),
-        originalInvoiceNo: resolvedOrigInvoiceNo,
-        originalInvoiceId: resolvedOrigInvoiceId,
       };
 
       if (isEditMode && targetInvoiceId) {
         const res = await invoiceService.updateCustomerSale(targetCustomerId, targetInvoiceId, payload);
-        savedSaleResult = res?.data?.data || res?.data || null;
-      } else if (isReturnInvoice || saleData.isReturn) {
-        const returnPayload = {
-          ...payload,
-          isReturn: true,
-          returnType: saleData.returnType || (saleData.payments?.[0]?.paymentType === "Advance" ? "advance_credit" : (saleData.payments?.[0]?.paymentType === "Credit" ? "credit_note" : "cash_refund")),
-          originalInvoiceNo: resolvedOrigInvoiceNo,
-          originalInvoiceId: resolvedOrigInvoiceId,
-        };
-        const res = await invoiceService.recordCustomerReturn(targetCustomerId, returnPayload);
         savedSaleResult = res?.data?.data || res?.data || null;
       } else {
         const res = await invoiceService.recordCustomerSale(targetCustomerId, payload);
@@ -1327,8 +1225,6 @@ export const SalesDesktopPage = () => {
     setIsCheckoutOpen(false);
     setCompletedSale({
       ...saleData,
-      isReturn: Boolean(isReturnInvoice || saleData.isReturn),
-      returnType: saleData.returnType || (saleData.payments?.[0]?.paymentType === "Advance" ? "advance_credit" : (saleData.payments?.[0]?.paymentType === "Credit" ? "credit_note" : "cash_refund")),
       customer: activeCustomer || saleData.customer,
       customerName: activeCustomer?.name || customerName || saleData.customerName,
       customerPhone: activeCustomer?.mobile || activeCustomer?.phone || customerPhone || saleData.customerPhone,
@@ -1348,14 +1244,11 @@ export const SalesDesktopPage = () => {
     setDoctorName("");
     setSelectedDoctor(null);
     setShowCustomerHistory(false);
-    setIsReturnInvoice(false);
     customerSearchBarRef.current?.clear?.();
     b2bCustomerSearchBarRef.current?.clear?.();
     setToastMessage(
       isEditMode
         ? `✅ ${billingMode} Invoice ${actualInvoiceNo} updated successfully.`
-        : (isReturnInvoice || saleData.isReturn)
-        ? `✅ ${billingMode} Return Memo ${actualInvoiceNo} recorded & refunded successfully.`
         : `✅ ${billingMode} Invoice ${actualInvoiceNo} created & saved in backend.`
     );
     setTimeout(() => setToastMessage(null), 4000);
@@ -1796,44 +1689,6 @@ export const SalesDesktopPage = () => {
                 className="border border-border/80 shadow-2xs"
               />
 
-              {/* Return Invoice Button (created with UI primitives and semantic tokens) */}
-              <UIIconButton
-                icon={
-                  <RotateCcw
-                    className={cn(
-                      "size-4 transition-transform duration-200",
-                      isReturnInvoice && "-rotate-45"
-                    )}
-                  />
-                }
-                variant={isReturnInvoice ? "destructive" : "outline"}
-                size="md"
-                badge={isReturnInvoice ? true : undefined}
-                badgeColor="error"
-                aria-label="Return Invoice"
-                onClick={() => {
-                  setIsReturnInvoice((prev) => {
-                    const next = !prev;
-                    if (next && (activeCustomer || customerName)) {
-                      setShowCustomerHistory(true);
-                    }
-                    setToastMessage(
-                      next
-                        ? "Return Invoice mode active — pick items from customer history"
-                        : "Switched to normal sales billing mode"
-                    );
-                    setTimeout(() => setToastMessage(null), 3000);
-                    return next;
-                  });
-                }}
-                className={cn(
-                  "transition-all cursor-pointer",
-                  isReturnInvoice
-                    ? "ring-2 ring-error/30 border-error/50 shadow-xs"
-                    : "hover:border-border-strong hover:text-text"
-                )}
-              />
-
               {/* Hold Bill Button */}
               <UIIconButton
                 icon={
@@ -1902,15 +1757,7 @@ export const SalesDesktopPage = () => {
 
                         {/* Item Name */}
                         <td className="py-1.5 px-2">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-text block truncate text-xs sm:text-[12px] leading-tight">{item.name}</span>
-                            {item.isReturnItem && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-error-soft/60 text-error border border-error/30 shrink-0">
-                                <RotateCcw className="size-2.5" />
-                                Return · #{item.originalInvoiceNo}
-                              </span>
-                            )}
-                          </div>
+                          <span className="font-bold text-text block truncate text-xs sm:text-[12px] leading-tight">{item.name}</span>
                           <span className="text-[10px] text-text-muted block truncate">{item.brand} · {item.category}</span>
                         </td>
 
@@ -1919,11 +1766,6 @@ export const SalesDesktopPage = () => {
                           <span className="font-mono text-xs sm:text-[12px] font-bold text-text tracking-wide truncate block">
                             {item.batch || "—"}
                           </span>
-                          {item.isReturnItem && item.originalSoldQty && (
-                            <span className="block text-[9px] text-text-muted/70 font-sans font-normal">
-                              max {item.originalSoldQty}
-                            </span>
-                          )}
                         </td>
 
                         {/* Pack */}
@@ -2188,7 +2030,6 @@ export const SalesDesktopPage = () => {
                   customer={billingMode === 'B2C' ? (activeCustomer || { name: customerName, phone: customerPhone }) : activeCustomer}
                   onAddProduct={handleAddFromHistory}
                   onSwitchCustomer={billingMode === 'B2C' ? handleSwitchCustomerFromHistory : undefined}
-                  isReturnInvoice={isReturnInvoice}
                 />
               </div>
             </div>
@@ -2253,7 +2094,6 @@ export const SalesDesktopPage = () => {
         branch={currentBranch}
         company={currentCompany}
         cartGrandTotal={cartGrandTotal}
-        isReturnInvoice={isReturnInvoice}
       />
 
       <SalesCheckoutModal
@@ -2270,7 +2110,6 @@ export const SalesDesktopPage = () => {
         existingInvoiceNo={editInvoiceData?.invoiceNo || initialInvoice?.invoiceNo}
         cartSummary={{ items: cart, subtotal: cartSubtotal }}
         onCompleteSale={handleCompleteSale}
-        isReturnInvoice={isReturnInvoice}
       />
 
       <OrderInvoiceModal
