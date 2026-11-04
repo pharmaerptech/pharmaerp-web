@@ -18,12 +18,15 @@ import {
 
 export const CompanyDashboardPage = () => {
   const [timeframe, setTimeframe] = useState("This Month");
-  const [dateRange, setDateRange] = useState("Oct 01, 2026 - Oct 31, 2026");
+  const [dateRange, setDateRange] = useState(null);
 
-  const { data, isLoading, refresh } = useCompanyDashboardData(timeframe, dateRange);
+  const { data, isLoading, refresh } = useCompanyDashboardData(
+    timeframe,
+    dateRange,
+  );
 
   return (
-    <section className="min-h-[100dvh] w-full bg-bg px-3 sm:px-5 py-4 font-sans text-text">
+    <section className="min-h-[100dvh] w-full bg-bg px-3 sm:px-5 py-4 font-sans text-text dashboard-no-scrollbar">
       <div className="max-w-[1600px] mx-auto space-y-3.5">
         {/* ── 1. Header with Title, Date Range Picker & Timeframe Tabs ──── */}
         <CompanyDashboardHeader
@@ -37,15 +40,16 @@ export const CompanyDashboardPage = () => {
         />
 
         {/* ── 2. Top 6 KPI Metrics Strip ───────────────────────────── */}
-        <CompanyKpiGrid kpis={data?.kpis} />
+        <CompanyKpiGrid kpis={data?.kpis} isLoading={isLoading} />
 
         {/* ── 3. Middle Section Row 1 (Sales vs Purchases, Branch Leaderboard, Category Donut) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-start">
           {/* Sales vs Purchases Clustered Bar Trend (5 cols) */}
           <div className="md:col-span-2 lg:col-span-5 flex flex-col min-w-0">
             <CompanySalesPurchasesChartCard
               chartData={data?.salesVsPurchasesTrend}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
 
@@ -53,7 +57,8 @@ export const CompanyDashboardPage = () => {
           <div className="md:col-span-1 lg:col-span-4 flex flex-col min-w-0">
             <CompanyBranchPerformanceCard
               branches={data?.branchPerformance}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
 
@@ -61,18 +66,20 @@ export const CompanyDashboardPage = () => {
           <div className="md:col-span-1 lg:col-span-3 flex flex-col min-w-0">
             <CompanyCategoryDonutCard
               categoryData={data?.salesByCategory}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
         </div>
 
         {/* ── 4. Middle Section Row 2 (Top Selling Products, GST Summary, Inventory Alerts) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-start">
           {/* Top Selling Products (5 cols) */}
           <div className="md:col-span-2 lg:col-span-5 flex flex-col min-w-0">
             <CompanyTopSellingProductsCard
               products={data?.topSellingProducts}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
 
@@ -80,7 +87,8 @@ export const CompanyDashboardPage = () => {
           <div className="md:col-span-1 lg:col-span-4 flex flex-col min-w-0">
             <CompanyGstSummaryCard
               gstData={data?.gstSummary}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
 
@@ -88,18 +96,20 @@ export const CompanyDashboardPage = () => {
           <div className="md:col-span-1 lg:col-span-3 flex flex-col min-w-0">
             <CompanyInventoryAlertsCard
               alerts={data?.inventoryAlerts}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
         </div>
 
         {/* ── 5. Bottom Section Row 3 (Recent Purchases, Recent Sales, Inter-Branch Transfers) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-start">
           {/* Recent Purchases (5 cols) */}
           <div className="md:col-span-2 lg:col-span-5 flex flex-col min-w-0">
             <CompanyRecentPurchasesCard
               purchases={data?.recentPurchases}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
 
@@ -107,7 +117,8 @@ export const CompanyDashboardPage = () => {
           <div className="md:col-span-1 lg:col-span-4 flex flex-col min-w-0">
             <CompanyRecentSalesCard
               sales={data?.recentSales}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
 
@@ -115,7 +126,8 @@ export const CompanyDashboardPage = () => {
           <div className="md:col-span-1 lg:col-span-3 flex flex-col min-w-0">
             <CompanyInterBranchTransfersCard
               transfers={data?.interBranchTransfers}
-              className="h-full"
+              className="h-fit"
+              isLoading={isLoading}
             />
           </div>
         </div>

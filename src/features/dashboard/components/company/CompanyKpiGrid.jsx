@@ -1,5 +1,6 @@
 // src/features/dashboard/components/company/CompanyKpiGrid.jsx
 
+import React from "react";
 import {
   BarChart3,
   ShoppingCart,
@@ -7,104 +8,100 @@ import {
   Smartphone,
   Wallet,
   Landmark,
-  ArrowUpRight,
 } from "lucide-react";
-import { UICard } from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
+import { UIStatCard } from "@/components/ui";
+import { ROUTES } from "@/constants";
 
-export const CompanyKpiGrid = ({ kpis }) => {
+const formatCurrency = (val) => {
+  const num = Number(val ?? 0);
+  return `₹ ${num.toLocaleString("en-IN")}`;
+};
+
+export const CompanyKpiGrid = ({ kpis, isLoading = false }) => {
+  const navigate = useNavigate();
+
   const cards = [
     {
       id: "sales",
       title: "Total Sales",
-      value: kpis?.totalSales ? `₹ ${kpis.totalSales.toLocaleString()}` : "₹ 68,12,430",
-      growth: kpis?.totalSalesGrowth || 14.6,
-      subtext: "vs last month",
+      value: formatCurrency(kpis?.totalSales),
+      growth: kpis?.totalSalesGrowth ?? 0,
+      growthLabel: "vs prior period",
       icon: BarChart3,
-      iconBg: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50",
+      color: "success",
+      route: ROUTES.SALES || "/sales",
     },
     {
       id: "purchases",
       title: "Total Purchases",
-      value: kpis?.totalPurchases ? `₹ ${kpis.totalPurchases.toLocaleString()}` : "₹ 42,18,900",
-      growth: kpis?.totalPurchasesGrowth || 8.2,
-      subtext: "vs last month",
+      value: formatCurrency(kpis?.totalPurchases),
+      growth: kpis?.totalPurchasesGrowth ?? 0,
+      growthLabel: "vs prior period",
       icon: ShoppingCart,
-      iconBg: "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/50",
+      color: "blue",
+      route: ROUTES.PURCHASES || "/purchases",
     },
     {
       id: "profit",
       title: "Gross Profit",
-      value: kpis?.grossProfit ? `₹ ${kpis.grossProfit.toLocaleString()}` : "₹ 26,48,530",
-      growth: kpis?.grossProfitGrowth || 16.3,
-      subtext: "vs last month",
+      value: formatCurrency(kpis?.grossProfit),
+      growth: kpis?.grossProfitGrowth ?? 0,
+      growthLabel: "margin realization",
       icon: TrendingUp,
-      iconBg: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200/50",
+      color: "warning",
+      route: ROUTES.REPORTS_FINANCIAL || ROUTES.SALES || "/sales",
     },
     {
       id: "receivables",
-      title: "Outstanding Receivables",
-      value: kpis?.outstandingReceivables ? `₹ ${kpis.outstandingReceivables.toLocaleString()}` : "₹ 12,28,300",
-      growth: kpis?.outstandingReceivablesGrowth || 6.8,
-      subtext: "vs last month",
+      title: "Customer Receivables",
+      value: formatCurrency(kpis?.outstandingReceivables),
+      growth: kpis?.outstandingReceivablesGrowth ?? 0,
+      growthLabel: "customer credit dues",
       icon: Smartphone,
-      iconBg: "bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 border border-purple-200/50",
+      color: "purple",
+      route: ROUTES.CUSTOMERS || "/parties/customers",
     },
     {
       id: "payables",
-      title: "Outstanding Payables",
-      value: kpis?.outstandingPayables ? `₹ ${kpis.outstandingPayables.toLocaleString()}` : "₹ 18,42,750",
-      growth: kpis?.outstandingPayablesGrowth || 11.2,
-      subtext: "vs last month",
+      title: "Supplier Payables",
+      value: formatCurrency(kpis?.outstandingPayables),
+      growth: kpis?.outstandingPayablesGrowth ?? 0,
+      growthLabel: "distributor dues",
       icon: Wallet,
-      iconBg: "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/50",
+      color: "error",
+      route: ROUTES.SUPPLIERS || "/parties/suppliers",
     },
     {
       id: "bank",
-      title: "Bank Balance",
-      value: kpis?.bankBalance ? `₹ ${kpis.bankBalance.toLocaleString()}` : "₹ 48,32,120",
-      growth: kpis?.bankBalanceGrowth || 4.1,
-      subtext: "vs last month",
+      title: "Corporate Treasury",
+      value: formatCurrency(kpis?.bankBalance),
+      growth: kpis?.bankBalanceGrowth ?? 0,
+      growthLabel: "liquid bank balances",
       icon: Landmark,
-      iconBg: "bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200/50",
+      color: "info",
+      route: ROUTES.BANK_ACCOUNTS || "/finance/treasury/bank-accounts",
     },
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3.5">
+    <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-3.5">
       {cards.map((card) => {
         const Icon = card.icon;
-
         return (
-          <UICard
+          <UIStatCard
             key={card.id}
-            variant="default"
-            className="p-3.5 rounded-xl border border-border bg-surface shadow-2xs flex flex-col justify-between hover:border-border/80 transition-colors"
-          >
-            {/* Top row: Icon & Title */}
-            <div className="flex items-center gap-2.5">
-              <div className={cn("p-2 rounded-lg shrink-0", card.iconBg)}>
-                <Icon className="size-4" />
-              </div>
-              <span className="text-xs font-medium text-text-muted leading-tight truncate">
-                {card.title}
-              </span>
-            </div>
-
-            {/* Middle: Value */}
-            <div className="mt-3">
-              <span className="text-lg sm:text-xl font-bold font-mono tracking-tight text-text tabular-nums block truncate">
-                {card.value}
-              </span>
-            </div>
-
-            {/* Bottom: Growth Badge */}
-            <div className="mt-2 flex items-center gap-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-              <ArrowUpRight className="size-3 shrink-0" />
-              <span>{card.growth}%</span>
-              <span className="text-text-muted font-normal truncate">{card.subtext}</span>
-            </div>
-          </UICard>
+            title={card.title}
+            value={card.value}
+            growth={card.growth}
+            growthLabel={card.growthLabel}
+            icon={<Icon />}
+            color={card.color}
+            density="compact"
+            variant="interactive"
+            isLoading={isLoading}
+            onClick={() => card.route && navigate(card.route)}
+          />
         );
       })}
     </div>

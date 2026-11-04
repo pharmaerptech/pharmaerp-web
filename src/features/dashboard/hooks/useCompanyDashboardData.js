@@ -7,22 +7,41 @@ import dashboardService from "../services/dashboardService";
 export const useCompanyDashboardData = (timeframe = "This Month", dateRange = null) => {
   const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace);
   const currentCompany = useSelector((state) => state.company?.currentCompany);
+  const user = useSelector((state) => state.user?.user);
 
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const workspaceId = currentWorkspace?._id;
-  const companyId = currentCompany?._id;
+  const workspaceId =
+    currentWorkspace?._id ||
+    currentWorkspace?.id ||
+    user?.activeContext?.workspaceId;
+  const companyId =
+    currentCompany?._id ||
+    currentCompany?.id ||
+    user?.activeContext?.companyId;
+
+  const normalizedTimeframe = String(timeframe || "THIS_MONTH")
+    .toUpperCase()
+    .replace(/\s+/g, "_");
+
+  let startDate = null;
+  let endDate = null;
+  if (dateRange && typeof dateRange === "object") {
+    startDate = dateRange.startDate || null;
+    endDate = dateRange.endDate || null;
+  }
 
   const fetchCompanyDashboard = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
       const res = await dashboardService.getCompanyDashboard({
-        timeframe,
-        dateRange,
-        companyId,
+        timeframe: normalizedTimeframe,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        companyId: companyId || undefined,
       });
       setData(res);
     } catch (err) {
@@ -30,17 +49,20 @@ export const useCompanyDashboardData = (timeframe = "This Month", dateRange = nu
     } finally {
       setIsLoading(false);
     }
-  }, [timeframe, dateRange, companyId]);
+  }, [normalizedTimeframe, startDate, endDate, companyId]);
 
   useEffect(() => {
     let active = true;
 
     const loadData = async () => {
       try {
+        setIsLoading(true);
+        setError(null);
         const res = await dashboardService.getCompanyDashboard({
-          timeframe,
-          dateRange,
-          companyId,
+          timeframe: normalizedTimeframe,
+          startDate: startDate || undefined,
+          endDate: endDate || undefined,
+          companyId: companyId || undefined,
         });
         if (active) {
           setData(res);
@@ -59,7 +81,7 @@ export const useCompanyDashboardData = (timeframe = "This Month", dateRange = nu
     return () => {
       active = false;
     };
-  }, [workspaceId, companyId, timeframe, dateRange]);
+  }, [workspaceId, companyId, normalizedTimeframe, startDate, endDate]);
 
   return {
     data,

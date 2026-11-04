@@ -1,6 +1,7 @@
 export const ROUTES = {
   HOME: "/",
   UI_SHOWCASE: "/ui-showcase",
+  CHOOSE_MODE: "/choose-mode",
 
   // Auth
   LOGIN: "/login",
@@ -88,6 +89,26 @@ export const ROUTES = {
 
   // Reports & Analytics Hub
   REPORTS_HUB: "/reports",
+  REPORTS_SALES: "/reports/sales",
+  REPORTS_SALES_SUB: (subReport = ":subReport") => `/reports/sales/${subReport}`,
+  REPORTS_PURCHASE: "/reports/purchase",
+  REPORTS_PURCHASE_SUB: (subReport = ":subReport") => `/reports/purchase/${subReport}`,
+  REPORTS_INVENTORY: "/reports/inventory",
+  REPORTS_INVENTORY_SUB: (subReport = ":subReport") => `/reports/inventory/${subReport}`,
+  REPORTS_CUSTOMER: "/reports/customer",
+  REPORTS_CUSTOMER_SUB: (subReport = ":subReport") => `/reports/customer/${subReport}`,
+  REPORTS_SUPPLIER: "/reports/supplier",
+  REPORTS_SUPPLIER_SUB: (subReport = ":subReport") => `/reports/supplier/${subReport}`,
+  REPORTS_FINANCIAL: "/reports/financial",
+  REPORTS_FINANCIAL_SUB: (subReport = ":subReport") => `/reports/financial/${subReport}`,
+  REPORTS_GST: "/reports/gst",
+  REPORTS_GST_SUB: (subReport = ":subReport") => `/reports/gst/${subReport}`,
+  REPORTS_PRODUCT: "/reports/product",
+  REPORTS_PRODUCT_SUB: (subReport = ":subReport") => `/reports/product/${subReport}`,
+  REPORTS_CUSTOM: "/reports/custom",
+  REPORTS_CUSTOM_SUB: (subReport = ":subReport") => `/reports/custom/${subReport}`,
+  REPORTS_CATEGORY: (category = ":category") => `/reports/${category}`,
+  REPORTS_SUB: (category = ":category", subReport = ":subReport") => `/reports/${category}/${subReport}`,
   REPORTS_HUB_VIEWER: (reportKey = ":reportKey") => `/reports/${reportKey}`,
 
   // Finance - Legacy Reports
@@ -293,6 +314,7 @@ export const ROUTES = {
   // Billing & Invoices
   BILLING: "/billing",
   SALES_RETURNS: "/sales-returns",
+  CREDIT_NOTES: "/sales/credit-notes",
 
   // Purchases & Procurement
   PURCHASES: "/purchases",

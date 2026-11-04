@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { ROUTES } from "@/constants";
 
@@ -23,6 +23,7 @@ import authRoutes from "@/features/auth/routes/authRoutes";
 import userRoutes from "@/features/user/routes/userRoutes";
 
 import { AcceptInvitationPage } from "@/features/workspace/pages";
+import { RouteErrorBoundary } from "@/components/shared/RouteErrorBoundary";
 import workspaceRoutes from "@/features/workspace/routes/workspaceRoutes";
 import setupRoutes from "@/features/setup/routes/setupRoutes";
 import dashboardRoutes from "@/features/dashboard/routes/dashboardRoutes";
@@ -83,6 +84,7 @@ import salesReturnRoutes from "@/features/sales-returns/routes/salesReturnRoutes
 import purchasesRoutes from "@/features/purchases/routes/purchasesRoutes";
 import helpCenterRoutes from "@/features/help-center/routes/helpCenterRoutes";
 import operationsRoutes from "@/features/operations/routes/operationsRoutes";
+import ChooseWorkModePage from "@/features/operations/pages/ChooseWorkModePage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 /**
@@ -213,7 +215,13 @@ export const router = createBrowserRouter([
         </WorkspaceRequiredRoute>
       </ProtectedRoute>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
+      // ── Choose Work Mode ──
+      {
+        path: ROUTES.CHOOSE_MODE,
+        element: <ChooseWorkModePage />,
+      },
       // ── Step 1 & Core Essentials (Always accessible once workspace exists) ──
       ...setupRoutes,
       ...userRoutes,
@@ -329,6 +337,14 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: "/reports/:category/:subReport",
+            element: (
+              <PermissionGuard permission="report:view">
+                <ReportsHubPage />
+              </PermissionGuard>
+            ),
+          },
+          {
             path: "/reports/:reportKey",
             element: (
               <PermissionGuard permission="report:view">
@@ -387,6 +403,10 @@ export const router = createBrowserRouter([
       },
 
               // Inventory & Catalog
+          {
+            path: "/inventory",
+            element: <Navigate to={ROUTES.STOCK_METRICS} replace />,
+          },
           {
             path: "/inventory/transfer-orders",
             element: <TransferOrdersPage />,

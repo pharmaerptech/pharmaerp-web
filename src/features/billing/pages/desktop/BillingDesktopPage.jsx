@@ -1,4 +1,4 @@
-// src/features/billing/pages/desktop/BillingDesktopPage.jsx
+﻿// src/features/billing/pages/desktop/BillingDesktopPage.jsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useSelector } from "react-redux";
@@ -89,6 +89,7 @@ const PAYMENT_TYPE_OPTIONS = [
   { label: "Split", value: "Split" },
   { label: "Credit", value: "Credit" },
   { label: "Advance", value: "Advance" },
+  { label: "Credit Note", value: "CreditNote" },
 ];
 
 const STATUS_SELECT_OPTIONS = [
@@ -148,13 +149,25 @@ export const BillingDesktopPage = () => {
     totalAmount: 0,
     cashAmount: 0,
     upiAmount: 0,
+    creditAmount: 0,
+    advanceAmount: 0,
+    creditNoteAmount: 0,
     pureCashInvoices: 0,
     pureUpiInvoices: 0,
     pureSplitInvoices: 0,
+    pureCreditInvoices: 0,
+    pureAdvanceInvoices: 0,
+    pureCreditNoteInvoices: 0,
     pureCashAmount: 0,
     splitCashAmount: 0,
     pureUpiAmount: 0,
     splitUpiAmount: 0,
+    pureCreditAmount: 0,
+    splitCreditAmount: 0,
+    pureAdvanceAmount: 0,
+    splitAdvanceAmount: 0,
+    pureCreditNoteAmount: 0,
+    splitCreditNoteAmount: 0,
     matchingSplitInvoices: 0,
   });
 
@@ -496,13 +509,25 @@ export const BillingDesktopPage = () => {
           totalAmount: resData.summary.totalAmount ?? 0,
           cashAmount: resData.summary.cashAmount ?? 0,
           upiAmount: resData.summary.upiAmount ?? 0,
+          creditAmount: resData.summary.creditAmount ?? 0,
+          advanceAmount: resData.summary.advanceAmount ?? 0,
+          creditNoteAmount: resData.summary.creditNoteAmount ?? 0,
           pureCashInvoices: resData.summary.pureCashInvoices ?? 0,
           pureUpiInvoices: resData.summary.pureUpiInvoices ?? 0,
           pureSplitInvoices: resData.summary.pureSplitInvoices ?? 0,
+          pureCreditInvoices: resData.summary.pureCreditInvoices ?? 0,
+          pureAdvanceInvoices: resData.summary.pureAdvanceInvoices ?? 0,
+          pureCreditNoteInvoices: resData.summary.pureCreditNoteInvoices ?? 0,
           pureCashAmount: resData.summary.pureCashAmount ?? 0,
           splitCashAmount: resData.summary.splitCashAmount ?? 0,
           pureUpiAmount: resData.summary.pureUpiAmount ?? 0,
           splitUpiAmount: resData.summary.splitUpiAmount ?? 0,
+          pureCreditAmount: resData.summary.pureCreditAmount ?? 0,
+          splitCreditAmount: resData.summary.splitCreditAmount ?? 0,
+          pureAdvanceAmount: resData.summary.pureAdvanceAmount ?? 0,
+          splitAdvanceAmount: resData.summary.splitAdvanceAmount ?? 0,
+          pureCreditNoteAmount: resData.summary.pureCreditNoteAmount ?? 0,
+          splitCreditNoteAmount: resData.summary.splitCreditNoteAmount ?? 0,
           matchingSplitInvoices: resData.summary.matchingSplitInvoices ?? 0,
         });
       } else {
@@ -512,13 +537,25 @@ export const BillingDesktopPage = () => {
           totalAmount: calcTotalAmount,
           cashAmount: 0,
           upiAmount: 0,
+          creditAmount: 0,
+          advanceAmount: 0,
+          creditNoteAmount: 0,
           pureCashInvoices: 0,
           pureUpiInvoices: 0,
           pureSplitInvoices: 0,
+          pureCreditInvoices: 0,
+          pureAdvanceInvoices: 0,
+          pureCreditNoteInvoices: 0,
           pureCashAmount: 0,
           splitCashAmount: 0,
           pureUpiAmount: 0,
           splitUpiAmount: 0,
+          pureCreditAmount: 0,
+          splitCreditAmount: 0,
+          pureAdvanceAmount: 0,
+          splitAdvanceAmount: 0,
+          pureCreditNoteAmount: 0,
+          splitCreditNoteAmount: 0,
           matchingSplitInvoices: 0,
         });
       }
@@ -737,6 +774,13 @@ export const BillingDesktopPage = () => {
         </div>
       );
     }
+        if (modeUpper === "CREDITNOTE" || modeUpper === "CREDIT_NOTE" || modeUpper === "CREDIT NOTE") {
+      return (
+        <UIBadge variant="soft" color="info" className="font-semibold text-xs border border-indigo-500/30 text-indigo-700 dark:text-indigo-300 bg-indigo-500/10">
+          Credit Note
+        </UIBadge>
+      );
+    }
     if (modeUpper === "CREDIT") {
       return (
         <div className="inline-flex flex-col items-center gap-0.5">
@@ -765,10 +809,14 @@ export const BillingDesktopPage = () => {
     );
   };
 
-  // Extract split payment breakdown (Cash vs UPI)
+  // Extract split payment breakdown across all payment methods
   const getSplitBreakdown = (inv) => {
     let cash = 0;
     let upi = 0;
+    let creditNote = 0;
+    let advance = 0;
+    let credit = 0;
+    let card = 0;
     const payments = Array.isArray(inv?.payments) ? inv.payments : [];
     if (payments.length > 0) {
       for (const p of payments) {
@@ -776,19 +824,33 @@ export const BillingDesktopPage = () => {
         const amt = Number(p.amount || 0);
         if (type.includes("UPI") || type.includes("QR")) {
           upi += amt;
+        } else if (type.includes("CREDIT_NOTE") || type.includes("CREDITNOTE")) {
+          creditNote += amt;
+        } else if (type.includes("CREDIT")) {
+          credit += amt;
+        } else if (type.includes("ADVANCE") || type.includes("WALLET")) {
+          advance += amt;
         } else if (type.includes("CASH")) {
           cash += amt;
-        } else if (!type.includes("CARD") && !type.includes("WALLET") && !type.includes("CREDIT")) {
+        } else if (type.includes("CARD")) {
+          card += amt;
+        } else {
           cash += amt;
         }
       }
-    } else if (Number(inv?.paidAmount || inv?.amount || 0) > 0) {
-      const grand = Number(inv?.amount || 0);
-      const tendered = Number(inv?.paidAmount || 0);
-      cash = Math.min(grand, tendered);
-      upi = Math.max(0, grand - cash);
+    } else {
+      if (Number(inv?.creditNoteTotal || 0) > 0) {
+        creditNote = Number(inv.creditNoteTotal);
+      }
+      const pMethod = String(inv?.paymentMode || inv?.paymentMethod || "").toUpperCase();
+      const grand = Number(inv?.amount || inv?.grandTotal || 0);
+      if (pMethod === "SPLIT") {
+        const tendered = Number(inv?.paidAmount || inv?.cashTendered || 0);
+        cash = Math.min(grand, tendered);
+        upi = Math.max(0, grand - cash - creditNote);
+      }
     }
-    return { cash, upi };
+    return { cash, upi, creditNote, advance, credit, card };
   };
 
   // Determine dynamic stats cards based on active payment filter
@@ -947,6 +1009,252 @@ export const BillingDesktopPage = () => {
               </div>
               <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
                 ₹{formatCurrency(stats.splitUpiAmount)}
+              </div>
+              <div className="text-[10px] text-text-muted truncate mt-0.5">
+                From {stats.matchingSplitInvoices} Split bills
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (selectedPaymentType === "Credit") {
+      return (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Pure Credit Bills */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <Receipt className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-rose-600 dark:text-rose-400 truncate">
+                Credit Bills
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                {stats.pureCreditInvoices}
+              </div>
+              {stats.matchingSplitInvoices > 0 && (
+                <div className="text-[10px] text-text-muted truncate mt-0.5">
+                  + {stats.matchingSplitInvoices} Split bills included
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Total Credit Amount (Pure + Split) */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+              <Banknote className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-text-muted truncate">
+                Credit Amount
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.creditAmount)}
+              </div>
+              {stats.splitCreditAmount > 0 && (
+                <div className="text-[10px] text-amber-600 dark:text-amber-400 font-mono truncate mt-0.5">
+                  ₹{formatCurrency(stats.splitCreditAmount)} from Split
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Pure Credit Portion */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Receipt className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-text-muted truncate">
+                Pure Credit
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.pureCreditAmount)}
+              </div>
+              <div className="text-[10px] text-text-muted truncate mt-0.5">
+                From pure Credit bills
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Split Credit Portion */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Banknote className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-amber-600 dark:text-amber-400 truncate">
+                Split Credit
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.splitCreditAmount)}
+              </div>
+              <div className="text-[10px] text-text-muted truncate mt-0.5">
+                From {stats.matchingSplitInvoices} Split bills
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (selectedPaymentType === "Advance") {
+      return (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Pure Advance Bills */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Receipt className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-amber-600 dark:text-amber-400 truncate">
+                Advance Bills
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                {stats.pureAdvanceInvoices}
+              </div>
+              {stats.matchingSplitInvoices > 0 && (
+                <div className="text-[10px] text-text-muted truncate mt-0.5">
+                  + {stats.matchingSplitInvoices} Split bills included
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Total Advance Amount (Pure + Split) */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Wallet className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-text-muted truncate">
+                Advance Amount
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.advanceAmount)}
+              </div>
+              {stats.splitAdvanceAmount > 0 && (
+                <div className="text-[10px] text-amber-600 dark:text-amber-400 font-mono truncate mt-0.5">
+                  ₹{formatCurrency(stats.splitAdvanceAmount)} from Split
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Pure Advance Portion */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Receipt className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-text-muted truncate">
+                Pure Advance
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.pureAdvanceAmount)}
+              </div>
+              <div className="text-[10px] text-text-muted truncate mt-0.5">
+                From pure Advance bills
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Split Advance Portion */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Wallet className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-amber-600 dark:text-amber-400 truncate">
+                Split Advance
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.splitAdvanceAmount)}
+              </div>
+              <div className="text-[10px] text-text-muted truncate mt-0.5">
+                From {stats.matchingSplitInvoices} Split bills
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (selectedPaymentType === "CreditNote" || selectedPaymentType === "creditnote") {
+      return (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {/* Card 1: Pure Credit Note Bills */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <Receipt className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-indigo-600 dark:text-indigo-400 truncate">
+                Credit Note Bills
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                {stats.pureCreditNoteInvoices}
+              </div>
+              {stats.matchingSplitInvoices > 0 && (
+                <div className="text-[10px] text-text-muted truncate mt-0.5">
+                  + {stats.matchingSplitInvoices} Split bills included
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 2: Total Credit Note Amount (Pure + Split) */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+              <Receipt className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-text-muted truncate">
+                Credit Note Amount
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.creditNoteAmount)}
+              </div>
+              {stats.splitCreditNoteAmount > 0 && (
+                <div className="text-[10px] text-amber-600 dark:text-amber-400 font-mono truncate mt-0.5">
+                  ₹{formatCurrency(stats.splitCreditNoteAmount)} from Split
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Pure Credit Note Portion */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <Receipt className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-text-muted truncate">
+                Pure Credit Note
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.pureCreditNoteAmount)}
+              </div>
+              <div className="text-[10px] text-text-muted truncate mt-0.5">
+                From pure Credit Note bills
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Split Credit Note Portion */}
+          <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors">
+            <div className="size-9 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+              <Receipt className="size-4.5 stroke-[1.8]" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[11.5px] font-medium text-amber-600 dark:text-amber-400 truncate">
+                Split Credit Note
+              </div>
+              <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                ₹{formatCurrency(stats.splitCreditNoteAmount)}
               </div>
               <div className="text-[10px] text-text-muted truncate mt-0.5">
                 From {stats.matchingSplitInvoices} Split bills
@@ -1344,10 +1652,17 @@ export const BillingDesktopPage = () => {
               ) : (
                 invoices.map((inv) => {
                   const split = inv.split || getSplitBreakdown(inv);
-                  const isSplit = inv.isSplit ?? (split.cash > 0 && split.upi > 0);
-                  const isSplitUnderCash = selectedPaymentType === "Cash" && isSplit;
-                  const isSplitUnderUpi = selectedPaymentType === "UPI" && isSplit;
-                  const isSplitUnderSingleFilter = isSplitUnderCash || isSplitUnderUpi;
+                  const isSplit = inv.isSplit ?? (
+                    String(inv.paymentMode || inv.paymentMethod || "").trim().toUpperCase() === "SPLIT" ||
+                    (Array.isArray(inv.payments) && inv.payments.length > 1) ||
+                    [split.cash > 0, split.upi > 0, split.creditNote > 0, split.advance > 0, split.credit > 0, split.card > 0].filter(Boolean).length > 1
+                  );
+                  const isSplitUnderCash = selectedPaymentType === "Cash" && isSplit && split.cash > 0;
+                  const isSplitUnderUpi = selectedPaymentType === "UPI" && isSplit && split.upi > 0;
+                  const isSplitUnderCreditNote = (selectedPaymentType === "CreditNote" || selectedPaymentType === "creditnote") && isSplit && split.creditNote > 0;
+                  const isSplitUnderCredit = selectedPaymentType === "Credit" && isSplit && split.credit > 0;
+                  const isSplitUnderAdvance = selectedPaymentType === "Advance" && isSplit && split.advance > 0;
+                  const isSplitUnderSingleFilter = isSplitUnderCash || isSplitUnderUpi || isSplitUnderCreditNote || isSplitUnderCredit || isSplitUnderAdvance;
 
                   return (
                     <UITableRow
@@ -1359,7 +1674,13 @@ export const BillingDesktopPage = () => {
                           ? "bg-emerald-500/[0.05] dark:bg-emerald-500/[0.10] hover:bg-emerald-500/[0.09] dark:hover:bg-emerald-500/[0.15] border-l-[3.5px] border-l-emerald-500"
                           : isSplitUnderUpi
                             ? "bg-sky-500/[0.05] dark:bg-sky-500/[0.10] hover:bg-sky-500/[0.09] dark:hover:bg-sky-500/[0.15] border-l-[3.5px] border-l-sky-500"
-                            : "hover:bg-surface-hover/70"
+                            : isSplitUnderCreditNote
+                              ? "bg-indigo-500/[0.05] dark:bg-indigo-500/[0.10] hover:bg-indigo-500/[0.09] dark:hover:bg-indigo-500/[0.15] border-l-[3.5px] border-l-indigo-500"
+                              : isSplitUnderCredit
+                                ? "bg-rose-500/[0.05] dark:bg-rose-500/[0.10] hover:bg-rose-500/[0.09] dark:hover:bg-rose-500/[0.15] border-l-[3.5px] border-l-rose-500"
+                                : isSplitUnderAdvance
+                                  ? "bg-amber-500/[0.05] dark:bg-amber-500/[0.10] hover:bg-amber-500/[0.09] dark:hover:bg-amber-500/[0.15] border-l-[3.5px] border-l-amber-500"
+                                  : "hover:bg-surface-hover/70"
                       )}
                     >
                       {/* Invoice No & Shift */}
@@ -1417,7 +1738,6 @@ export const BillingDesktopPage = () => {
                         <div className="flex flex-col items-end">
                           {isSplit ? (
                             selectedPaymentType === "Cash" ? (
-                              // Cash filter selected: Highlight Cash amount, Blur UPI amount
                               <div className="flex flex-col items-end">
                                 <div className="flex items-baseline gap-1.5">
                                   <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Cash:</span>
@@ -1425,15 +1745,15 @@ export const BillingDesktopPage = () => {
                                     ₹{formatCurrency(split.cash)}
                                   </span>
                                 </div>
-                                {split.upi > 0 && (
+                                {(split.upi > 0 || split.creditNote > 0 || split.advance > 0 || split.credit > 0) && (
                                   <div
-                                    className="flex items-baseline gap-1 mt-0.5 filter blur-[2px] opacity-40 select-none transition-all cursor-not-allowed"
-                                    title="UPI amount (blurred in Cash view)"
+                                    className="flex flex-col items-end gap-0.5 mt-0.5 filter blur-[2px] opacity-40 select-none transition-all cursor-not-allowed"
+                                    title="Other split amounts (blurred in Cash view)"
                                   >
-                                    <span className="text-[10px] text-text-muted">UPI:</span>
-                                    <span className="font-mono text-[11px] text-text-muted tabular-nums">
-                                      ₹{formatCurrency(split.upi)}
-                                    </span>
+                                    {split.creditNote > 0 && <span className="font-mono text-[10px] text-text-muted">CN: ₹{formatCurrency(split.creditNote)}</span>}
+                                    {split.upi > 0 && <span className="font-mono text-[10px] text-text-muted">UPI: ₹{formatCurrency(split.upi)}</span>}
+                                    {split.advance > 0 && <span className="font-mono text-[10px] text-text-muted">Adv: ₹{formatCurrency(split.advance)}</span>}
+                                    {split.credit > 0 && <span className="font-mono text-[10px] text-text-muted">Credit: ₹{formatCurrency(split.credit)}</span>}
                                   </div>
                                 )}
                                 <span className="text-[9.5px] text-text-muted/70 font-mono mt-0.5">
@@ -1441,7 +1761,6 @@ export const BillingDesktopPage = () => {
                                 </span>
                               </div>
                             ) : selectedPaymentType === "UPI" ? (
-                              // UPI filter selected: Highlight UPI amount, Blur Cash amount
                               <div className="flex flex-col items-end">
                                 <div className="flex items-baseline gap-1.5">
                                   <span className="text-[11px] font-semibold text-sky-600 dark:text-sky-400">UPI:</span>
@@ -1449,15 +1768,84 @@ export const BillingDesktopPage = () => {
                                     ₹{formatCurrency(split.upi)}
                                   </span>
                                 </div>
-                                {split.cash > 0 && (
+                                {(split.cash > 0 || split.creditNote > 0 || split.advance > 0 || split.credit > 0) && (
                                   <div
-                                    className="flex items-baseline gap-1 mt-0.5 filter blur-[2px] opacity-40 select-none transition-all cursor-not-allowed"
-                                    title="Cash amount (blurred in UPI view)"
+                                    className="flex flex-col items-end gap-0.5 mt-0.5 filter blur-[2px] opacity-40 select-none transition-all cursor-not-allowed"
+                                    title="Other split amounts (blurred in UPI view)"
                                   >
-                                    <span className="text-[10px] text-text-muted">Cash:</span>
-                                    <span className="font-mono text-[11px] text-text-muted tabular-nums">
-                                      ₹{formatCurrency(split.cash)}
-                                    </span>
+                                    {split.creditNote > 0 && <span className="font-mono text-[10px] text-text-muted">CN: ₹{formatCurrency(split.creditNote)}</span>}
+                                    {split.cash > 0 && <span className="font-mono text-[10px] text-text-muted">Cash: ₹{formatCurrency(split.cash)}</span>}
+                                    {split.advance > 0 && <span className="font-mono text-[10px] text-text-muted">Adv: ₹{formatCurrency(split.advance)}</span>}
+                                    {split.credit > 0 && <span className="font-mono text-[10px] text-text-muted">Credit: ₹{formatCurrency(split.credit)}</span>}
+                                  </div>
+                                )}
+                                <span className="text-[9.5px] text-text-muted/70 font-mono mt-0.5">
+                                  Total: ₹{formatCurrency(inv.amount)}
+                                </span>
+                              </div>
+                            ) : (selectedPaymentType === "CreditNote" || selectedPaymentType === "creditnote") ? (
+                              <div className="flex flex-col items-end">
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">Credit Note:</span>
+                                  <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 tabular-nums text-sm">
+                                    ₹{formatCurrency(split.creditNote)}
+                                  </span>
+                                </div>
+                                {(split.cash > 0 || split.upi > 0 || split.advance > 0 || split.credit > 0) && (
+                                  <div
+                                    className="flex flex-col items-end gap-0.5 mt-0.5 filter blur-[2px] opacity-40 select-none transition-all cursor-not-allowed"
+                                    title="Other split amounts (blurred in Credit Note view)"
+                                  >
+                                    {split.cash > 0 && <span className="font-mono text-[10px] text-text-muted">Cash: ₹{formatCurrency(split.cash)}</span>}
+                                    {split.upi > 0 && <span className="font-mono text-[10px] text-text-muted">UPI: ₹{formatCurrency(split.upi)}</span>}
+                                    {split.advance > 0 && <span className="font-mono text-[10px] text-text-muted">Adv: ₹{formatCurrency(split.advance)}</span>}
+                                    {split.credit > 0 && <span className="font-mono text-[10px] text-text-muted">Credit: ₹{formatCurrency(split.credit)}</span>}
+                                  </div>
+                                )}
+                                <span className="text-[9.5px] text-text-muted/70 font-mono mt-0.5">
+                                  Total: ₹{formatCurrency(inv.amount)}
+                                </span>
+                              </div>
+                            ) : selectedPaymentType === "Credit" ? (
+                              <div className="flex flex-col items-end">
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-[11px] font-semibold text-rose-600 dark:text-rose-400">Credit:</span>
+                                  <span className="font-mono font-bold text-rose-600 dark:text-rose-400 tabular-nums text-sm">
+                                    ₹{formatCurrency(split.credit)}
+                                  </span>
+                                </div>
+                                {(split.cash > 0 || split.upi > 0 || split.creditNote > 0 || split.advance > 0) && (
+                                  <div
+                                    className="flex flex-col items-end gap-0.5 mt-0.5 filter blur-[2px] opacity-40 select-none transition-all cursor-not-allowed"
+                                    title="Other split amounts (blurred in Credit view)"
+                                  >
+                                    {split.creditNote > 0 && <span className="font-mono text-[10px] text-text-muted">CN: ₹{formatCurrency(split.creditNote)}</span>}
+                                    {split.cash > 0 && <span className="font-mono text-[10px] text-text-muted">Cash: ₹{formatCurrency(split.cash)}</span>}
+                                    {split.upi > 0 && <span className="font-mono text-[10px] text-text-muted">UPI: ₹{formatCurrency(split.upi)}</span>}
+                                    {split.advance > 0 && <span className="font-mono text-[10px] text-text-muted">Adv: ₹{formatCurrency(split.advance)}</span>}
+                                  </div>
+                                )}
+                                <span className="text-[9.5px] text-text-muted/70 font-mono mt-0.5">
+                                  Total: ₹{formatCurrency(inv.amount)}
+                                </span>
+                              </div>
+                            ) : selectedPaymentType === "Advance" ? (
+                              <div className="flex flex-col items-end">
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Advance:</span>
+                                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400 tabular-nums text-sm">
+                                    ₹{formatCurrency(split.advance)}
+                                  </span>
+                                </div>
+                                {(split.cash > 0 || split.upi > 0 || split.creditNote > 0 || split.credit > 0) && (
+                                  <div
+                                    className="flex flex-col items-end gap-0.5 mt-0.5 filter blur-[2px] opacity-40 select-none transition-all cursor-not-allowed"
+                                    title="Other split amounts (blurred in Advance view)"
+                                  >
+                                    {split.creditNote > 0 && <span className="font-mono text-[10px] text-text-muted">CN: ₹{formatCurrency(split.creditNote)}</span>}
+                                    {split.cash > 0 && <span className="font-mono text-[10px] text-text-muted">Cash: ₹{formatCurrency(split.cash)}</span>}
+                                    {split.upi > 0 && <span className="font-mono text-[10px] text-text-muted">UPI: ₹{formatCurrency(split.upi)}</span>}
+                                    {split.credit > 0 && <span className="font-mono text-[10px] text-text-muted">Credit: ₹{formatCurrency(split.credit)}</span>}
                                   </div>
                                 )}
                                 <span className="text-[9.5px] text-text-muted/70 font-mono mt-0.5">
@@ -1465,12 +1853,17 @@ export const BillingDesktopPage = () => {
                                 </span>
                               </div>
                             ) : (
-                              // Standard view (All Payments / Split / Credit / Advance)
+                              // Standard view (All Payments / Split)
                               <div className="flex flex-col items-end">
                                 <span className="font-mono font-bold text-text tabular-nums text-sm">
                                   ₹{formatCurrency(inv.amount)}
                                 </span>
-                                <div className="mt-0.5 flex flex-col items-end text-[10.5px] font-mono leading-tight">
+                                <div className="mt-0.5 flex flex-col items-end text-[10.5px] font-mono leading-tight gap-0.5">
+                                  {split.creditNote > 0 && (
+                                    <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                                      CN: ₹{formatCurrency(split.creditNote)}
+                                    </span>
+                                  )}
                                   {split.cash > 0 && (
                                     <span className="font-semibold text-emerald-600 dark:text-emerald-400">
                                       Cash: ₹{formatCurrency(split.cash)}
@@ -1479,6 +1872,21 @@ export const BillingDesktopPage = () => {
                                   {split.upi > 0 && (
                                     <span className="font-semibold text-sky-600 dark:text-sky-400">
                                       UPI: ₹{formatCurrency(split.upi)}
+                                    </span>
+                                  )}
+                                  {split.advance > 0 && (
+                                    <span className="font-semibold text-amber-600 dark:text-amber-400">
+                                      Adv: ₹{formatCurrency(split.advance)}
+                                    </span>
+                                  )}
+                                  {split.credit > 0 && (
+                                    <span className="font-semibold text-rose-600 dark:text-rose-400">
+                                      Credit: ₹{formatCurrency(split.credit)}
+                                    </span>
+                                  )}
+                                  {split.card > 0 && (
+                                    <span className="font-semibold text-purple-600 dark:text-purple-400">
+                                      Card: ₹{formatCurrency(split.card)}
                                     </span>
                                   )}
                                 </div>
@@ -1562,3 +1970,4 @@ export const BillingDesktopPage = () => {
 };
 
 export default BillingDesktopPage;
+

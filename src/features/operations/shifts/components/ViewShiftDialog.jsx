@@ -211,12 +211,6 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
   const qrBills = Number(summary?.paymentQrCount ?? shift?.paymentQrCount ?? 0);
   const upiBreakdown = summary?.upiBreakdown || shift?.upiBreakdown || [];
 
-  const cardNet = Number(summary?.cardNet ?? shift?.cardNet ?? 0);
-  const cardBills = Number(summary?.cardInvoiceCount ?? shift?.cardInvoiceCount ?? 0);
-
-  const walletNet = Number(summary?.walletNet ?? shift?.walletNet ?? 0);
-  const walletBills = Number(summary?.walletInvoiceCount ?? shift?.walletInvoiceCount ?? 0);
-
   const splitNet = Number(summary?.splitNet ?? shift?.splitNet ?? summary?.splitSalesTotal ?? shift?.splitSalesTotal ?? 0);
   const splitBills = Number(summary?.splitInvoiceCount ?? shift?.splitInvoiceCount ?? 0);
 
@@ -227,9 +221,20 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
 
   const creditSalesTotal = Number(summary?.creditSalesTotal ?? shift?.creditSalesTotal ?? 0);
   const creditBills = Number(summary?.creditInvoiceCount ?? shift?.creditInvoiceCount ?? 0);
+  const splitCreditAmount = Number(summary?.splitCreditAmount ?? shift?.splitCreditAmount ?? 0);
+  const pureCreditAmount = Number(summary?.pureCreditAmount ?? shift?.pureCreditAmount ?? (creditSalesTotal - splitCreditAmount));
 
   const advanceSalesTotal = Number(summary?.advanceSalesTotal ?? shift?.advanceSalesTotal ?? 0);
   const advanceBills = Number(summary?.advanceInvoiceCount ?? shift?.advanceInvoiceCount ?? 0);
+  const splitAdvanceAmount = Number(summary?.splitAdvanceAmount ?? shift?.splitAdvanceAmount ?? 0);
+  const pureAdvanceAmount = Number(summary?.pureAdvanceAmount ?? shift?.pureAdvanceAmount ?? (advanceSalesTotal - splitAdvanceAmount));
+
+  const creditNoteSalesTotal = Number(summary?.creditNoteSalesTotal ?? shift?.creditNoteSalesTotal ?? 0);
+  const creditNoteBills = Number(summary?.creditNoteInvoiceCount ?? shift?.creditNoteInvoiceCount ?? 0);
+  const splitCreditNoteAmount = Number(summary?.splitCreditNoteAmount ?? shift?.splitCreditNoteAmount ?? 0);
+  const pureCreditNoteAmount = Number(summary?.pureCreditNoteAmount ?? shift?.pureCreditNoteAmount ?? (creditNoteSalesTotal - splitCreditNoteAmount));
+
+  const splitCombinations = summary?.splitCombinations || shift?.splitCombinations || [];
 
   const paymentMethods = useMemo(() => {
     const list = [
@@ -263,8 +268,8 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
         icon: Receipt,
         bills: creditBills,
         amount: creditSalesTotal,
-        pureAmount: creditSalesTotal,
-        splitPortion: 0,
+        pureAmount: pureCreditAmount,
+        splitPortion: splitCreditAmount,
         color: "bg-rose-500",
         textColor: "text-rose-600 dark:text-rose-400",
         iconBg: "bg-rose-50 dark:bg-rose-950/40",
@@ -275,35 +280,23 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
         icon: Wallet,
         bills: advanceBills,
         amount: advanceSalesTotal,
-        pureAmount: advanceSalesTotal,
-        splitPortion: 0,
+        pureAmount: pureAdvanceAmount,
+        splitPortion: splitAdvanceAmount,
         color: "bg-amber-500",
         textColor: "text-amber-600 dark:text-amber-400",
         iconBg: "bg-amber-50 dark:bg-amber-950/40",
       },
       {
-        id: "card",
-        label: "Card",
-        icon: CreditCard,
-        bills: cardBills,
-        amount: cardNet,
-        pureAmount: cardNet,
-        splitPortion: 0,
-        color: "bg-purple-500",
-        textColor: "text-purple-600 dark:text-purple-400",
-        iconBg: "bg-purple-50 dark:bg-purple-950/40",
-      },
-      {
-        id: "wallet",
-        label: "Wallet / Others",
-        icon: Wallet,
-        bills: walletBills,
-        amount: walletNet,
-        pureAmount: walletNet,
-        splitPortion: 0,
-        color: "bg-amber-500",
-        textColor: "text-amber-600 dark:text-amber-400",
-        iconBg: "bg-amber-50 dark:bg-amber-950/40",
+        id: "creditNote",
+        label: "Credit Note",
+        icon: Receipt,
+        bills: creditNoteBills,
+        amount: creditNoteSalesTotal,
+        pureAmount: pureCreditNoteAmount,
+        splitPortion: splitCreditNoteAmount,
+        color: "bg-indigo-500",
+        textColor: "text-indigo-600 dark:text-indigo-400",
+        iconBg: "bg-indigo-50 dark:bg-indigo-950/40",
       },
       {
         id: "split",
@@ -313,13 +306,16 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
         amount: splitNet,
         splitCash: splitCashAmount,
         splitUpi: splitUpiAmount,
-        color: "bg-indigo-500",
-        textColor: "text-indigo-600 dark:text-indigo-400",
-        iconBg: "bg-indigo-50 dark:bg-indigo-950/40",
+        splitCredit: splitCreditAmount,
+        splitAdvance: splitAdvanceAmount,
+        splitCreditNote: splitCreditNoteAmount,
+        color: "bg-purple-500",
+        textColor: "text-purple-600 dark:text-purple-400",
+        iconBg: "bg-purple-50 dark:bg-purple-950/40",
       },
     ];
 
-    const totalSum = totalBillAmount || (pureCashAmount + pureUpiAmount + cardNet + walletNet + splitNet + creditSalesTotal + advanceSalesTotal) || 1;
+    const totalSum = totalBillAmount || (pureCashAmount + pureUpiAmount + splitNet + creditSalesTotal + advanceSalesTotal + creditNoteSalesTotal) || 1;
 
     return list.map((item) => ({
       ...item,
@@ -336,12 +332,16 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
     splitUpiAmount,
     creditBills,
     creditSalesTotal,
+    pureCreditAmount,
+    splitCreditAmount,
     advanceBills,
     advanceSalesTotal,
-    cardBills,
-    cardNet,
-    walletBills,
-    walletNet,
+    pureAdvanceAmount,
+    splitAdvanceAmount,
+    creditNoteBills,
+    creditNoteSalesTotal,
+    pureCreditNoteAmount,
+    splitCreditNoteAmount,
     splitBills,
     splitNet,
     totalBillAmount,
@@ -1165,8 +1165,13 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
                                   <div>
                                     <span className="font-semibold text-text">{method.label}</span>
                                     {method.id === "split" && method.bills > 0 && (
+                                      <div className="text-[10px] text-purple-600 dark:text-purple-400 font-medium">
+                                        Multi-tender across Cash, UPI, Credit, Advance & Credit Note
+                                      </div>
+                                    )}
+                                    {method.id === "creditNote" && method.bills > 0 && (
                                       <div className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
-                                        Divided across Cash & UPI
+                                        Redeemed against return credit notes
                                       </div>
                                     )}
                                     {method.id === "credit" && method.bills > 0 && (
@@ -1190,44 +1195,47 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
                               <td className="py-2.5 px-3 text-right">
                                 {method.id === "split" ? (
                                   <div>
-                                    <div className="font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                                    <div className="font-mono font-bold text-purple-600 dark:text-purple-400">
                                       {formatCurrency(method.amount)}
                                     </div>
-                                    <div className="flex items-center justify-end gap-1.5 mt-0.5 text-[10px]">
-                                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold font-mono">
-                                        Cash: {formatCurrency(method.splitCash)}
-                                      </span>
-                                      <span className="text-text-muted">·</span>
-                                      <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold font-mono">
-                                        UPI: {formatCurrency(method.splitUpi)}
-                                      </span>
+                                    <div className="flex items-center justify-end gap-1.5 mt-0.5 text-[10px] flex-wrap">
+                                      {method.splitCash > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold font-mono">
+                                          Cash: {formatCurrency(method.splitCash)}
+                                        </span>
+                                      )}
+                                      {method.splitUpi > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold font-mono">
+                                          UPI: {formatCurrency(method.splitUpi)}
+                                        </span>
+                                      )}
+                                      {method.splitCreditNote > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold font-mono">
+                                          CN: {formatCurrency(method.splitCreditNote)}
+                                        </span>
+                                      )}
+                                      {method.splitCredit > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold font-mono">
+                                          Credit: {formatCurrency(method.splitCredit)}
+                                        </span>
+                                      )}
+                                      {method.splitAdvance > 0 && (
+                                        <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-semibold font-mono">
+                                          Adv: {formatCurrency(method.splitAdvance)}
+                                        </span>
+                                      )}
                                     </div>
-                                  </div>
-                                ) : method.id === "cash" ? (
-                                  <div>
-                                    <div className="font-mono font-bold text-text">
-                                      {formatCurrency(method.amount)}
-                                    </div>
-                                    {method.splitPortion > 0 && (
-                                      <div className="text-[10px] text-text-muted font-normal mt-0.5">
-                                        ({formatCurrency(method.splitPortion)} from Split)
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : method.id === "upi" ? (
-                                  <div>
-                                    <div className="font-mono font-bold text-text">
-                                      {formatCurrency(method.amount)}
-                                    </div>
-                                    {method.splitPortion > 0 && (
-                                      <div className="text-[10px] text-text-muted font-normal mt-0.5">
-                                        ({formatCurrency(method.splitPortion)} from Split)
-                                      </div>
-                                    )}
                                   </div>
                                 ) : (
-                                  <div className="font-mono font-bold text-text">
-                                    {formatCurrency(method.amount)}
+                                  <div>
+                                    <div className="font-mono font-bold text-text">
+                                      {formatCurrency(method.amount)}
+                                    </div>
+                                    {method.splitPortion > 0 && (
+                                      <div className="text-[10px] text-text-muted font-normal mt-0.5">
+                                        ({formatCurrency(method.splitPortion)} from Split)
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </td>
@@ -1252,6 +1260,53 @@ export const ViewShiftDialog = ({ isOpen, onClose, shift }) => {
                     </table>
                   </div>
                 </div>
+
+                {/* Split Combinations Breakdown Card */}
+                {(splitBills > 0 || (Array.isArray(splitCombinations) && splitCombinations.length > 0)) && (
+                  <div className="bg-surface rounded-xl border border-purple-500/30 p-4 space-y-3 shadow-xs animate-in fade-in">
+                    <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                      <div className="flex items-center gap-2">
+                        <Calculator className="size-4 text-purple-600 dark:text-purple-400" />
+                        <div>
+                          <h3 className="text-xs font-bold text-text">
+                            Split Payment Combinations
+                          </h3>
+                          <p className="text-[11px] text-text-muted">
+                            Breakdown of multi-tender bill combinations during this shift
+                          </p>
+                        </div>
+                      </div>
+                      <UIBadge variant="soft" color="purple" className="text-[10px] font-bold">
+                        {splitBills} {splitBills === 1 ? "Split Bill" : "Split Bills"} · {formatCurrency(splitNet)}
+                      </UIBadge>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                      {(splitCombinations && splitCombinations.length > 0 ? splitCombinations : [
+                        { combination: "Cash + UPI", count: splitBills, totalAmount: splitNet }
+                      ]).map((comb, cIdx) => (
+                        <div
+                          key={comb.combination || cIdx}
+                          className="p-2.5 rounded-xl border border-border/70 bg-surface-alt/40 flex items-center justify-between gap-3 shadow-2xs"
+                        >
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-text truncate">
+                              {comb.combination}
+                            </div>
+                            <div className="text-[10.5px] text-text-muted mt-0.5">
+                              {comb.count} {comb.count === 1 ? "invoice" : "invoices"}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="font-mono font-bold text-xs text-purple-600 dark:text-purple-400 block">
+                              {formatCurrency(comb.totalAmount)}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Dedicated UPI / QR Terminal & Bank Breakdown Card */}
                 {(qrNet > 0 || upiBreakdown.length > 0) && (

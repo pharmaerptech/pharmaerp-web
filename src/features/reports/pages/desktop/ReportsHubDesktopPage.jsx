@@ -1,131 +1,90 @@
 // src/features/reports/pages/desktop/ReportsHubDesktopPage.jsx
 
-import React, { useRef, useState, useMemo } from "react";
+import React, { useMemo } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  ReportStatCards,
-  ReportFilterToolbar,
-  ReportDataTable,
-  ReportFilterModal,
+  ReportsOverviewStatCards,
+  ReportsDirectoryGrid,
+  ReportDetailView,
 } from "../../components";
 import {
-  REPORTS_REGISTRY,
-  getReportConfig,
-} from "../../config/reportsRegistry";
-import usePharmacyReports from "../../hooks/usePharmacyReports";
-import useBranch from "@/features/branch/hooks/useBranch";
-import useCompany from "@/features/company/hooks/useCompany";
+  REPORTS_OVERVIEW_STATS,
+  resolveCategoryAndTab,
+} from "../../constants/reportsHubData";
 
-import { exportReportToCsv, printPharmacyReport } from "../../utils/reportExportUtils";
+export const ReportsHubDesktopPage = () => {
+  const navigate = useNavigate();
+  const { category, subReport, reportKey: routeReportKey } = useParams();
+  const [searchParams] = useSearchParams();
 
-export const ReportsHubDesktopPage = ({ defaultReportKey = "daily-sales" }) => {
-  const { currentBranch } = useBranch();
-  const { currentCompany } = useCompany();
-  const tableContainerRef = useRef(null);
-
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
-
-  const {
-    reportKey,
-    setReportKey,
-    reportData,
-    isLoading,
-    isLoadingMore,
-    hasMore,
-    filters,
-    setFilterField,
-    setDatePreset,
-    resetFilters,
-    fetchReport,
-    loadMore,
-  } = usePharmacyReports(defaultReportKey, currentBranch?._id);
-
-  const reportConfig = useMemo(() => getReportConfig(reportKey), [reportKey]);
-
-  // Generate 4 compact stats from reportData.summary
-  const statCards = useMemo(() => {
-    if (typeof reportConfig.getStatCards === "function") {
-      return reportConfig.getStatCards(reportData.summary);
+  // Determine if a specific category / report view is active
+  const activeReportContext = useMemo(() => {
+    // 1. Path is /reports/:category/:subReport (e.g. /reports/purchase/summary)
+    if (category) {
+      return resolveCategoryAndTab(category, subReport);
     }
-    return [];
-  }, [reportConfig, reportData.summary]);
 
-  // Handle CSV Export
-  const handleExportCsv = () => {
-    exportReportToCsv(reportConfig.title, reportConfig.columns, reportData.rows, {
-      pharmacyName: currentBranch?.name || currentCompany?.tradeName || "Main Pharmacy",
-      startDate: filters.startDate,
-      endDate: filters.endDate,
-    });
+    // 2. Path is /reports/:reportKey (e.g. /reports/sales or /reports/purchase-summary)
+    if (routeReportKey) {
+      return resolveCategoryAndTab(routeReportKey, null);
+    }
+
+    // 3. Query param ?report=...
+    const queryReport = searchParams.get("report");
+    if (queryReport) {
+      return resolveCategoryAndTab(queryReport, null);
+    }
+
+    return null;
+  }, [category, subReport, routeReportKey, searchParams]);
+
+  // Handle report selection from category cards on the front page directory
+  const handleSelectReport = (reportId, categoryId, slug) => {
+    const cleanCat = categoryId.replace("-reports", "");
+    const tabSlug = slug || reportId.replace(`${cleanCat}-`, "");
+    navigate(`/reports/${cleanCat}/${tabSlug}`);
   };
 
-  // Handle Browser Native Print with Letterhead
-  const handlePrint = () => {
-    printPharmacyReport({
-      reportTitle: reportConfig.title,
-      columns: reportConfig.columns,
-      rows: reportData.rows,
-      summaryCards: statCards,
-      company: currentCompany,
-      branch: currentBranch,
-      filters,
-    });
+  // Switch tabs inside any report subdivision view (seamless URL + state change)
+  const handleTabChange = (tabSlug) => {
+    if (activeReportContext) {
+      navigate(`/reports/${activeReportContext.catKey}/${tabSlug}`, { replace: true });
+    }
   };
 
-  // Active filter count for badge
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.datePreset !== "today") count++;
-    if (reportKey === "near-expiry" && filters.daysThreshold !== 90) count++;
-    return count;
-  }, [filters, reportKey]);
+  // Back to front page directory
+  const handleBackToHub = () => {
+    navigate("/reports");
+  };
 
   return (
-    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-2 sm:px-3 pt-2 pb-1 gap-2 text-text font-sans transition-colors overflow-hidden select-none">
-      {/* ── 1. Compact 4-Card Statistics Grid (PAGE_UI_DESIGN_SPEC.md) ── */}
-      <ReportStatCards statCards={statCards} />
+    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-3 sm:px-4 md:px-5 pt-0 pb-3 gap-3.5 text-text font-sans transition-colors overflow-hidden">
+      {activeReportContext ? (
+        /* ── General Report Subdivision & Detail View (All Categories) ─── */
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          <ReportDetailView
+            categoryKey={activeReportContext.catKey}
+            initialTabKey={activeReportContext.tabKey}
+            onBackToHub={handleBackToHub}
+            onTabChange={handleTabChange}
+          />
+        </div>
+      ) : (
+        /* ── Front Page: General Collection of Reports (Image 2) ─────────── */
+        <>
+          {/* 1. Compact 4-Card Statistics Grid (Top of Page, NO heading) */}
+          <div className="shrink-0 pt-1">
+            <ReportsOverviewStatCards stats={REPORTS_OVERVIEW_STATS} />
+          </div>
 
-      {/* ── 3. Single-Row Streamlined Filter Toolbar ──────────────────── */}
-      <ReportFilterToolbar
-        reportKey={reportKey}
-        onReportChange={(key) => {
-          setReportKey(key);
-          if (tableContainerRef.current) tableContainerRef.current.scrollTop = 0;
-        }}
-        filters={filters}
-        onDatePresetChange={setDatePreset}
-        onFilterChange={setFilterField}
-        onResetFilters={resetFilters}
-        onRefresh={() => fetchReport(reportKey)}
-        isLoading={isLoading}
-        onOpenFilterModal={() => setIsFilterModalOpen(true)}
-        onExportCsv={handleExportCsv}
-        onPrint={handlePrint}
-        activeFilterCount={activeFilterCount}
-      />
-
-      {/* ── 4. Constrained Table with Sticky Header & Infinite Scroll ─── */}
-      <ReportDataTable
-        columns={reportConfig.columns}
-        rows={reportData.rows}
-        isLoading={isLoading}
-        isLoadingMore={isLoadingMore}
-        hasMore={hasMore}
-        total={reportData.total}
-        onLoadMore={loadMore}
-        tableContainerRef={tableContainerRef}
-        onResetFilters={resetFilters}
-      />
-
-      {/* ── 5. Advanced Filter Modal ─────────────────────────────────── */}
-      <ReportFilterModal
-        isOpen={isFilterModalOpen}
-        onClose={() => setIsFilterModalOpen(false)}
-        reportKey={reportKey}
-        onReportChange={setReportKey}
-        filters={filters}
-        onFilterChange={setFilterField}
-        onResetFilters={resetFilters}
-      />
+          {/* 2. 3x3 Grid of 9 Category Cards (All 45 Reports) - Filter Toolbar Removed */}
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            <ReportsDirectoryGrid
+              onSelectReport={handleSelectReport}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 };

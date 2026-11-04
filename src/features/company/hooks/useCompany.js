@@ -98,15 +98,25 @@ const useCompany = () => {
     dispatch(clearCompanyMessage());
   }, [dispatch]);
 
-  const saveCurrentCompany = useCallback(
+    const saveCurrentCompany = useCallback(
     (payload) => {
       dispatch(setCurrentCompany(payload));
+      try {
+        if (payload?._id) {
+          localStorage.setItem("pahuch_active_company_id", payload._id);
+        } else {
+          localStorage.removeItem("pahuch_active_company_id");
+        }
+      } catch {}
     },
     [dispatch],
   );
 
   const removeCurrentCompany = useCallback(() => {
     dispatch(clearCurrentCompany());
+    try {
+      localStorage.removeItem("pahuch_active_company_id");
+    } catch {}
   }, [dispatch]);
 
   const removeCompanies = useCallback(() => {

@@ -17,7 +17,23 @@ import {
   AppStack,
   AppText,
 } from "@/components";
-import { formatCurrency, formatDate } from "@/utils";
+import { formatCurrency, formatDate, formatDateTime } from "@/utils";
+
+const resolveTxTimestamp = (tx) => {
+  if (!tx) return null;
+  const d = tx.transactionDate ? new Date(tx.transactionDate) : null;
+  const isMidnightUTC =
+    d &&
+    !Number.isNaN(d.getTime()) &&
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0;
+
+  if (isMidnightUTC && (tx.postedAt || tx.createdAt)) {
+    return tx.postedAt || tx.createdAt;
+  }
+  return tx.transactionDate || tx.postedAt || tx.createdAt;
+};
 
 const BankTransactionDetailsMobilePage = ({
   transaction,
@@ -150,7 +166,7 @@ const BankTransactionDetailsMobilePage = ({
                   </span>
                 </div>
                 <span className="text-[10px] text-text-muted mt-0.5 block">
-                  Date: {formatDate(transaction.transactionDate)}
+                  Date: {formatDateTime(resolveTxTimestamp(transaction))}
                 </span>
               </div>
             </div>

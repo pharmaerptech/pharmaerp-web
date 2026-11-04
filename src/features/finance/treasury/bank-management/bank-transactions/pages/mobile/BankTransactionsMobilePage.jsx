@@ -29,8 +29,23 @@ import {
   AppTablePagination,
   AppMenu,
 } from "@/components";
-import { ROUTES } from "@/constants";
-import { formatCurrency, formatDate } from "@/utils";
+import { formatCurrency, formatDate, formatDateTime } from "@/utils";
+
+const resolveTxTimestamp = (tx) => {
+  if (!tx) return null;
+  const d = tx.transactionDate ? new Date(tx.transactionDate) : null;
+  const isMidnightUTC =
+    d &&
+    !Number.isNaN(d.getTime()) &&
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0;
+
+  if (isMidnightUTC && (tx.postedAt || tx.createdAt)) {
+    return tx.postedAt || tx.createdAt;
+  }
+  return tx.transactionDate || tx.postedAt || tx.createdAt;
+};
 
 const typeOptions = [
   { label: "All Types", value: "all" },
@@ -373,7 +388,7 @@ const BankTransactionsMobilePage = ({
                       <div>
                         <span className="text-text-muted block font-semibold">Transaction Date</span>
                         <span className="font-bold text-text block mt-0.5">
-                          {formatDate(tx.transactionDate)}
+                          {formatDateTime(resolveTxTimestamp(tx))}
                         </span>
                       </div>
 

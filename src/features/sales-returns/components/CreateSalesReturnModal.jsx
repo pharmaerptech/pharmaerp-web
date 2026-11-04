@@ -78,10 +78,28 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
   const [selectedItems, setSelectedItems] = useState([]);
 
   // Step 3: Refund Settlement Mode
-  const [refundMode, setRefundMode] = useState("Cash"); // "Cash" | "Advance" | "Credit"
+  const [refundMode, setRefundMode] = useState("Cash"); // "Cash" | "Credit"
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(null);
+
+  const isWalkInReturn = useMemo(() => {
+    const cust = originalInvoice?.customerId || selectedCustomer;
+    const custType = typeof cust === "object" ? cust?.customerType : null;
+    const isWalk = typeof cust === "object" ? (cust?.isWalkIn || cust?.type === "walk_in") : null;
+    const name = (typeof cust === "object" ? cust?.name : originalInvoice?.customerName) || "";
+    return Boolean(
+      isWalk ||
+      custType === "walk_in" ||
+      name.toLowerCase().includes("walk-in")
+    );
+  }, [originalInvoice, selectedCustomer]);
+
+  useEffect(() => {
+    if (isWalkInReturn && refundMode !== "Cash") {
+      setRefundMode("Cash");
+    }
+  }, [isWalkInReturn, refundMode]);
 
   // Cash Denominations
   const [cashDenominations, setCashDenominations] = useState({});
@@ -404,6 +422,11 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
   }, [cashDenominations]);
 
   const handleSaveReturn = async () => {
+    if (refundMode === "Credit" && !originalInvoice?.customerId) {
+      setSubmitError("Issuing a Credit Note requires a registered customer on the original bill.");
+      return;
+    }
+
     if (activeReturnItems.length === 0) {
       setSubmitError("Please select at least one item and quantity to return.");
       return;
@@ -426,9 +449,9 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
         subtotal,
         tax: totalGst,
         grandTotal,
-        returnType: refundMode === "Advance" ? "advance_credit" : refundMode === "Credit" ? "credit_note" : "cash_refund",
-        paymentMethod: refundMode,
-        refundMethod: refundMode,
+        returnType: refundMode === "Credit" ? "credit_note" : "cash_refund",
+        paymentMethod: refundMode === "Credit" ? "Credit Note" : "Cash",
+        refundMethod: refundMode === "Credit" ? "Credit Note" : "Cash",
         notes: notes || `Returned from bill #${originalInvoice?.invoiceNo}`,
         items: activeReturnItems.map((i) => ({
           productId: i.productId,
@@ -952,49 +975,50 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
               3. Refund Settlement Method
             </label>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => setRefundMode("Cash")}
                 className={cn(
-                  "p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer",
+                  "p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer",
                   refundMode === "Cash"
-                    ? "border-emerald-600 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-600"
+                    ? "border-emerald-600 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-600 shadow-2xs"
                     : "border-border bg-surface text-text-muted hover:border-text-muted"
                 )}
               >
-                <Banknote className="size-4" />
+                <Banknote className="size-4.5 text-emerald-600" />
                 <span>Cash Drawer Refund</span>
+                <span className="text-[10px] font-normal opacity-80">Dispense cash to customer immediately</span>
               </button>
 
               <button
                 type="button"
-                onClick={() => setRefundMode("Advance")}
+                disabled={isWalkInReturn}
+                onClick={() => !isWalkInReturn && setRefundMode("Credit")}
+                title={isWalkInReturn ? "Credit Notes cannot be issued for Walk-in Customers" : undefined}
                 className={cn(
-                  "p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer",
-                  refundMode === "Advance"
-                    ? "border-blue-600 bg-blue-500/10 text-blue-700 dark:text-blue-300 ring-1 ring-blue-600"
-                    : "border-border bg-surface text-text-muted hover:border-text-muted"
+                  "p-3 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all",
+                  isWalkInReturn
+                    ? "border-border bg-surface-alt/50 text-text-muted/50 cursor-not-allowed opacity-60"
+                    : refundMode === "Credit"
+                    ? "border-indigo-600 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-600 shadow-2xs cursor-pointer"
+                    : "border-border bg-surface text-text-muted hover:border-text-muted cursor-pointer"
                 )}
               >
-                <Wallet className="size-4" />
-                <span>Customer Advance Credit</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRefundMode("Credit")}
-                className={cn(
-                  "p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1.5 transition-all cursor-pointer",
-                  refundMode === "Credit"
-                    ? "border-purple-600 bg-purple-500/10 text-purple-700 dark:text-purple-300 ring-1 ring-purple-600"
-                    : "border-border bg-surface text-text-muted hover:border-text-muted"
-                )}
-              >
-                <Receipt className="size-4" />
-                <span>Credit Note Voucher</span>
+                <Receipt className="size-4.5 text-indigo-600" />
+                <span>Issue Credit Note</span>
+                <span className="text-[10px] font-normal opacity-80">
+                  {isWalkInReturn ? "Requires registered customer" : "Generate return voucher for future bills"}
+                </span>
               </button>
             </div>
+
+            {isWalkInReturn && (
+              <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-200 text-xs flex items-center gap-2">
+                <Banknote className="size-4 text-emerald-600 shrink-0" />
+                <span>Walk-in Customer return: Settled immediately via Cash Drawer refund. Credit notes require a registered phone number.</span>
+              </div>
+            )}
 
             {refundMode === "Cash" && (
               <div className="space-y-2">
@@ -1057,16 +1081,19 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
               </div>
             )}
 
-            {refundMode === "Advance" && (
-              <div className="p-2 rounded-lg border border-blue-500/20 bg-blue-500/5 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                <Wallet className="size-4 shrink-0" />
+            {refundMode === "Credit" && (
+              <div className="p-2.5 rounded-lg border border-purple-500/20 bg-purple-500/5 text-xs text-purple-700 dark:text-purple-300 flex items-center gap-2">
+                <Receipt className="size-4 shrink-0" />
                 <span>
-                  <strong>{formatCurrency(grandTotal)}</strong> will be credited to{" "}
-                  <strong>{originalInvoice.customerId?.name || originalInvoice.customerName || "Customer"}</strong>'s advance balance
-                  for future purchases.
+                  An official <strong>Credit Note</strong> of{" "}
+                  <strong>{formatCurrency(grandTotal)}</strong> will be issued to{" "}
+                  <strong>{originalInvoice?.customerId?.name || originalInvoice?.customerName || "Customer"}</strong>.
+                  This Credit Note can be redeemed against future purchases.
                 </span>
               </div>
             )}
+
+            
 
             <div>
               <input

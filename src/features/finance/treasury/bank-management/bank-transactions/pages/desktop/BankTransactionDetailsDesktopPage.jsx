@@ -21,7 +21,23 @@ import {
   AppText,
   PageHeader,
 } from "@/components";
-import { formatCurrency, formatDate } from "@/utils";
+import { formatCurrency, formatDate, formatDateTime } from "@/utils";
+
+const resolveTxTimestamp = (tx) => {
+  if (!tx) return null;
+  const d = tx.transactionDate ? new Date(tx.transactionDate) : null;
+  const isMidnightUTC =
+    d &&
+    !Number.isNaN(d.getTime()) &&
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0;
+
+  if (isMidnightUTC && (tx.postedAt || tx.createdAt)) {
+    return tx.postedAt || tx.createdAt;
+  }
+  return tx.transactionDate || tx.postedAt || tx.createdAt;
+};
 
 const BankTransactionDetailsDesktopPage = ({
   transaction,
@@ -206,7 +222,7 @@ const BankTransactionDetailsDesktopPage = ({
                   <div>
                     <span className="text-text-muted block font-semibold">Transaction Date</span>
                     <span className="font-semibold text-text block mt-0.5">
-                      {formatDate(transaction.transactionDate)}
+                      {formatDateTime(resolveTxTimestamp(transaction))}
                     </span>
                   </div>
 

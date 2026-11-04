@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef, useCallback } from "react";
-import { Search, X, Loader2, User, Phone, MapPin, CreditCard, Plus, ChevronRight, Check, Eye } from "lucide-react";
+import { Search, X, Loader2, User, Phone, MapPin, CreditCard, Plus, ChevronRight, Check, Eye, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import customerService from "../services/customerService";
 import CustomerDialog from "./CustomerDialog";
@@ -9,15 +9,17 @@ import CustomerDialog from "./CustomerDialog";
  * Dedicated search bar for Company Customers.
  * Supports real-time debounced search by customer name or phone.
  * Restricts queries strictly to active company, enforces 2-char minimum, and limits top 5 matches.
+ * On focus/click when empty, displays Walk-in Customer as instant single choice.
  */
 export const B2cCustomerSearchBar = forwardRef(
   (
     {
       value: controlledValue,
       selectedCustomer,
+      walkInCustomer: propWalkInCustomer,
       onSelectCustomer,
       onViewCustomerDetails,
-      placeholder = "Search customer by name or phone...",
+      placeholder = "Search customer or select Walk-in...",
       size = "md", // "sm" | "md" | "lg"
       debounceMs = 250,
       disabled = false,
@@ -34,13 +36,49 @@ export const B2cCustomerSearchBar = forwardRef(
     const isControlled = controlledValue !== undefined;
     const [searchTerm, setSearchTerm] = useState(selectedCustomer?.name || "");
     const currentValue = isControlled ? controlledValue : searchTerm;
+    const isWalkInMode = !currentValue || currentValue.trim().length < 2;
 
+    const [walkInCustomer, setWalkInCustomer] = useState(propWalkInCustomer || null);
     const [results, setResults] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
     const [selectedIndex, setSelectedIndex] = useState(-1);
     const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
     const [detailCustomer, setDetailCustomer] = useState(null);
+
+    // Keep walkInCustomer synchronized if prop is provided or fetch once on mount
+    useEffect(() => {
+      if (propWalkInCustomer) {
+        setWalkInCustomer(propWalkInCustomer);
+        return;
+      }
+      let isMounted = true;
+      customerService
+        .getWalkInCustomer()
+        .then((res) => {
+          if (!isMounted) return;
+          const w = res.data?.data || res.data;
+          if (w) {
+            setWalkInCustomer({
+              id: w._id || w.id,
+              _id: w._id || w.id,
+              name: w.name || "Walk-in Customer",
+              phone: w.mobile || w.phone || "",
+              mobile: w.mobile || w.phone || "",
+              isWalkIn: true,
+              customerType: "walk_in",
+              customerCode: w.customerCode || "WALK-IN",
+              ...w,
+            });
+          }
+        })
+        .catch((err) => {
+          console.warn("B2cCustomerSearchBar: Failed to fetch walk-in customer:", err);
+        });
+      return () => {
+        isMounted = false;
+      };
+    }, [propWalkInCustomer]);
 
     const handleOpenDetails = useCallback(
       async (cust) => {
@@ -145,7 +183,8 @@ export const B2cCustomerSearchBar = forwardRef(
       if (!q || q.length < 2) {
         setResults([]);
         setIsLoading(false);
-        setIsOpen(false);
+        // Do NOT force close the dropdown here!
+        // When in focus, 0 or 1 character displays the Walk-in customer dropdown.
         return;
       }
 
@@ -199,23 +238,29 @@ export const B2cCustomerSearchBar = forwardRef(
         setSearchTerm(val);
       }
       if (onInputChange) onInputChange(val);
-      if (val.trim().length >= 2) {
-        setIsOpen(true);
-      } else {
-        setIsOpen(false);
+
+      const trimmed = val.trim();
+      // Keep dropdown open: 0 or 1 char shows Walk-in, 2+ chars shows search
+      setIsOpen(true);
+      if (trimmed.length < 2) {
+        setSelectedIndex(0);
         setResults([]);
+        setIsLoading(false);
+      } else {
+        setSelectedIndex(-1);
       }
-      setSelectedIndex(-1);
     };
 
     const handleClear = () => {
       if (!isControlled) {
         setSearchTerm("");
       }
-      setSelectedIndex(-1);
-      setIsOpen(false);
+      setSelectedIndex(0);
       setResults([]);
+      setIsLoading(false);
       if (onInputChange) onInputChange("");
+      if (onSelectCustomer) onSelectCustomer(null);
+      setIsOpen(true);
       inputRef.current?.focus();
     };
 
@@ -230,14 +275,34 @@ export const B2cCustomerSearchBar = forwardRef(
     };
 
     const handleKeyDown = (e) => {
-      if (!isOpen && e.key === "ArrowDown") {
-        if (currentValue?.trim() && results.length > 0) {
-          setIsOpen(true);
+      if (!isOpen && (e.key === "ArrowDown" || e.key === "Enter")) {
+        setIsOpen(true);
+        if (isWalkInMode) {
+          setSelectedIndex(0);
         }
         return;
       }
 
       if (!isOpen) return;
+
+      if (isWalkInMode) {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          e.preventDefault();
+          setSelectedIndex(0);
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          const targetWalkIn = walkInCustomer || {
+            name: "Walk-in Customer",
+            isWalkIn: true,
+            customerType: "walk_in",
+            customerCode: "WALK-IN",
+          };
+          handleSelect(targetWalkIn);
+        } else if (e.key === "Escape") {
+          setIsOpen(false);
+        }
+        return;
+      }
 
       const hasCreateOption = showAddNewAction && Boolean(currentValue?.trim());
       const totalItems = (isLoading ? 0 : results.length) + (hasCreateOption ? 1 : 0);
@@ -274,7 +339,7 @@ export const B2cCustomerSearchBar = forwardRef(
     }[size] || "h-10 text-sm px-3 rounded-xl";
 
     return (
-      <div ref={containerRef} className={cn("relative w-full select-none", className)}>
+      <div ref={containerRef} className={cn("relative w-full select-none", isOpen && "z-30", className)}>
         {/* Search Input Box */}
         <div
           className={cn(
@@ -299,8 +364,9 @@ export const B2cCustomerSearchBar = forwardRef(
             value={currentValue}
             onChange={handleInputChange}
             onFocus={() => {
-              if (currentValue && currentValue.trim().length >= 2 && results.length > 0) {
-                setIsOpen(true);
+              setIsOpen(true);
+              if (!currentValue || currentValue.trim().length < 2) {
+                setSelectedIndex(0);
               }
             }}
             onKeyDown={handleKeyDown}
@@ -339,168 +405,250 @@ export const B2cCustomerSearchBar = forwardRef(
           )}
         </div>
 
-        {/* Dropdown Results List - Only render when open AND user has typed at least 2 characters */}
-        {isOpen && Boolean(currentValue?.trim()?.length >= 2) && (
+        {/* Dropdown Results List - Render when open: shows Walk-in for 0 or 1 char, or search results for 2+ chars */}
+        {isOpen && (
           <div
             className={cn(
-              "absolute left-0 right-0 top-[calc(100%+6px)] z-50 flex flex-col h-[340px] overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--app-shadow-xl)] animate-in fade-in-50 zoom-in-95 duration-100",
+              "absolute left-0 right-0 top-[calc(100%+6px)] z-30 flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--app-shadow-xl)] animate-in fade-in-50 zoom-in-95 duration-100",
+              isWalkInMode ? "h-auto max-h-[240px]" : "h-[340px]",
               dropdownClassName
             )}
           >
-            {/* Dropdown Top Bar */}
-            <div className="flex items-center justify-between border-b border-border/60 bg-surface-alt/60 px-3.5 py-2 text-[11px] font-semibold text-text-muted shrink-0">
-              <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-                <User className="size-3" /> Company Customers
-              </span>
-              <span className="text-[10px] text-text-muted/70">
-                {isLoading ? "Searching..." : `${results.length} found`}
-              </span>
-            </div>
-
-            {/* Results / Skeletons / Empty state Area */}
-            <div ref={listRef} className="flex-1 overflow-y-auto p-1.5 space-y-1 scroll-smooth min-h-0">
-              {isLoading ? (
-                /* Skeleton Loader (4 items matching customer card geometry) */
-                <div className="space-y-1">
-                  {Array.from({ length: 4 }).map((_, sIdx) => (
-                    <div
-                      key={`skeleton-cust-${sIdx}`}
-                      className="flex items-start gap-2.5 rounded-xl p-2.5 border border-border/40 bg-surface-alt/30 animate-pulse select-none"
-                    >
-                      <div className="size-8 rounded-lg bg-border/50 shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0 space-y-2 py-0.5">
-                        <div className="h-3.5 bg-border/60 rounded w-1/3" />
-                        <div className="flex items-center gap-2">
-                          <div className="h-2.5 bg-border/40 rounded w-20" />
-                          <div className="h-2.5 bg-border/40 rounded w-32" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+            {isWalkInMode ? (
+              /* Pre-type Mode: Single Walk-in Customer Suggestion */
+              <>
+                <div className="flex items-center justify-between border-b border-border/60 bg-surface-alt/60 px-3.5 py-2 text-[11px] font-semibold text-text-muted shrink-0">
+                  <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                    <Store className="size-3.5" /> Walk-in Customer
+                  </span>
+                  <span className="text-[10px] text-text-muted/80">
+                    Quick Selection
+                  </span>
                 </div>
-              ) : results.length > 0 ? (
-                results.map((cust, idx) => {
-                  const isSelected = selectedCustomer?.id === cust.id || idx === selectedIndex;
 
-                  return (
-                    <div
-                      key={cust.id || idx}
-                      data-index={idx}
-                      onMouseEnter={() => setSelectedIndex(idx)}
-                      onClick={() => handleSelect(cust)}
-                      className={cn(
-                        "group/item relative flex items-center justify-between rounded-xl p-2.5 transition-all cursor-pointer border",
-                        isSelected
-                          ? "bg-primary-soft/60 border-primary/30 text-primary font-bold shadow-2xs"
-                          : "border-transparent hover:bg-surface-hover text-text"
-                      )}
-                    >
-                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                        <div
-                          className={cn(
-                            "flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors mt-0.5",
-                            isSelected
-                              ? "bg-primary text-white border-primary"
-                              : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                          )}
-                        >
-                          <User className="size-4" />
-                        </div>
-
-                        <div className="flex flex-col min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-xs truncate text-text group-hover/item:text-primary transition-colors">
-                              {cust.name}
-                            </span>
-                          </div>
-
-                          <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5">
-                            {cust.phone && (
-                              <div className="flex items-center gap-1 text-[11px] text-text-muted font-mono shrink-0">
-                                <Phone className="size-3 text-text-muted/70" /> {cust.phone}
-                              </div>
-                            )}
-                            {cust.address && (
-                              <div className="flex items-center gap-1 text-[11px] text-text-muted truncate max-w-[280px]">
-                                <MapPin className="size-3 text-emerald-600/70 dark:text-emerald-400/70 shrink-0" />
-                                <span className="truncate">{cust.address}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenDetails(cust);
-                          }}
-                          className="opacity-0 group-hover/item:opacity-100 p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface-alt transition-all shrink-0 cursor-pointer"
-                          title="View customer details & relationships"
-                          aria-label="View customer details"
-                        >
-                          <Eye className="size-3.5" />
-                        </button>
-                        {isSelected && <Check className="size-4 text-primary" />}
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="h-full min-h-[160px] flex flex-col items-center justify-center p-4 text-center">
-                  <p className="text-xs font-semibold text-text">No customer found</p>
-                  <p className="text-[11px] text-text-muted mt-0.5">
-                    No matching customer in directory for &quot;{currentValue}&quot;
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Last Option: Create User (Fixed position at bottom) */}
-            {showAddNewAction && Boolean(currentValue?.trim()) && (
-              <div className="p-1 border-t border-border bg-surface-alt/60 shrink-0 backdrop-blur-xs">
-                <button
-                  type="button"
-                  data-index={results.length}
-                  onClick={() => {
-                    setIsOpen(false);
-                    if (onAddNewCustomer) {
-                      onAddNewCustomer(currentValue.trim());
-                    }
-                  }}
-                  onMouseEnter={() => setSelectedIndex(results.length)}
-                  className={cn(
-                    "w-full flex items-center justify-between gap-2 p-2 rounded-xl text-left text-xs transition-colors cursor-pointer",
-                    selectedIndex === results.length
-                      ? "bg-primary text-white font-bold shadow-xs"
-                      : "hover:bg-primary/10 text-primary font-semibold bg-primary/5 border border-primary/20"
-                  )}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div
-                      className={cn(
-                        "size-6 rounded-md flex items-center justify-center shrink-0",
-                        selectedIndex === results.length ? "bg-white/20 text-white" : "bg-primary/20 text-primary"
-                      )}
-                    >
-                      <Plus className="size-3.5 stroke-[2.5]" />
-                    </div>
-                    <div className="truncate">
-                      Create User &quot;<span className="font-bold underline decoration-dotted">{currentValue.trim()}</span>&quot;
-                    </div>
-                  </div>
-                  <span
+                <div ref={listRef} className="p-1.5">
+                  <div
+                    data-index={0}
+                    onMouseEnter={() => setSelectedIndex(0)}
+                    onClick={() => {
+                      const targetWalkIn = walkInCustomer || {
+                        name: "Walk-in Customer",
+                        isWalkIn: true,
+                        customerType: "walk_in",
+                        customerCode: "WALK-IN",
+                      };
+                      handleSelect(targetWalkIn);
+                    }}
                     className={cn(
-                      "text-[10px] uppercase font-mono tracking-wider font-bold shrink-0 px-1.5 py-0.5 rounded",
-                      selectedIndex === results.length ? "bg-white/20 text-white" : "bg-primary/15 text-primary"
+                      "group/item relative flex items-center justify-between rounded-xl p-2.5 transition-all cursor-pointer border",
+                      selectedIndex === 0
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-bold shadow-2xs"
+                        : "border-transparent hover:bg-surface-hover text-text"
                     )}
                   >
-                    + Add New
+                    <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                      <div
+                        className={cn(
+                          "flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors mt-0.5",
+                          selectedIndex === 0
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                        )}
+                      >
+                        <Store className="size-4" />
+                      </div>
+
+                      <div className="flex flex-col min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs truncate text-text group-hover/item:text-emerald-600 dark:group-hover/item:text-emerald-400 transition-colors">
+                            {walkInCustomer?.name || "Walk-in Customer"}
+                          </span>
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shrink-0">
+                            Default Walk-in
+                          </span>
+                        </div>
+
+                        <p className="text-[11px] text-text-muted mt-0.5 truncate">
+                          Counter sale without customer name or phone
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 ml-2">
+                      <span className="text-[10px] text-text-muted/70 font-mono hidden sm:inline-block">
+                        Press ↵ Enter
+                      </span>
+                      {selectedIndex === 0 && <Check className="size-4 text-emerald-600" />}
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              /* Search Mode: 2+ characters typed - Query results, skeletons, Add New */
+              <>
+                {/* Dropdown Top Bar */}
+                <div className="flex items-center justify-between border-b border-border/60 bg-surface-alt/60 px-3.5 py-2 text-[11px] font-semibold text-text-muted shrink-0">
+                  <span className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                    <User className="size-3" /> Company Customers
                   </span>
-                </button>
-              </div>
+                  <span className="text-[10px] text-text-muted/70">
+                    {isLoading ? "Searching..." : `${results.length} found`}
+                  </span>
+                </div>
+
+                {/* Results / Skeletons / Empty state Area */}
+                <div ref={listRef} className="flex-1 overflow-y-auto p-1.5 space-y-1 scroll-smooth min-h-0">
+                  {isLoading ? (
+                    /* Skeleton Loader (4 items matching customer card geometry) */
+                    <div className="space-y-1">
+                      {Array.from({ length: 4 }).map((_, sIdx) => (
+                        <div
+                          key={`skeleton-cust-${sIdx}`}
+                          className="flex items-start gap-2.5 rounded-xl p-2.5 border border-border/40 bg-surface-alt/30 animate-pulse select-none"
+                        >
+                          <div className="size-8 rounded-lg bg-border/50 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0 space-y-2 py-0.5">
+                            <div className="h-3.5 bg-border/60 rounded w-1/3" />
+                            <div className="flex items-center gap-2">
+                              <div className="h-2.5 bg-border/40 rounded w-20" />
+                              <div className="h-2.5 bg-border/40 rounded w-32" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : results.length > 0 ? (
+                    results.map((cust, idx) => {
+                      const isSelected = selectedCustomer?.id === cust.id || idx === selectedIndex;
+
+                      return (
+                        <div
+                          key={cust.id || idx}
+                          data-index={idx}
+                          onMouseEnter={() => setSelectedIndex(idx)}
+                          onClick={() => handleSelect(cust)}
+                          className={cn(
+                            "group/item relative flex items-center justify-between rounded-xl p-2.5 transition-all cursor-pointer border",
+                            isSelected
+                              ? "bg-primary-soft/60 border-primary/30 text-primary font-bold shadow-2xs"
+                              : "border-transparent hover:bg-surface-hover text-text"
+                          )}
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                            <div
+                              className={cn(
+                                "flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors mt-0.5",
+                                isSelected
+                                  ? "bg-primary text-white border-primary"
+                                  : cust.isWalkIn
+                                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                                  : "bg-surface-alt text-text-muted border-border"
+                              )}
+                            >
+                              {cust.isWalkIn ? <Store className="size-4" /> : <User className="size-4" />}
+                            </div>
+
+                            <div className="flex flex-col min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-xs truncate text-text group-hover/item:text-primary transition-colors">
+                                  {cust.name}
+                                </span>
+                                {cust.isWalkIn && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shrink-0">
+                                    Walk-in
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 mt-0.5">
+                                {cust.phone && (
+                                  <div className="flex items-center gap-1 text-[11px] text-text-muted font-mono shrink-0">
+                                    <Phone className="size-3 text-text-muted/70" /> {cust.phone}
+                                  </div>
+                                )}
+                                {cust.address && (
+                                  <div className="flex items-center gap-1 text-[11px] text-text-muted truncate max-w-[280px]">
+                                    <MapPin className="size-3 text-emerald-600/70 dark:text-emerald-400/70 shrink-0" />
+                                    <span className="truncate">{cust.address}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenDetails(cust);
+                              }}
+                              className="opacity-0 group-hover/item:opacity-100 p-1.5 rounded-lg text-text-muted hover:text-primary hover:bg-surface-alt transition-all shrink-0 cursor-pointer"
+                              title="View customer details & relationships"
+                              aria-label="View customer details"
+                            >
+                              <Eye className="size-3.5" />
+                            </button>
+                            {isSelected && <Check className="size-4 text-primary" />}
+                          </div>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="h-full min-h-[160px] flex flex-col items-center justify-center p-4 text-center">
+                      <p className="text-xs font-semibold text-text">No customer found</p>
+                      <p className="text-[11px] text-text-muted mt-0.5">
+                        No matching customer in directory for &quot;{currentValue}&quot;
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Last Option: Create User (Fixed position at bottom) */}
+                {showAddNewAction && Boolean(currentValue?.trim()) && (
+                  <div className="p-1 border-t border-border bg-surface-alt/60 shrink-0 backdrop-blur-xs">
+                    <button
+                      type="button"
+                      data-index={results.length}
+                      onClick={() => {
+                        setIsOpen(false);
+                        if (onAddNewCustomer) {
+                          onAddNewCustomer(currentValue.trim());
+                        }
+                      }}
+                      onMouseEnter={() => setSelectedIndex(results.length)}
+                      className={cn(
+                        "w-full flex items-center justify-between gap-2 p-2 rounded-xl text-left text-xs transition-colors cursor-pointer",
+                        selectedIndex === results.length
+                          ? "bg-primary text-white font-bold shadow-xs"
+                          : "hover:bg-primary/10 text-primary font-semibold bg-primary/5 border border-primary/20"
+                      )}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={cn(
+                            "size-6 rounded-md flex items-center justify-center shrink-0",
+                            selectedIndex === results.length ? "bg-white/20 text-white" : "bg-primary/20 text-primary"
+                          )}
+                        >
+                          <Plus className="size-3.5 stroke-[2.5]" />
+                        </div>
+                        <div className="truncate">
+                          Create User &quot;<span className="font-bold underline decoration-dotted">{currentValue.trim()}</span>&quot;
+                        </div>
+                      </div>
+                      <span
+                        className={cn(
+                          "text-[10px] uppercase font-mono tracking-wider font-bold shrink-0 px-1.5 py-0.5 rounded",
+                          selectedIndex === results.length ? "bg-white/20 text-white" : "bg-primary/15 text-primary"
+                        )}
+                      >
+                        + Add New
+                      </span>
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}

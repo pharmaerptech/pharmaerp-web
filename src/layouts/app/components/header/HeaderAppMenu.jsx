@@ -23,6 +23,8 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { ROUTES } from "@/constants";
+import { useWorkMode } from "@/contexts";
+import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
 import { cn } from "@/lib/utils";
 
 // 1. Dashboards Group (3 Levels)
@@ -177,6 +179,8 @@ export const HeaderAppMenu = ({ className = "" }) => {
   const containerRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { isViewMode, isOperationMode } = useWorkMode();
+  const { isWorkspaceLevel, isCompanyLevel, isBranchLevel } = useNavigationPipeline();
 
   // Close on outside click
   useEffect(() => {
@@ -322,100 +326,162 @@ export const HeaderAppMenu = ({ className = "" }) => {
 
             {/* Scrollable Content Body */}
             <div className="flex-1 overflow-y-auto p-3.5 space-y-4 max-h-[calc(85vh-90px)]">
-              {/* ── SECTION 1: DASHBOARDS ─────────────────────────── */}
-              <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
-                    Multi-Level Dashboards
-                  </span>
-                  <span className="text-[10px] font-mono text-text-muted/80">
-                    3 Tiers
-                  </span>
-                </div>
+              {/* ── SECTION 1: DASHBOARDS (Strictly View Mode) ─────────────────────────── */}
+              {!isOperationMode && (
+                <div>
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
+                      Active Level Dashboard
+                    </span>
+                    <span className="text-[10px] font-mono text-primary font-bold">
+                      {isWorkspaceLevel ? "Workspace" : isCompanyLevel ? "Company" : "Branch"}
+                    </span>
+                  </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {DASHBOARDS.map((dash) => {
-                    const Icon = dash.icon;
-                    const isActive = location.pathname === dash.path;
+                  <div className="grid grid-cols-1 gap-2">
+                    {DASHBOARDS.filter((dash) => {
+                      if (isWorkspaceLevel) return dash.id === "workspace-dashboard";
+                      if (isCompanyLevel) return dash.id === "company-dashboard";
+                      return dash.id === "branch-dashboard";
+                    }).map((dash) => {
+                      const Icon = dash.icon;
+                      const isActive = location.pathname === dash.path;
 
-                    return (
-                      <button
-                        key={dash.id}
-                        type="button"
-                        onClick={() => handleNavigate(dash.path)}
-                        className={cn(
-                          "group p-2.5 rounded-xl border text-left transition-all duration-150 cursor-pointer flex flex-col justify-between relative overflow-hidden",
-                          isActive
-                            ? "border-primary bg-primary/5 shadow-2xs"
-                            : "border-border/70 bg-surface hover:border-border hover:bg-surface-hover hover:shadow-2xs"
-                        )}
-                      >
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className={cn("p-1.5 rounded-lg border shrink-0", dash.color)}>
-                              <Icon className="size-4" />
+                      return (
+                        <button
+                          key={dash.id}
+                          type="button"
+                          onClick={() => handleNavigate(dash.path)}
+                          className={cn(
+                            "group p-3 rounded-xl border text-left transition-all duration-150 cursor-pointer flex items-center justify-between relative overflow-hidden",
+                            isActive
+                              ? "border-primary bg-primary/5 shadow-2xs"
+                              : "border-border/70 bg-surface hover:border-border hover:bg-surface-hover hover:shadow-2xs"
+                          )}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={cn("p-2 rounded-lg border shrink-0", dash.color)}>
+                              <Icon className="size-4.5" />
                             </div>
-                            <span className="text-[9px] font-semibold font-mono uppercase px-1.5 py-0.5 rounded-md bg-surface-alt border border-border/60 text-text-muted">
-                              {dash.badge}
-                            </span>
+                            <div>
+                              <div className="font-bold text-xs text-text group-hover:text-primary transition-colors leading-snug">
+                                {dash.title}
+                              </div>
+                              <div className="text-[10px] text-text-muted line-clamp-1 leading-tight mt-0.5">
+                                {dash.description}
+                              </div>
+                            </div>
                           </div>
-                          <div className="font-bold text-xs text-text group-hover:text-primary transition-colors leading-snug">
-                            {dash.title}
-                          </div>
+                          <span className="text-[9px] font-semibold font-mono uppercase px-2 py-0.5 rounded-md bg-surface-alt border border-border/60 text-text-muted">
+                            {dash.badge}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION 2: BRANCH OPERATIONS ─────────────────────────── */}
+              {!isViewMode && isBranchLevel && (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
+                        Daily Counter &amp; Cash Routine
+                      </span>
+                      <span className="text-[10px] font-medium text-text-muted">
+                        Shift &amp; Register
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {DAILY_COUNTER_OPS.map(renderOpCard)}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
+                        Stock &amp; Procurement
+                      </span>
+                      <span className="text-[10px] font-medium text-text-muted">
+                        Batches &amp; Receiving
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {INVENTORY_SUPPLY_OPS.map(renderOpCard)}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* ── SECTION 3: COMPANY OPERATIONS ────────────────────────── */}
+              {!isViewMode && isCompanyLevel && (
+                <div>
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
+                      Parties &amp; Banking
+                    </span>
+                    <span className="text-[10px] font-medium text-text-muted">
+                      Ledgers &amp; Accounts
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {PARTIES_BANKING_OPS.map(renderOpCard)}
+                  </div>
+                </div>
+              )}
+
+              {/* ── SECTION 4: WORKSPACE OPERATIONS ──────────────────────── */}
+              {!isViewMode && isWorkspaceLevel && (
+                <div>
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
+                      Workspace Governance
+                    </span>
+                    <span className="text-[10px] font-medium text-text-muted">
+                      Setup &amp; Roles
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate("/companies/create")}
+                      className="group p-2.5 rounded-xl border border-border/60 bg-surface hover:border-border hover:bg-surface-hover transition-all flex items-center gap-2.5 text-left"
+                    >
+                      <div className="p-2 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 shrink-0">
+                        <Building2 className="size-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-xs text-text truncate group-hover:text-primary">
+                          Create Company
                         </div>
-                        <div className="text-[10px] text-text-muted line-clamp-2 mt-1 leading-tight">
-                          {dash.description}
+                        <div className="text-[10px] text-text-muted truncate">
+                          Add a legal firm entity
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                      </div>
+                    </button>
 
-              {/* ── SECTION 2: DAILY COUNTER & CASH ROUTINE ───────── */}
-              <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
-                    Daily Counter &amp; Cash Routine
-                  </span>
-                  <span className="text-[10px] font-medium text-text-muted">
-                    Shift &amp; Register
-                  </span>
+                    <button
+                      type="button"
+                      onClick={() => handleNavigate(ROUTES.INVITE_WORKSPACE_MEMBER)}
+                      className="group p-2.5 rounded-xl border border-border/60 bg-surface hover:border-border hover:bg-surface-hover transition-all flex items-center gap-2.5 text-left"
+                    >
+                      <div className="p-2 rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400 shrink-0">
+                        <Users className="size-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-xs text-text truncate group-hover:text-primary">
+                          Invite Staff
+                        </div>
+                        <div className="text-[10px] text-text-muted truncate">
+                          Send invitation link
+                        </div>
+                      </div>
+                    </button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {DAILY_COUNTER_OPS.map(renderOpCard)}
-                </div>
-              </div>
-
-              {/* ── SECTION 3: STOCK & PROCUREMENT ────────────────── */}
-              <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
-                    Stock &amp; Procurement
-                  </span>
-                  <span className="text-[10px] font-medium text-text-muted">
-                    Batches &amp; Receiving
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {INVENTORY_SUPPLY_OPS.map(renderOpCard)}
-                </div>
-              </div>
-
-              {/* ── SECTION 4: PARTIES & BANKING ──────────────────── */}
-              <div>
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <span className="text-[10px] font-bold tracking-wider uppercase text-text-muted">
-                    Parties &amp; Banking
-                  </span>
-                  <span className="text-[10px] font-medium text-text-muted">
-                    Ledgers &amp; Accounts
-                  </span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {PARTIES_BANKING_OPS.map(renderOpCard)}
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Subtle footer */}

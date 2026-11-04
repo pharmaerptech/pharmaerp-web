@@ -2,12 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useWorkModeDeepLinkSync } from "@/hooks";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useUser from "@/features/user/hooks/useUser";
 import useAccessControl from "@/features/access-control/hooks/useAccessControl";
+import {
+  useWorkMode,
+  NavigationPipelineProvider,
+  PIPELINE_LEVELS,
+  PIPELINE_STORAGE_KEYS,
+  getLevelFromPathname,
+} from "@/contexts";
+import { ChooseWorkModeModal } from "@/features/operations/components/ChooseWorkModeModal";
 import { ScrollToTop } from "@/components";
 import { UIToastContainer } from "@/components/ui";
 import { AnimatePresence } from "framer-motion";
@@ -22,8 +30,9 @@ const getWorkspaceFromItem = (item) => {
 
 const AppLayout = () => {
   const isMobile = useIsMobile();
+  useWorkModeDeepLinkSync();
 
-  const { user, getActiveContext } = useUser();
+  const { user } = useUser();
   const { workspaces, currentWorkspace, getMyWorkspaces, setCurrentWorkspace } =
     useWorkspace();
   const {
@@ -41,9 +50,10 @@ const AppLayout = () => {
     clearCurrentBranch,
   } = useBranch();
   const { getMyAccess } = useAccessControl();
+  const { hasSelectedMode, openModeModal } = useWorkMode();
 
-  // STRATEGY: If Redux is populated, we are routing (skip loading). If empty, we are reloading (show loader).
-  const isHardRefresh = !currentWorkspace?._id || !currentCompany?._id;
+  // STRATEGY: If workspace is populated in Redux, skip initialization. If empty, reload session.
+  const isHardRefresh = !currentWorkspace?._id;
   const [isSyncComplete, setIsSyncComplete] = useState(!isHardRefresh);
 
   const initializedRef = useRef(false);
@@ -60,58 +70,106 @@ const AppLayout = () => {
 
     const bootApplicationContext = async () => {
       try {
-        // STEP 1: Await source-of-truth active identifiers from database
-        const activeContext = await getActiveContext().catch(() => null);
+        // STEP 1: Determine active floor level from URL route or localStorage
+        const routeLevel = getLevelFromPathname(window.location.pathname);
+        let effectiveLevel = routeLevel;
+        if (!effectiveLevel) {
+          try {
+            effectiveLevel = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL);
+          } catch {}
+        }
+        if (
+          !effectiveLevel ||
+          !Object.values(PIPELINE_LEVELS).includes(effectiveLevel)
+        ) {
+          effectiveLevel = PIPELINE_LEVELS.WORKSPACE;
+        }
 
-        const targetWorkspaceId =
-          activeContext?.workspaceId ||
-          user?.activeContext?.workspaceId ||
-          null;
-        const targetCompanyId =
-          activeContext?.companyId || user?.activeContext?.companyId || null;
-        const targetBranchId =
-          activeContext?.branchId || user?.activeContext?.branchId || null;
+        // Read locally stored company and branch identifiers (NO database fetch)
+        let savedCompanyId = null;
+        let savedBranchId = null;
+        try {
+          savedCompanyId = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+          savedBranchId = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+        } catch {}
 
         // STEP 2: Resolve Workspace Array
         const workspaceItems = workspaces?.length
           ? workspaces
           : await getMyWorkspaces();
-        const selectedWorkspaceItem =
-          workspaceItems?.find(
-            (item) => getWorkspaceFromItem(item)?._id === targetWorkspaceId,
-          ) || workspaceItems?.[0];
-
+        const selectedWorkspaceItem = workspaceItems?.[0];
         const selectedWorkspace = getWorkspaceFromItem(selectedWorkspaceItem);
+
         if (selectedWorkspace?._id) {
           setCurrentWorkspace(selectedWorkspace);
         }
 
-        // STEP 3: Resolve Company Array
+        // STEP 3: Always fetch available Workspace Companies so the list is ready in Redux
+        let companyItems = [];
         if (selectedWorkspace?._id) {
-          const companyItems = await getWorkspaceCompanies();
+          companyItems = await getWorkspaceCompanies().catch(() => []);
+        }
+
+        // STEP 4: Strict Level Context Hydration
+        if (effectiveLevel === PIPELINE_LEVELS.WORKSPACE) {
+          // At Workspace level: both active company & active branch MUST remain null!
+          clearCurrentCompany();
+          clearCurrentBranch();
+          try {
+            localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+            localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+          } catch {}
+        } else if (effectiveLevel === PIPELINE_LEVELS.COMPANY) {
+          // At Company level: branch MUST remain null!
+          clearCurrentBranch();
+          try {
+            localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+          } catch {}
+
           const selectedCompany =
-            companyItems?.find((company) => company?._id === targetCompanyId) ||
+            companyItems?.find((company) => company?._id === savedCompanyId) ||
+            null;
+
+          if (selectedCompany?._id) {
+            setCurrentCompany(selectedCompany);
+            // Pre-fetch branches for this active company
+            await getCompanyBranches(selectedCompany._id).catch(() => null);
+          } else {
+            clearCurrentCompany();
+            try {
+              localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+            } catch {}
+          }
+        } else if (effectiveLevel === PIPELINE_LEVELS.BRANCH) {
+          // At Branch level: resolve both company and branch strictly
+          const selectedCompany =
+            companyItems?.find((company) => company?._id === savedCompanyId) ||
             companyItems?.[0] ||
             null;
 
           if (selectedCompany?._id) {
             setCurrentCompany(selectedCompany);
 
-            // STEP 4: Resolve Branch Array (Only attempts if a valid company exists)
-            const branchItems = await getCompanyBranches();
+            const branchItems = await getCompanyBranches(selectedCompany._id).catch(() => []);
             const selectedBranch =
-              branchItems?.find((branch) => branch?._id === targetBranchId) ||
-              branchItems?.[0] ||
+              branchItems?.find((branch) => branch?._id === savedBranchId) ||
               null;
 
             if (selectedBranch?._id) {
               setCurrentBranch(selectedBranch);
             } else {
               clearCurrentBranch();
+              try {
+                localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+              } catch {}
             }
           } else {
             clearCurrentCompany();
             clearCurrentBranch();
+            try {
+              localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+              localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+            } catch {}
           }
         }
 
@@ -134,7 +192,7 @@ const AppLayout = () => {
   }, [isHardRefresh]);
 
   return (
-    <>
+    <NavigationPipelineProvider>
       <ScrollToTop />
       <UIToastContainer position="bottom-right" />
       <AnimatePresence mode="wait">
@@ -144,7 +202,7 @@ const AppLayout = () => {
           isMobile ? <AppMobileLayout key="mobile" /> : <AppDesktopLayout key="desktop" />
         )}
       </AnimatePresence>
-    </>
+    </NavigationPipelineProvider>
   );
 };
 

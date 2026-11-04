@@ -2,42 +2,54 @@
 
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import { uiToast } from "@/components/ui";
 
-import { useIsMobile } from "@/hooks";
+import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
+import BranchDashboardPage from "./BranchDashboardPage";
+import CompanyDashboardPage from "./CompanyDashboardPage";
+import WorkspaceDashboardPage from "./WorkspaceDashboardPage";
 
-import MainDashboardDesktopPage from "./desktop/MainDashboardDesktopPage";
-import MainDashboardMobilePage from "./mobile/MainDashboardMobilePage";
-
-const MainDashboardPage = (props) => {
-  const isMobile = useIsMobile();
+export const MainDashboardPage = (props) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isWorkspaceLevel, isCompanyLevel, isBranchLevel } =
+    useNavigationPipeline();
+
+  const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace);
+  const currentCompany = useSelector((state) => state.company?.currentCompany);
+  const currentBranch = useSelector((state) => state.branch?.currentBranch);
 
   useEffect(() => {
     if (location.state?.unauthorizedContext) {
       const ctx = location.state.unauthorizedContext;
       uiToast.error("Access Denied", `You need an active ${ctx} to access that page.`);
-      
-      // Clean up the state so it doesn't fire again on refresh
+
       const state = { ...location.state };
       delete state.unauthorizedContext;
       navigate(location.pathname, { replace: true, state });
     } else if (location.state?.unauthorizedPermission) {
       uiToast.error("Access Denied", "You don't have permission to view that page.");
-      
-      // Clean up the state so it doesn't fire again on refresh
+
       const state = { ...location.state };
       delete state.unauthorizedPermission;
       navigate(location.pathname, { replace: true, state });
     }
   }, [location, navigate]);
 
-  return isMobile ? (
-    <MainDashboardMobilePage {...props} />
-  ) : (
-    <MainDashboardDesktopPage {...props} />
-  );
+  // Contextual Dashboard Resolution based on Elevator Pipeline Level
+  if (isWorkspaceLevel) {
+    const wsKey = currentWorkspace?._id || currentWorkspace?.id || "ws";
+    return <WorkspaceDashboardPage key={`workspace-${wsKey}`} {...props} />;
+  }
+
+  if (isCompanyLevel) {
+    const compKey = currentCompany?._id || currentCompany?.id || "comp";
+    return <CompanyDashboardPage key={`company-${compKey}`} {...props} />;
+  }
+
+  const branchKey = currentBranch?._id || currentBranch?.id || "branch";
+  return <BranchDashboardPage key={`branch-${branchKey}`} {...props} />;
 };
 
 export default MainDashboardPage;

@@ -20,7 +20,6 @@ import {
   Clock,
   ShoppingCart,
   Wallet,
-  CreditCard,
   Tag,
   Percent,
   BarChart2,
@@ -377,10 +376,12 @@ export const CloseShiftDialog = ({
   const splitUpiAmount = Number(summary?.splitUpiAmount || 0);
   const pureCashAmount = Number(summary?.pureCashAmount ?? (totalCashCollected - splitCashAmount));
   const pureUpiAmount = Number(summary?.pureUpiAmount ?? (qrNet - splitUpiAmount));
-  const totalCardUpi = Number((summary?.qrNet || 0) + (summary?.cardNet || 0));
-  const cardUpiBillsCount = Number(
-    (summary?.paymentQrCount || 0) + (summary?.cardInvoiceCount || 0)
-  );
+  const totalUpi = Number(summary?.qrNet || 0);
+  const upiBillsCount = Number(summary?.paymentQrCount || 0);
+  const creditNoteSalesTotal = Number(summary?.creditNoteSalesTotal ?? shift?.creditNoteSalesTotal ?? 0);
+  const creditNoteBillsCount = Number(summary?.creditNoteInvoiceCount ?? shift?.creditNoteInvoiceCount ?? 0);
+  const splitCreditNoteAmount = Number(summary?.splitCreditNoteAmount ?? shift?.splitCreditNoteAmount ?? 0);
+  const splitCombinations = summary?.splitCombinations || shift?.splitCombinations || [];
 
   const advanceCreditUpiBreakdown = summary?.advanceCreditUpiBreakdown || shift?.advanceCreditUpiBreakdown || [];
 
@@ -893,8 +894,8 @@ export const CloseShiftDialog = ({
             </div>
           )}
 
-          {/* ── Customer Advance Received & Bills Using Advance Highlights ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          {/* ── Customer Advance & Credit Note Highlights ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {/* Total Advance Received in Shift */}
             <div className="bg-surface rounded-xl border border-amber-500/30 p-3 shadow-xs flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -916,7 +917,7 @@ export const CloseShiftDialog = ({
                     </span>
                     <span>•</span>
                     <span className="text-purple-600 dark:text-purple-400 font-medium">
-                      UPI on Hold: {formatCurrency(advanceUpiTotal)}
+                      UPI: {formatCurrency(advanceUpiTotal)}
                     </span>
                   </div>
                 </div>
@@ -927,9 +928,9 @@ export const CloseShiftDialog = ({
             </div>
 
             {/* Bills Using Advance (Prepaid customer deduction) */}
-            <div className="bg-surface rounded-xl border border-indigo-500/30 p-3 shadow-xs flex items-center justify-between gap-3">
+            <div className="bg-surface rounded-xl border border-amber-500/30 p-3 shadow-xs flex items-center justify-between gap-3">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="size-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                <div className="size-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
                   <Receipt className="size-4 stroke-[1.8]" />
                 </div>
                 <div className="min-w-0">
@@ -940,12 +941,36 @@ export const CloseShiftDialog = ({
                     {advanceBillsCount} {advanceBillsCount === 1 ? "Bill" : "Bills"}
                   </div>
                   <div className="text-[10px] text-text-muted mt-0.5">
-                    Total Deducted: <strong className="font-mono text-indigo-600 dark:text-indigo-400">{formatCurrency(advanceSalesTotal)}</strong> prepaid advance
+                    Deducted: <strong className="font-mono text-amber-600 dark:text-amber-400">{formatCurrency(advanceSalesTotal)}</strong>
+                  </div>
+                </div>
+              </div>
+              <UIBadge variant="soft" intent="warning" className="text-[9px] py-0 px-2 shrink-0">
+                Prepaid Bills
+              </UIBadge>
+            </div>
+
+            {/* Bills Using Credit Note */}
+            <div className="bg-surface rounded-xl border border-indigo-500/30 p-3 shadow-xs flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="size-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                  <Receipt className="size-4 stroke-[1.8]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-medium text-text-muted">
+                    Bills Using Credit Note
+                  </div>
+                  <div className="text-sm font-bold text-text font-mono mt-0.5 truncate">
+                    {creditNoteBillsCount} {creditNoteBillsCount === 1 ? "Bill" : "Bills"}
+                  </div>
+                  <div className="text-[10px] text-text-muted mt-0.5">
+                    Redeemed: <strong className="font-mono text-indigo-600 dark:text-indigo-400">{formatCurrency(creditNoteSalesTotal)}</strong>
+                    {splitCreditNoteAmount > 0 ? ` (${formatCurrency(splitCreditNoteAmount)} split)` : ""}
                   </div>
                 </div>
               </div>
               <UIBadge variant="soft" intent="info" className="text-[9px] py-0 px-2 shrink-0">
-                Prepaid Bills
+                Credit Note
               </UIBadge>
             </div>
           </div>
@@ -985,19 +1010,19 @@ export const CloseShiftDialog = ({
               </div>
             </div>
 
-            {/* Total Card / UPI */}
+            {/* Total UPI Collections */}
             <div className="bg-surface rounded-xl border border-border/80 p-3 shadow-xs">
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="size-7 rounded-lg bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                  <CreditCard className="size-3.5 stroke-[1.8]" />
+                  <QrCode className="size-3.5 stroke-[1.8]" />
                 </div>
-                <span className="text-[11px] font-medium text-text-muted">Total Card / UPI</span>
+                <span className="text-[11px] font-medium text-text-muted">Total UPI Collections</span>
               </div>
               <div className="text-sm font-bold text-text font-mono">
-                {formatCurrency(totalCardUpi)}
+                {formatCurrency(totalUpi)}
               </div>
               <div className="text-[10px] text-text-muted mt-0.5">
-                {cardUpiBillsCount} UPI bills
+                {upiBillsCount} UPI bills
                 {splitUpiAmount > 0 && ` (${formatCurrency(splitUpiAmount)} from Split)`}
               </div>
             </div>
@@ -1034,6 +1059,53 @@ export const CloseShiftDialog = ({
               </div>
             </div>
           </div>
+
+          {/* Split Payment Combinations (if any) */}
+          {(splitBillsCount > 0 || (Array.isArray(splitCombinations) && splitCombinations.length > 0)) && (
+            <div className="bg-surface rounded-xl border border-purple-500/30 p-3.5 space-y-2.5 shadow-xs">
+              <div className="flex items-center justify-between pb-1 border-b border-border/60">
+                <div className="flex items-center gap-2">
+                  <Receipt className="size-4 text-purple-600 dark:text-purple-400" />
+                  <div>
+                    <h3 className="text-xs font-bold text-text">
+                      Split Payment Combinations
+                    </h3>
+                    <p className="text-[10.5px] text-text-muted">
+                      Multi-tender bills recorded during this shift
+                    </p>
+                  </div>
+                </div>
+                <UIBadge variant="soft" color="purple" className="text-[10px] font-bold">
+                  {splitBillsCount} Split Bills · {formatCurrency(splitNet)}
+                </UIBadge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-0.5">
+                {(splitCombinations && splitCombinations.length > 0 ? splitCombinations : [
+                  { combination: "Cash + UPI", count: splitBillsCount, totalAmount: splitNet }
+                ]).map((comb, cIdx) => (
+                  <div
+                    key={comb.combination || cIdx}
+                    className="p-2 rounded-lg border border-border/70 bg-surface-alt/40 flex items-center justify-between gap-2 shadow-2xs"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-text truncate">
+                        {comb.combination}
+                      </div>
+                      <div className="text-[10px] text-text-muted mt-0.5">
+                        {comb.count} {comb.count === 1 ? "invoice" : "invoices"}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="font-mono font-bold text-xs text-purple-600 dark:text-purple-400 block">
+                        {formatCurrency(comb.totalAmount)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Middle Row: Expected vs Actual & Denominations Split ── */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start">
@@ -1143,19 +1215,25 @@ export const CloseShiftDialog = ({
                 </div>
 
                 {/* Non-Cash Sales Note */}
-                {(creditSalesTotal > 0 || advanceSalesTotal > 0) && (
+                {(creditSalesTotal > 0 || advanceSalesTotal > 0 || creditNoteSalesTotal > 0) && (
                   <div className="pt-2 border-t border-border/50 flex items-center justify-between text-[10.5px] text-text-muted">
                     <span>Non-Cash Sales (Excluded from Drawer):</span>
-                    <div className="flex items-center gap-1.5 font-mono">
+                    <div className="flex items-center gap-1.5 font-mono flex-wrap">
                       {creditSalesTotal > 0 && (
                         <span className="text-rose-600 dark:text-rose-400 font-semibold">
                           Credit: {formatCurrency(creditSalesTotal)} ({creditBillsCount} {creditBillsCount === 1 ? "bill" : "bills"})
                         </span>
                       )}
-                      {creditSalesTotal > 0 && advanceSalesTotal > 0 && <span>·</span>}
+                      {creditSalesTotal > 0 && (advanceSalesTotal > 0 || creditNoteSalesTotal > 0) && <span>·</span>}
                       {advanceSalesTotal > 0 && (
                         <span className="text-amber-600 dark:text-amber-400 font-semibold">
                           Advance: {formatCurrency(advanceSalesTotal)} ({advanceBillsCount} {advanceBillsCount === 1 ? "bill" : "bills"})
+                        </span>
+                      )}
+                      {(creditSalesTotal > 0 || advanceSalesTotal > 0) && creditNoteSalesTotal > 0 && <span>·</span>}
+                      {creditNoteSalesTotal > 0 && (
+                        <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
+                          Credit Note: {formatCurrency(creditNoteSalesTotal)} ({creditNoteBillsCount} {creditNoteBillsCount === 1 ? "bill" : "bills"})
                         </span>
                       )}
                     </div>

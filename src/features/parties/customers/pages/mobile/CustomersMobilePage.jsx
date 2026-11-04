@@ -37,6 +37,7 @@ import {
 } from "@/components";
 
 const typeColorMap = {
+  walk_in: "teal",
   retail: "success",
   wholesale: "primary",
   hospital: "purple",
@@ -73,6 +74,7 @@ const CustomersMobilePage = ({
   handleViewCustomer,
   handleEditCustomer,
   handleDeleteCustomer,
+  handleViewCreditNotes,
   handleRefresh,
   isLoading,
 }) => {
@@ -410,6 +412,7 @@ const CustomersMobilePage = ({
                           onView={handleViewCustomer}
                           onEdit={handleEditCustomer}
                           onDelete={handleDeleteCustomer}
+                          onViewCreditNotes={handleViewCreditNotes}
                         />
                       </AppStack>
                     </AppStack>
@@ -486,7 +489,16 @@ const RowActionDropdownTrigger = ({
   onView,
   onEdit,
   onDelete,
+  onViewCreditNotes,
 }) => {
+  const isWalkIn = Boolean(
+    customer?.isWalkIn ||
+    customer?.customerType === "walk_in" ||
+    customer?.type === "walk_in" ||
+    customer?.displayType?.toLowerCase?.() === "walk_in" ||
+    customer?.displayType?.toLowerCase?.() === "walk-in"
+  );
+
   const menuConfigItems = [
     {
       id: "view",
@@ -494,20 +506,34 @@ const RowActionDropdownTrigger = ({
       icon: <FiEye />,
       onClick: () => onView?.(customer),
     },
+    ...(!isWalkIn
+      ? [
+          {
+            id: "credit_notes",
+            label: "Credit Notes",
+            icon: <FiEye />,
+            onClick: () => onViewCreditNotes?.(customer),
+          },
+        ]
+      : []),
     {
       id: "edit",
       label: "Edit Customer",
       icon: <FiEdit2 />,
       onClick: () => onEdit?.(customer),
     },
-    { id: "divider_row", type: "divider" },
-    {
-      id: "remove",
-      label: "Remove Profile",
-      icon: <FiTrash2 />,
-      danger: true,
-      onClick: () => onDelete?.(customer),
-    },
+    ...(!isWalkIn
+      ? [
+          { id: "divider_row", type: "divider" },
+          {
+            id: "remove",
+            label: "Remove Profile",
+            icon: <FiTrash2 />,
+            danger: true,
+            onClick: () => onDelete?.(customer),
+          },
+        ]
+      : []),
   ];
 
   return (

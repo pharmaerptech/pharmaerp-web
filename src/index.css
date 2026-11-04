@@ -549,3 +549,25 @@ input[type="number"] {
     color: black !important;
   }
 }
+
+
+/* ============================================================================
+   Universal Scrollbar-Hiding Utilities (preserves full scrolling functionality)
+============================================================================ */
+.no-scrollbar,
+.scrollbar-none,
+.dashboard-no-scrollbar,
+.dashboard-no-scrollbar * {
+  -ms-overflow-style: none !important; /* IE and Edge */
+  scrollbar-width: none !important; /* Firefox */
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar,
+.dashboard-no-scrollbar::-webkit-scrollbar,
+.dashboard-no-scrollbar *::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari and Opera */
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}

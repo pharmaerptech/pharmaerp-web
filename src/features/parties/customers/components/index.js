@@ -9,3 +9,4 @@ export { default as CustomerStatementLedgerDialog } from "./CustomerStatementLed
 export { default as CustomerPaymentMethodPanel } from "./CustomerPaymentMethodPanel";
 export { default as B2cCustomerImportModal } from "./B2cCustomerImportModal";
 
+export { default as CustomerCreditNotesDialog } from "./CustomerCreditNotesDialog";

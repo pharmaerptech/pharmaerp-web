@@ -1,14 +1,9 @@
 // src/features/dashboard/pages/DashboardPage.jsx
 
-import { useIsMobile } from "@/hooks";
+import BranchDashboardPage from "./BranchDashboardPage";
 
-import DashboardDesktopPage from "./desktop/DashboardDesktopPage";
-import DashboardMobilePage from "./mobile/DashboardMobilePage";
-
-const DashboardPage = () => {
-  const isMobile = useIsMobile();
-
-  return isMobile ? <DashboardMobilePage /> : <DashboardDesktopPage />;
+export const DashboardPage = () => {
+  return <BranchDashboardPage />;
 };
 
 export default DashboardPage;

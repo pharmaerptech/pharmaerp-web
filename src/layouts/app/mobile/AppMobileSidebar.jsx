@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut } from "lucide-react";
+import { LogOut, X } from "lucide-react";
 import { ROUTES } from "@/constants";
 import useAuth from "@/features/auth/hooks/useAuth";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
@@ -10,16 +10,19 @@ import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import { usePermission } from "@/hooks";
+import { useWorkMode } from "@/contexts";
 import { UIConfirmDialog } from "@/components/ui";
 
 import {
   SIDEBAR_NAV_GROUPS,
   SidebarItem,
-  SidebarCompanySelector,
+  SidebarLevelIndicator,
   SidebarUserProfile,
   SidebarScrollArea,
+  filterNavByPipeline,
 } from "../components/sidebar";
 import { filterNavByPermission } from "../components/sidebar/filterNavByPermission";
+import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
 
 const AppMobileSidebar = ({ open, onClose }) => {
   const navigate = useNavigate();
@@ -31,26 +34,37 @@ const AppMobileSidebar = ({ open, onClose }) => {
   const { currentBranch } = useBranch();
   const { isSetupComplete, companyCompleted, branchCompleted } = useSetupStatus();
   const { can, canAny, isOwner } = usePermission();
+  const { workMode } = useWorkMode();
+  const { currentLevel } = useNavigationPipeline();
 
-  // Filter nav groups by permissions, owner status, and setup completion
-  const visibleNavGroups = useMemo(
-    () =>
-      filterNavByPermission(
-        SIDEBAR_NAV_GROUPS,
-        can,
-        canAny,
-        isOwner,
-        { 
-          isSetupComplete, 
-          companyCompleted, 
-          branchCompleted, 
-          hasActiveCompany: !!currentCompany, 
-          hasActiveBranch: !!currentBranch 
-        },
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [can, canAny, isOwner, isSetupComplete, companyCompleted, branchCompleted, currentCompany, currentBranch],
-  );
+  // Filter nav groups by active pipeline level and workMode first, then by permissions
+  const visibleNavGroups = useMemo(() => {
+    const pipelineFiltered = filterNavByPipeline(SIDEBAR_NAV_GROUPS, currentLevel, workMode);
+    return filterNavByPermission(
+      pipelineFiltered,
+      can,
+      canAny,
+      isOwner,
+      { 
+        isSetupComplete, 
+        companyCompleted, 
+        branchCompleted, 
+        hasActiveCompany: !!currentCompany, 
+        hasActiveBranch: !!currentBranch 
+      },
+    );
+  }, [
+    currentLevel,
+    workMode,
+    can,
+    canAny,
+    isOwner,
+    isSetupComplete,
+    companyCompleted,
+    branchCompleted,
+    currentCompany,
+    currentBranch,
+  ]);
 
   const handleLogoutClick = () => {
     setIsLogoutDialogOpen(true);
@@ -64,6 +78,10 @@ const AppMobileSidebar = ({ open, onClose }) => {
       console.error("Logout failed:", err);
     } finally {
       clearCredentials();
+      try {
+        localStorage.removeItem("pahuch_work_mode");
+        localStorage.removeItem("pahuch_work_mode_selected");
+      } catch {}
       setIsLogoutDialogOpen(false);
       onClose();
       window.location.href = ROUTES.LOGIN;
@@ -90,12 +108,54 @@ const AppMobileSidebar = ({ open, onClose }) => {
           open ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
-        {/* ── TOP: Company & Branch Tabbed Selector ───────────────────── */}
-        <SidebarCompanySelector
-          collapsed={false}
-          onClose={onClose}
-          showClose={true}
-        />
+        {/* ── TOP: Brand Header (Choose Mode) OR Company & Branch Selector ───────────────────── */}
+        {!workMode ? (
+          <div className="relative flex h-13 shrink-0 items-center justify-between border-b border-border px-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex size-7.5 shrink-0 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shadow-2xs">
+                <svg
+                  className="size-4"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <rect width="6" height="6" x="9" y="3" rx="1.5" />
+                  <rect width="6" height="6" x="9" y="15" rx="1.5" />
+                  <rect width="6" height="6" x="3" y="9" rx="1.5" />
+                  <rect width="6" height="6" x="15" y="9" rx="1.5" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-bold text-text leading-tight truncate">
+                  Pahuch ERP
+                </div>
+                <div className="text-[10px] text-text-muted font-medium truncate">
+                  Choose Work Mode
+                </div>
+              </div>
+            </div>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close sidebar"
+                className="ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-text-muted transition hover:bg-surface-hover hover:text-text active:scale-[0.95]"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <SidebarLevelIndicator
+            collapsed={false}
+            onToggleCollapse={onClose}
+            showClose={true}
+            onClose={onClose}
+          />
+        )}
 
         {/* ── MIDDLE: Multi-Level Navigation Tree (WhatsApp-Style Auto-Hiding Scrollbar) ── */}
         <SidebarScrollArea className="px-2 py-2 space-y-3">

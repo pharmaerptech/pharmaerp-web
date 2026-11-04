@@ -1,6 +1,7 @@
 // src/features/operations/business-days/components/ViewBusinessDayDialog.jsx
 
 import React, { useEffect, useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import { apiClient } from "@/services";
 import {
   UIModal,
@@ -40,6 +41,7 @@ import {
   Info,
   CheckSquare,
   Landmark,
+  ExternalLink,
 } from "lucide-react";
 import { ViewShiftDialog } from "../../shifts/components/ViewShiftDialog";
 import { CloseBusinessDayDialog } from "./CloseBusinessDayDialog";
@@ -260,6 +262,20 @@ export const ViewBusinessDayDialog = ({
   const totalCash = Number(bd.totalCashNet) || 0;
   const totalDeposits = Number(bd.totalDeposits) || totalShiftDeposits || 0;
   const totalWithdrawals = Number(bd.totalWithdrawals) || totalShiftWithdrawals || 0;
+
+  const upiSettlementStatus = bd.upiSettlementStatus || "PENDING";
+  const isUpiSettled = upiSettlementStatus === "SETTLED" || (Array.isArray(bd.upiBankBreakdown) && bd.upiBankBreakdown.length > 0);
+  const upiBankBreakdown = (Array.isArray(bd.upiBankBreakdown) && bd.upiBankBreakdown.length > 0)
+    ? bd.upiBankBreakdown
+    : (Array.isArray(bd.upiBankSummary) ? bd.upiBankSummary : []);
+  const totalSettlementUpiAmount =
+    Number(bd.totalUpiAmount) ||
+    Number(bd.totalSettlementUpiAmount) ||
+    upiBankBreakdown.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0);
+  const totalSettlementUpiCount =
+    Number(bd.totalUpiTransactions) ||
+    Number(bd.totalSettlementUpiCount) ||
+    upiBankBreakdown.reduce((sum, b) => sum + (Number(b.transactionCount) || 0), 0);
 
   // Real Bank Deposit Slips data
   const rawBankSlipsList = bd.bankSlips || [];
@@ -882,6 +898,86 @@ export const ViewBusinessDayDialog = ({
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Consolidated UPI Bank Settlement Card */}
+                  <div className="bg-surface border border-border/80 rounded-xl p-3 shadow-2xs space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="size-6.5 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                          <Sparkles className="size-3.5" />
+                        </div>
+                        <div>
+                          <div className="text-xs font-bold text-text flex items-center gap-2">
+                            <span>Consolidated UPI Bank Settlement</span>
+                            <span
+                              className={`text-[9.5px] font-bold px-2 py-0.2 rounded-full border ${
+                                isUpiSettled
+                                  ? "bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30"
+                                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                              }`}
+                            >
+                              {isUpiSettled ? "Settled in Treasury" : "Pending Day Close"}
+                            </span>
+                          </div>
+                          <span className="text-[10px] text-text-muted">
+                            {isUpiSettled
+                              ? `All intra-day UPI collections settled into exactly 1 bank transaction per bank.`
+                              : `Intra-day UPI held in clearing. Will be consolidated into 1 bank transaction per bank upon Day Close.`}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {totalSettlementUpiAmount > 0 && (
+                          <div className="text-right font-mono font-bold text-xs text-purple-700 dark:text-purple-300">
+                            ₹ {fmt(totalSettlementUpiAmount)}
+                            <span className="text-[10px] text-text-muted font-normal block">
+                              {totalSettlementUpiCount} payments
+                            </span>
+                          </div>
+                        )}
+                        <Link
+                          to={`/finance/treasury/bank-transactions${bd._id ? `?businessDayId=${bd._id}` : ""}`}
+                          className="h-7 px-2.5 text-[11px] font-medium rounded-lg border border-border/80 bg-surface-alt hover:bg-surface-hover text-text flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                          title="Open Treasury Bank Transactions"
+                        >
+                          Treasury <ExternalLink className="size-3" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    {upiBankBreakdown.length > 0 ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-1 border-t border-border/50">
+                        {upiBankBreakdown.map((bank, bIdx) => (
+                          <div
+                            key={bank.bankAccountId || bIdx}
+                            className="bg-surface-alt/40 border border-border/60 rounded-lg p-2.5 flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="size-7 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                                <Landmark className="size-3.5" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-xs font-bold text-text block truncate">
+                                  {bank.bankName || "Bank Account"}
+                                </span>
+                                <span className="text-[10px] text-text-muted font-mono truncate block">
+                                  {bank.accountNumber ? `••••${bank.accountNumber.slice(-4)}` : "Direct"} • {bank.transactionCount || 0} payments
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 font-mono font-bold text-xs text-text">
+                              ₹ {fmt(bank.totalAmount)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-2 text-xs text-text-muted italic border-t border-border/50">
+                        No UPI collections recorded under this session.
+                      </div>
+                    )}
                   </div>
 
                   {/* Bottom Workflow & Rules Strip */}

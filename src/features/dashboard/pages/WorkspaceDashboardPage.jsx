@@ -5,110 +5,80 @@ import { useWorkspaceDashboardData } from "../hooks";
 import {
   WorkspaceDashboardHeader,
   WorkspaceKpiGrid,
-  WorkspaceRevenueProfitTrendCard,
-  WorkspaceTopCompaniesCard,
-  WorkspaceBranchPerformanceCard,
-  WorkspaceCategoryDonutCard,
-  WorkspaceStockAlertsCard,
-  WorkspaceFinancialSummaryCard,
-  WorkspaceRecentActivityCard,
-  WorkspaceSubscriptionUsageCard,
+  WorkspaceCompaniesCard,
+  WorkspaceBranchesCard,
+  WorkspaceSubscriptionCard,
+  WorkspaceMembersCard,
+  WorkspaceRolesCard,
 } from "../components/workspace";
 
 export const WorkspaceDashboardPage = () => {
   const [timeframe, setTimeframe] = useState("This Month");
-  const [dateRange, setDateRange] = useState("Oct 01, 2026 - Oct 31, 2026");
-
-  const { data, isLoading, refresh } = useWorkspaceDashboardData(timeframe, dateRange);
+  const { data, isLoading, refresh } = useWorkspaceDashboardData(timeframe);
 
   return (
-    <section className="min-h-[100dvh] w-full bg-bg px-3 sm:px-5 py-4 font-sans text-text">
-      <div className="max-w-[1600px] mx-auto space-y-3.5">
-        {/* ── 1. Header with Title, Date Range Picker & Timeframe Tabs ──── */}
+    <section className="min-h-[100dvh] w-full bg-bg px-3 sm:px-5 py-4 font-sans text-text dashboard-no-scrollbar">
+      <div className="max-w-[1600px] mx-auto space-y-4">
+        {/* ── 1. Workspace Executive Header ─────────────────────────────── */}
         <WorkspaceDashboardHeader
           workspaceInfo={data?.workspaceInfo}
           timeframe={timeframe}
           onTimeframeChange={setTimeframe}
-          dateRange={dateRange}
-          onDateRangeChange={setDateRange}
           onRefresh={refresh}
           isLoading={isLoading}
         />
 
-        {/* ── 2. Top 6 KPI Metrics Strip ───────────────────────────── */}
-        <WorkspaceKpiGrid kpis={data?.kpis} />
+        {/* ── 2. Top 6 Workspace-Level KPI Metric Cards ─────────────────── */}
+        <WorkspaceKpiGrid
+          kpis={data?.kpis}
+          isLoading={isLoading}
+        />
 
-        {/* ── 3. Middle Section Row 1 (Revenue & Profit Trend, Top Companies, Branch Performance) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-stretch">
-          {/* Revenue & Profit Combo Chart (5 cols) */}
-          <div className="md:col-span-2 lg:col-span-5 flex flex-col min-w-0">
-            <WorkspaceRevenueProfitTrendCard
-              chartData={data?.revenueProfitTrend}
-              className="h-full"
+        {/* ── 3. Row 1: Legal Companies & Physical Branch Network ───────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          {/* Registered Companies (6 cols) */}
+          <div className="lg:col-span-6 flex flex-col min-w-0">
+            <WorkspaceCompaniesCard
+              companies={data?.companies}
+              isLoading={isLoading}
             />
           </div>
 
-          {/* Top Companies by Revenue (4 cols) */}
-          <div className="md:col-span-1 lg:col-span-4 flex flex-col min-w-0">
-            <WorkspaceTopCompaniesCard
-              companies={data?.topCompanies}
-              className="h-full"
-            />
-          </div>
-
-          {/* Branch Performance (3 cols) */}
-          <div className="md:col-span-1 lg:col-span-3 flex flex-col min-w-0">
-            <WorkspaceBranchPerformanceCard
-              branches={data?.branchPerformance}
-              className="h-full"
+          {/* Physical Branches (6 cols) */}
+          <div className="lg:col-span-6 flex flex-col min-w-0">
+            <WorkspaceBranchesCard
+              branches={data?.branches}
+              isLoading={isLoading}
             />
           </div>
         </div>
 
-        {/* ── 4. Middle Section Row 2 (Sales by Category, Stock Alerts, Financial Summary) ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3.5 items-stretch">
-          {/* Sales by Category Donut (4 cols) */}
-          <div className="md:col-span-1 lg:col-span-4 flex flex-col min-w-0">
-            <WorkspaceCategoryDonutCard
-              categoryData={data?.salesByCategory}
-              className="h-full"
-            />
-          </div>
-
-          {/* Stock Alerts (4 cols) */}
-          <div className="md:col-span-1 lg:col-span-4 flex flex-col min-w-0">
-            <WorkspaceStockAlertsCard
-              alerts={data?.stockAlerts}
-              className="h-full"
-            />
-          </div>
-
-          {/* Financial Summary (4 cols) */}
-          <div className="md:col-span-2 lg:col-span-4 flex flex-col min-w-0">
-            <WorkspaceFinancialSummaryCard
-              financialData={data?.financialSummary}
-              className="h-full"
-            />
-          </div>
-        </div>
-
-        {/* ── 5. Bottom Section Row 3 (Recent Business Activity & Subscription Usage) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-stretch">
-          {/* Recent Business Activity Table (~60% / 7 cols) */}
+        {/* ── 4. Row 2: Workspace Staff & Access Control Roles ──────────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          {/* Workspace Team & Staff Members (7 cols) */}
           <div className="lg:col-span-7 flex flex-col min-w-0">
-            <WorkspaceRecentActivityCard
-              activities={data?.recentActivity}
-              className="h-full"
+            <WorkspaceMembersCard
+              members={data?.members}
+              isLoading={isLoading}
             />
           </div>
 
-          {/* Subscription & Usage Panel (~40% / 5 cols) */}
+          {/* Access Roles & Permissions Master (5 cols) */}
           <div className="lg:col-span-5 flex flex-col min-w-0">
-            <WorkspaceSubscriptionUsageCard
-              usageData={data?.subscriptionUsage}
-              className="h-full"
+            <WorkspaceRolesCard
+              roles={data?.roles}
+              isLoading={isLoading}
             />
           </div>
+        </div>
+
+        {/* ── 5. Row 3: Subscription Limits & Workspace Governance Health ── */}
+        <div className="w-full">
+          <WorkspaceSubscriptionCard
+            usageData={data?.subscriptionUsage}
+            compliance={data?.compliance}
+            isLoading={isLoading}
+          />
         </div>
       </div>
     </section>

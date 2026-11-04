@@ -82,7 +82,7 @@ export const UIModal = forwardRef(
         {isOpen && (
           <div
             className={cn(
-              "fixed inset-0 z-50 flex p-4 sm:p-6 overflow-y-auto",
+              "fixed inset-0 z-[100] flex p-4 sm:p-6 overflow-y-auto",
               mobileSheet ? "items-end sm:items-center justify-center" : "items-center justify-center"
             )}
           >

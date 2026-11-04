@@ -7,6 +7,14 @@ const customerService = {
   |--------------------------------------------------------------------------
   */
 
+  getWalkInCustomer() {
+    return apiClient.get(ENDPOINTS.CUSTOMER.WALK_IN);
+  },
+
+  ensureWalkInCustomer() {
+    return apiClient.post(ENDPOINTS.CUSTOMER.WALK_IN);
+  },
+
   createCustomer(payload) {
     return apiClient.post(ENDPOINTS.CUSTOMER.CREATE, payload);
   },
@@ -144,6 +152,10 @@ const customerService = {
 
   getAllPendingCredits(params = {}) {
     return apiClient.get(ENDPOINTS.CUSTOMER.CREDITS_PENDING_ALL, { params });
+  },
+
+  getCustomerCreditNotes(customerId, params = {}) {
+    return apiClient.get(ENDPOINTS.CUSTOMER.CREDIT_NOTES(customerId), { params });
   },
 
   addRelationship(customerId, payload) {

@@ -42,6 +42,7 @@ import {
   Plus,
   Trash2,
   Search,
+  Store,
 } from "lucide-react";
 import customerService from "../services/customerService";
 
@@ -57,6 +58,7 @@ const RELATION_OPTIONS = [
 ];
 
 const customerTypeOptions = [
+  { label: "Walk-in Customer", value: "walk_in", description: "Default counter walk-in retail sales" },
   { label: "Retail Customer", value: "retail", description: "Walk-in OTC and consumer retail buyer" },
   { label: "Wholesale Buyer", value: "wholesale", description: "B2B bulk purchaser and local sub-dealers" },
   { label: "Hospital / Institution", value: "hospital", description: "Medical center, nursing home, or emergency room" },
@@ -170,6 +172,7 @@ export function CustomerDialog({
   onSuccess,
   onReceiveAdvance,
   onSettleCredit,
+  onViewCreditNotes,
   onViewTransactions,
   onStatementLedger,
 }) {
@@ -221,6 +224,11 @@ export function CustomerDialog({
   }, [customerData]);
 
   const activeCustomer = currentCustomer || customerData;
+  const isWalkInCustomer = Boolean(
+    activeCustomer?.isWalkIn ||
+    activeCustomer?.customerType === "walk_in" ||
+    formData.customerType === "walk_in"
+  );
 
   const populateFormFromCustomer = useCallback((cust) => {
     if (!cust) return;
@@ -843,8 +851,16 @@ export function CustomerDialog({
                ══════════════════════════════════════════════════════════════ */}
             {activeProfileTab === "overview" && (
               <div className="space-y-6">
+                {isWalkInCustomer && (
+                  <div className="flex items-start gap-3 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200">
+                    <Store className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                    <div className="text-xs leading-relaxed">
+                      <span className="font-bold">System Default Walk-in Customer:</span> Used for quick counter sales and anonymous POS transactions. Credit limit, advance balances, and store credit notes are permanently disabled for this profile.
+                    </div>
+                  </div>
+                )}
                 {/* 4 Financial & Credit Metrics */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3.5">
                   <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3.5 shadow-2xs">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-text-muted uppercase tracking-wider">
                       <span>Credit Outstanding</span>
@@ -896,28 +912,69 @@ export function CustomerDialog({
                     </div>
                     <div className="mt-1 text-[11px] text-text-muted">Invoice maturity window</div>
                   </div>
+
+                  <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3.5 shadow-2xs">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-text-muted uppercase tracking-wider">
+                      <span>Credit Note Balance</span>
+                      <Receipt className="size-4 text-indigo-600" />
+                    </div>
+                    <div className="mt-1.5 text-base font-bold text-indigo-600 dark:text-indigo-400 font-mono">
+                      ₹{Number(activeCustomer.creditNoteBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </div>
+                    <div className="mt-1 flex items-center justify-between text-[11px]">
+                      <span className="text-text-muted">Return vouchers</span>
+                      {Number(activeCustomer.creditNoteBalance || 0) > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => onViewCreditNotes && onViewCreditNotes(activeCustomer)}
+                          className="font-bold text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                        >
+                          View Notes →
+                        </button>
+                      ) : (
+                        <span className="text-text-muted/60 font-mono">0 Notes</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Financial Quick Actions Toolbar */}
                 <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border bg-surface-alt/40 flex-wrap">
                   <div className="text-xs font-semibold text-text-muted">Financial Workflows:</div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <UIButton
-                      variant="outline"
-                      size="sm"
-                      startIcon={<PlusCircle className="size-3.5 text-emerald-600" />}
-                      onClick={() => onReceiveAdvance && onReceiveAdvance(activeCustomer)}
-                    >
-                      Receive Advance
-                    </UIButton>
-                    <UIButton
-                      variant="outline"
-                      size="sm"
-                      startIcon={<CheckCircle2 className="size-3.5 text-blue-600" />}
-                      onClick={() => onSettleCredit && onSettleCredit(activeCustomer)}
-                    >
-                      Settle Credit
-                    </UIButton>
+                    {!isWalkInCustomer && (
+                      <>
+                        <UIButton
+                          variant="outline"
+                          size="sm"
+                          startIcon={<PlusCircle className="size-3.5 text-emerald-600" />}
+                          onClick={() => onReceiveAdvance && onReceiveAdvance(activeCustomer)}
+                        >
+                          Receive Advance
+                        </UIButton>
+                        <UIButton
+                          variant="outline"
+                          size="sm"
+                          startIcon={<CheckCircle2 className="size-3.5 text-blue-600" />}
+                          onClick={() => onSettleCredit && onSettleCredit(activeCustomer)}
+                        >
+                          Settle Credit
+                        </UIButton>
+                        <UIButton
+                          variant="outline"
+                          size="sm"
+                          startIcon={<Receipt className="size-3.5 text-indigo-600" />}
+                          onClick={() => onViewCreditNotes && onViewCreditNotes(activeCustomer)}
+                        >
+                          Credit Notes
+                          {Number(activeCustomer.creditNoteBalance || 0) > 0 && (
+                            <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-mono font-bold">
+                              ₹{Number(activeCustomer.creditNoteBalance || 0).toFixed(0)}
+                            </span>
+                          )}
+                        </UIButton>
+                      </>
+                    )}
                     <UIButton
                       variant="outline"
                       size="sm"
@@ -1272,6 +1329,14 @@ export function CustomerDialog({
            ══════════════════════════════════════════════════════════════════ */}
         {!isView && (
           <form id="customer-dialog-form" onSubmit={handleSubmit} className="space-y-6">
+            {isWalkInCustomer && (
+              <div className="flex items-start gap-3 p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-200">
+                <Store className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                <div className="text-xs leading-relaxed">
+                  <span className="font-bold">System Default Walk-in Customer:</span> Used for quick counter sales and anonymous POS transactions. Customer type and credit/opening balances are permanently disabled.
+                </div>
+              </div>
+            )}
             {/* Live Interactive Card Header */}
             <CustomerCardPreview
               name={formData.name}
@@ -1316,6 +1381,8 @@ export function CustomerDialog({
                   value={formData.customerType}
                   onChange={(val) => handleFieldChange("customerType", val)}
                   options={customerTypeOptions}
+                  disabled={isWalkInCustomer}
+                  helperText={isWalkInCustomer ? "System Walk-in Customer type cannot be changed" : undefined}
                   required
                   size="md"
                 />
@@ -1481,8 +1548,9 @@ export function CustomerDialog({
                   placeholder="0.00"
                   value={formData.creditLimit}
                   onChange={(e) => handleFieldChange("creditLimit", e.target.value)}
+                  disabled={isWalkInCustomer}
                   size="md"
-                  helperText="Maximum allowed outstanding bill balance"
+                  helperText={isWalkInCustomer ? "Permanently 0 for Walk-in Customer" : "Maximum allowed outstanding bill balance"}
                 />
 
                 <UIInput
@@ -1491,8 +1559,9 @@ export function CustomerDialog({
                   placeholder="30"
                   value={formData.creditDays}
                   onChange={(e) => handleFieldChange("creditDays", e.target.value)}
+                  disabled={isWalkInCustomer}
                   size="md"
-                  helperText="Days before unpaid invoice flags as overdue"
+                  helperText={isWalkInCustomer ? "Permanently 0 for Walk-in Customer" : "Days before unpaid invoice flags as overdue"}
                 />
 
                 <UIInput
@@ -1501,7 +1570,9 @@ export function CustomerDialog({
                   placeholder="0.00"
                   value={formData.openingBalance}
                   onChange={(e) => handleFieldChange("openingBalance", e.target.value)}
+                  disabled={isWalkInCustomer}
                   size="md"
+                  helperText={isWalkInCustomer ? "Permanently 0 for Walk-in Customer" : undefined}
                 />
 
                 <UISelect
@@ -1509,6 +1580,7 @@ export function CustomerDialog({
                   value={formData.openingBalanceType}
                   onChange={(val) => handleFieldChange("openingBalanceType", val)}
                   options={balanceTypeOptions}
+                  disabled={isWalkInCustomer}
                   size="md"
                 />
 

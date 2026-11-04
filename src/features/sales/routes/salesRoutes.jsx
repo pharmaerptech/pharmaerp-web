@@ -3,6 +3,7 @@
 import React from "react";
 import { ROUTES } from "@/constants";
 import SalesPage from "../pages/SalesPage";
+import CreditNotesPage from "../credit-notes/pages/CreditNotesPage";
 
 export const salesRoutes = [
   {
@@ -16,6 +17,10 @@ export const salesRoutes = [
   {
     path: "/sale/edit/:invoiceId",
     element: <SalesPage />,
+  },
+  {
+    path: ROUTES.CREDIT_NOTES || "/sales/credit-notes",
+    element: <CreditNotesPage />,
   },
 ];
 

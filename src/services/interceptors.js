@@ -19,9 +19,26 @@ export const setupInterceptors = (apiClient, store) => {
       if (store) {
         const state = store.getState();
 
-        const workspaceId = state.workspace?.currentWorkspace?._id;
-        const companyId = state.company?.currentCompany?._id;
-        const branchId = state.branch?.currentBranch?._id;
+        const workspaceId =
+          state.workspace?.currentWorkspace?._id ||
+          state.workspace?.currentWorkspace?.id;
+        let companyId =
+          state.company?.currentCompany?._id ||
+          state.company?.currentCompany?.id;
+        if (!companyId) {
+          try {
+            companyId = localStorage.getItem("pahuch_active_company_id") || null;
+          } catch {}
+        }
+
+        let branchId =
+          state.branch?.currentBranch?._id ||
+          state.branch?.currentBranch?.id;
+        if (!branchId) {
+          try {
+            branchId = localStorage.getItem("pahuch_active_branch_id") || null;
+          } catch {}
+        }
 
         if (workspaceId) {
           config.headers["x-workspace-id"] = workspaceId;

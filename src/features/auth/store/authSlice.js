@@ -91,6 +91,10 @@ const authSlice = createSlice({
 
       storage.remove(TOKEN_KEY);
       storage.remove(USER_STORAGE_KEY);
+      try {
+        localStorage.removeItem("pahuch_work_mode");
+        localStorage.removeItem("pahuch_work_mode_selected");
+      } catch {}
     },
 
     setSignupData(state, action) {
@@ -157,6 +161,10 @@ const authSlice = createSlice({
         state.subscription = null;
         state.isAuthenticated = false;
         state.message = "Logout successful";
+        try {
+          localStorage.removeItem("pahuch_work_mode");
+          localStorage.removeItem("pahuch_work_mode_selected");
+        } catch {}
       })
       .addCase(logoutUser.rejected, (state, action) => {
         state.status = API_STATUS.ERROR;

@@ -16,6 +16,20 @@ import {
 } from "lucide-react";
 import { UIModal, UIButton, UIBadge } from "@/components/ui";
 
+const formatPaymentMode = (mode) => {
+  if (!mode) return "Cash";
+  const str = String(mode).trim();
+  const lower = str.toLowerCase();
+  if (lower === "creditnote" || lower === "credit_note" || lower === "credit note") return "Credit Note";
+  if (lower === "cash") return "Cash";
+  if (lower === "upi") return "UPI";
+  if (lower === "card") return "Card";
+  if (lower === "credit") return "Credit (Ledger)";
+  if (lower === "advance") return "Advance Deposit";
+  if (lower === "split") return "Split Payment";
+  return str;
+};
+
 export const SalesReceiptModal = ({ isOpen, onClose, saleData }) => {
   if (!saleData) return null;
 
@@ -156,12 +170,12 @@ export const SalesReceiptModal = ({ isOpen, onClose, saleData }) => {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted flex items-center justify-end gap-1 mb-1">
                   <CreditCard className="size-3" /> Payment
                 </span>
-                <p className="font-bold text-text text-sm leading-tight">{paymentMethod}</p>
+                <p className="font-bold text-text text-sm leading-tight">{formatPaymentMode(paymentMethod)}</p>
                 {paymentMethod === "Split" && Array.isArray(saleData.payments) && saleData.payments.length > 0 && (
                   <div className="text-[10.5px] text-text-muted space-y-0.5 mt-1 font-mono">
                     {saleData.payments.map((p, idx) => (
                       <div key={idx} className="flex justify-end gap-1.5">
-                        <span className="capitalize">{p.paymentType || p.mode}:</span>
+                        <span className="text-text-muted">{formatPaymentMode(p.paymentType || p.mode)}:</span>
                         <span className="font-semibold text-text">₹{Number(p.amount || 0).toFixed(2)}</span>
                       </div>
                     ))}

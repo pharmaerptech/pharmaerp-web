@@ -1,20 +1,40 @@
 // src/features/dashboard/components/branch/BranchCurrentShiftCard.jsx
 
-import { Sun, MoreVertical, ArrowRight } from "lucide-react";
+import { Sun, Moon, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { UICard, UIIconButton } from "@/components/ui";
+import { UICard, UISkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-export const BranchCurrentShiftCard = ({ shiftData, className }) => {
+export const BranchCurrentShiftCard = ({ shiftData, className, isLoading = false }) => {
   const navigate = useNavigate();
 
-  const cashier = shiftData?.cashier || "Rohit Sharma";
+  if (isLoading) {
+    return (
+      <UICard
+        variant="default"
+        className={cn("p-4 sm:p-4.5 rounded-xl border border-border bg-surface", className)}
+      >
+        <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+          <UISkeleton className="h-4 w-28" />
+          <UISkeleton className="h-5 w-14 rounded-full" />
+        </div>
+        <div className="pt-3 space-y-3">
+          <UISkeleton className="h-4 w-3/4" />
+          <UISkeleton className="h-4 w-full" />
+          <UISkeleton className="h-4 w-2/3" />
+        </div>
+      </UICard>
+    );
+  }
+
+  const isLive = Boolean(shiftData?.isLive);
+  const cashier = shiftData?.cashier || (isLive ? "Staff Cashier" : "Unassigned");
   const counter = shiftData?.counter || "Counter 1";
-  const salesAmount = shiftData?.salesAmount || 124580;
-  const invoices = shiftData?.invoices || 218;
-  const cashInDrawer = shiftData?.cashInDrawer || 18250;
-  const shiftName = shiftData?.shiftName || "Morning Shift";
-  const shiftTime = shiftData?.shiftTime || "08:00 AM - 02:00 PM";
+  const salesAmount = Number(shiftData?.salesAmount || 0);
+  const invoices = Number(shiftData?.invoices || 0);
+  const cashInDrawer = Number(shiftData?.cashInDrawer || 0);
+  const shiftName = shiftData?.shiftName || (isLive ? "Shift #1" : "No Active Shift");
+  const shiftTime = shiftData?.shiftTime || (isLive ? "Active" : "Closed");
 
   return (
     <UICard
@@ -30,26 +50,31 @@ export const BranchCurrentShiftCard = ({ shiftData, className }) => {
           Current Shift
         </h2>
 
-        <div className="flex items-center gap-1.5">
-          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-success/30 bg-success-soft text-success text-[10px] font-bold">
-            <span className="size-1.5 rounded-full bg-success animate-pulse" />
+        {isLive ? (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
+            <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
             <span>Live</span>
           </span>
-
-          <UIIconButton
-            variant="ghost"
-            size="xs"
-            aria-label="Shift options"
-            icon={<MoreVertical className="size-3.5 text-text-muted" />}
-          />
-        </div>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border bg-surface-alt text-text-muted text-[10px] font-medium">
+            <span className="size-1.5 rounded-full bg-text-muted/50" />
+            <span>Closed</span>
+          </span>
+        )}
       </div>
 
       {/* Subheader: Shift Name & Hours */}
       <div className="flex items-center justify-between gap-2 pt-2 pb-1.5">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="size-6 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center shrink-0">
-            <Sun className="size-3.5" />
+          <div
+            className={cn(
+              "size-6 rounded-md flex items-center justify-center shrink-0",
+              isLive
+                ? "bg-amber-500/10 text-amber-500"
+                : "bg-surface-alt text-text-muted"
+            )}
+          >
+            {isLive ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
           </div>
           <span className="text-xs font-bold text-text truncate">{shiftName}</span>
         </div>
@@ -73,7 +98,7 @@ export const BranchCurrentShiftCard = ({ shiftData, className }) => {
         <div className="flex items-center justify-between gap-2 py-1.5 text-xs">
           <span className="text-text-muted text-[11px] shrink-0">Sales Amount</span>
           <span className="font-bold font-mono tabular-nums text-text shrink-0">
-            ₹ {salesAmount.toLocaleString()}
+            ₹ {salesAmount.toLocaleString("en-IN")}
           </span>
         </div>
 
@@ -87,19 +112,22 @@ export const BranchCurrentShiftCard = ({ shiftData, className }) => {
         <div className="flex items-center justify-between gap-2 py-1.5 text-xs">
           <span className="text-text-muted text-[11px] shrink-0">Cash in Drawer</span>
           <span className="font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400 shrink-0">
-            ₹ {cashInDrawer.toLocaleString()}
+            ₹ {cashInDrawer.toLocaleString("en-IN")}
           </span>
         </div>
       </div>
 
       {/* Footer Link */}
-      <div className="pt-2 border-t border-border/60 flex justify-end">
+      <div className="pt-2 border-t border-border/60 flex items-center justify-between">
+        <span className="text-[10px] text-text-muted">
+          {isLive ? "Shift is ongoing" : "No cashier logged in"}
+        </span>
         <button
           type="button"
           onClick={() => navigate("/operations/shifts")}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
-          <span>View Details</span>
+          <span>{isLive ? "View Shift" : "Open Shift"}</span>
           <ArrowRight className="size-3" />
         </button>
       </div>

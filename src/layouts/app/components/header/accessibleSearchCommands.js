@@ -1,7 +1,7 @@
 // src/layouts/app/components/header/accessibleSearchCommands.js
 //
 // Extracts all searchable navigation routes and quick actions,
-// and filters them strictly based on current user permissions.
+// and filters them strictly based on current work mode, pipeline level, and user permissions.
 
 import {
   Layers,
@@ -21,7 +21,8 @@ import {
 
 import { ROUTES } from "@/constants";
 import { SIDEBAR_NAV_GROUPS } from "../sidebar/sidebarNavConfig";
-
+import { filterNavByPipeline } from "../sidebar/filterNavByPipeline";
+import { getSafeWorkMode } from "@/contexts/WorkModeContext";
 
 /**
  * Recursively flattens sidebar nav items into searchable commands.
@@ -40,6 +41,8 @@ const flattenNavItems = (items, prefix = "") => {
         icon: item.icon || Layers,
         permission: item.permission,
         permissions: item.permissions,
+        level: item.level || "all",
+        workMode: item.workMode || "both",
         keywords: item.keywords || [],
         category: prefix || "Navigation",
       });
@@ -56,7 +59,7 @@ const flattenNavItems = (items, prefix = "") => {
 };
 
 /**
- * Additional direct quick actions with explicit permission requirements.
+ * Additional direct quick actions with explicit permission, level & workMode requirements.
  */
 const QUICK_ACTIONS = [
   {
@@ -66,6 +69,8 @@ const QUICK_ACTIONS = [
     path: ROUTES.BRANCH_DASHBOARD,
     icon: Store,
     category: "Dashboards",
+    level: "branch",
+    workMode: "view",
     keywords: ["branch dashboard", "daily sales", "registers", "shift dashboard"],
   },
   {
@@ -75,6 +80,8 @@ const QUICK_ACTIONS = [
     path: ROUTES.COMPANY_DASHBOARD,
     icon: Building2,
     category: "Dashboards",
+    level: "company",
+    workMode: "view",
     keywords: ["company dashboard", "financials", "multi branch", "gst overview"],
   },
   {
@@ -84,6 +91,8 @@ const QUICK_ACTIONS = [
     path: ROUTES.WORKSPACE_DASHBOARD,
     icon: Layers,
     category: "Dashboards",
+    level: "workspace",
+    workMode: "view",
     keywords: ["workspace dashboard", "organization", "plan", "quota", "usage"],
   },
   {
@@ -94,6 +103,8 @@ const QUICK_ACTIONS = [
     icon: QrCode,
     permission: "payment-qr:view",
     category: "Treasury",
+    level: "branch",
+    workMode: "operation",
     keywords: [
       "upi tally",
       "upi reconciliation",
@@ -114,6 +125,8 @@ const QUICK_ACTIONS = [
     icon: Building2,
     permission: "company:create",
     category: "Organization",
+    level: "workspace",
+    workMode: "operation",
   },
   {
     id: "action-create-branch",
@@ -123,6 +136,8 @@ const QUICK_ACTIONS = [
     icon: GitBranch,
     permission: "branch:create",
     category: "Organization",
+    level: "company",
+    workMode: "operation",
   },
   {
     id: "action-invite-member",
@@ -132,6 +147,8 @@ const QUICK_ACTIONS = [
     icon: Users,
     permission: "workspace-member:create",
     category: "Organization",
+    level: "workspace",
+    workMode: "operation",
   },
   {
     id: "action-create-role",
@@ -141,6 +158,8 @@ const QUICK_ACTIONS = [
     icon: ShieldAlert,
     permission: "role:create",
     category: "Access Control",
+    level: "workspace",
+    workMode: "operation",
   },
   {
     id: "action-create-customer",
@@ -150,6 +169,8 @@ const QUICK_ACTIONS = [
     icon: User,
     permission: "customer:create",
     category: "Parties",
+    level: "company",
+    workMode: "operation",
   },
   {
     id: "action-create-supplier",
@@ -159,6 +180,8 @@ const QUICK_ACTIONS = [
     icon: Truck,
     permission: "supplier:create",
     category: "Parties",
+    level: "company",
+    workMode: "operation",
   },
   {
     id: "action-create-voucher",
@@ -168,6 +191,8 @@ const QUICK_ACTIONS = [
     icon: FileText,
     permission: "journal-voucher:create",
     category: "Finance",
+    level: "company",
+    workMode: "operation",
   },
   {
     id: "action-settings-profile",
@@ -177,6 +202,8 @@ const QUICK_ACTIONS = [
     icon: User,
     permission: null,
     category: "Settings",
+    level: "all",
+    workMode: "both",
   },
   {
     id: "action-settings-appearance",
@@ -186,6 +213,8 @@ const QUICK_ACTIONS = [
     icon: Palette,
     permission: null,
     category: "Settings",
+    level: "all",
+    workMode: "both",
   },
   {
     id: "action-settings-security",
@@ -195,6 +224,8 @@ const QUICK_ACTIONS = [
     icon: Lock,
     permission: null,
     category: "Settings",
+    level: "all",
+    workMode: "both",
   },
   {
     id: "action-settings-billing",
@@ -204,22 +235,51 @@ const QUICK_ACTIONS = [
     icon: CreditCard,
     permission: "subscription:view",
     category: "Settings",
+    level: "workspace",
+    workMode: "both",
   },
 ];
 
 /**
- * Returns all accessible commands and navigation links for the current user.
- * @param {Function} can - Permission checking function from usePermission()
- * @param {Function} [canAny] - Permission checking function for any from usePermission()
- * @returns {Array} List of commands accessible to the user
+ * Returns all accessible commands and navigation links for the current user, work mode, and pipeline level.
  */
-export const getAccessibleSearchCommands = (can, canAny, isOwner = false) => {
-  const allNavItems = SIDEBAR_NAV_GROUPS.flatMap((group) =>
+export const getAccessibleSearchCommands = (
+  can,
+  canAny,
+  isOwner = false,
+  workMode = null,
+  currentLevel = null
+) => {
+  const activeMode = getSafeWorkMode(workMode);
+
+  // Filter sidebar groups according to the current pipeline level & work mode
+  const filteredNavGroups = filterNavByPipeline(SIDEBAR_NAV_GROUPS, currentLevel, activeMode);
+
+  const allNavItems = filteredNavGroups.flatMap((group) =>
     flattenNavItems(group.items, group.label)
   );
 
+  // Filter quick actions based on currentLevel and workMode
+  const filteredQuickActions = QUICK_ACTIONS.filter((action) => {
+    if (!activeMode) {
+      return action.category === "Settings" || action.workMode === "both";
+    }
+
+    // Level check
+    if (currentLevel && action.level && action.level !== "all" && action.level !== currentLevel) {
+      return false;
+    }
+
+    // Mode check
+    if (action.workMode && action.workMode !== "both" && action.workMode !== activeMode) {
+      return false;
+    }
+
+    return true;
+  });
+
   const existingPaths = new Set(allNavItems.map((n) => n.path));
-  const uniqueQuickActions = QUICK_ACTIONS.filter((a) => !existingPaths.has(a.path));
+  const uniqueQuickActions = filteredQuickActions.filter((a) => !existingPaths.has(a.path));
 
   const allItems = [...allNavItems, ...uniqueQuickActions];
 

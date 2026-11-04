@@ -33,6 +33,8 @@ import {
   FileText,
   CheckSquare,
   Users,
+  Landmark,
+  Sparkles,
 } from "lucide-react";
 import { ViewShiftDialog } from "../../shifts/components/ViewShiftDialog";
 import useBranch from "@/features/branch/hooks/useBranch";
@@ -210,6 +212,14 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
   const totalWithdrawals =
     Number(bd.totalWithdrawals) ||
     shifts.reduce((acc, s) => acc + Number(s.withdrawals || 0), 0);
+
+  const upiBankSummary = bd.upiBankSummary || [];
+  const totalSettlementUpiAmount =
+    Number(bd.totalSettlementUpiAmount) ||
+    upiBankSummary.reduce((acc, b) => acc + (Number(b.totalAmount) || 0), 0);
+  const totalSettlementUpiCount =
+    Number(bd.totalSettlementUpiCount) ||
+    upiBankSummary.reduce((acc, b) => acc + (Number(b.transactionCount) || 0), 0);
 
   const isLoading = closeBusinessDayStatus === API_STATUS.LOADING;
 
@@ -582,6 +592,59 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
             </div>
           </div>
 
+          {/* 2.5 Consolidated UPI Settlement Preview */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-text">
+                <Sparkles className="size-3.5 text-purple-600 dark:text-purple-400" />
+                <span>Consolidated UPI Bank Settlement ({upiBankSummary.length} {upiBankSummary.length === 1 ? "Bank" : "Banks"})</span>
+              </div>
+              {totalSettlementUpiAmount > 0 && (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 font-mono">
+                  Total: ₹ {fmt(totalSettlementUpiAmount)} ({totalSettlementUpiCount} payments)
+                </span>
+              )}
+            </div>
+
+            <div className="p-3 rounded-xl border border-purple-500/20 bg-purple-500/[0.03] space-y-2">
+              <p className="text-[11px] text-text-muted leading-relaxed">
+                Upon closing this Business Day, all intra-day UPI collections across all shifts will be consolidated into <strong className="text-text font-semibold">exactly 1 clean Bank Transaction per bank</strong> in Treasury.
+              </p>
+
+              {upiBankSummary.length === 0 ? (
+                <div className="py-2 text-center text-xs text-text-muted italic">
+                  No UPI collections were recorded for this business day.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                  {upiBankSummary.map((bank, bIdx) => (
+                    <div
+                      key={bank.bankAccountId || bIdx}
+                      className="bg-surface border border-border/80 rounded-lg p-2.5 flex items-center justify-between shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="size-7 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                          <Landmark className="size-3.5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-text truncate">
+                            {bank.bankName || "Primary Bank"}
+                          </div>
+                          <div className="text-[10px] text-text-muted font-mono truncate">
+                            {bank.accountNumber ? `A/C: ••••${bank.accountNumber.slice(-4)}` : "Direct Account"} • {bank.transactionCount || 0} payments
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0 font-mono font-bold text-xs text-purple-700 dark:text-purple-300">
+                        ₹ {fmt(bank.totalAmount)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* 2.6 Closing Note (Optional) */}
           <div className="space-y-1.5">
             <div className="flex items-center gap-1.5 text-xs font-bold text-text">
@@ -638,6 +701,12 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
                 <li className="flex items-start gap-1.5">
                   <span className="size-1 rounded-full bg-emerald-600 shrink-0 mt-1.5" />
                   <span>All transactions for this business day are complete</span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <span className="size-1 rounded-full bg-purple-600 shrink-0 mt-1.5" />
+                  <span>
+                    Consolidated UPI bank transactions will be posted to Treasury for each receiving bank.
+                  </span>
                 </li>
                 <li className="flex items-start gap-1.5">
                   <span className="size-1 rounded-full bg-emerald-600 shrink-0 mt-1.5" />

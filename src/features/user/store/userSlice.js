@@ -21,8 +21,8 @@ const getEmptyActiveContext = () => ({
 
 const normalizeActiveContext = (context) => ({
   workspaceId: context?.workspaceId || null,
-  companyId: context?.companyId || null,
-  branchId: context?.branchId || null,
+  companyId: null,
+  branchId: null,
   updatedAt: context?.updatedAt || null,
 });
 

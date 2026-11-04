@@ -15,6 +15,7 @@ import CustomerDialog from "../components/CustomerDialog";
 import CustomerAdvanceReceiptDialog from "../components/CustomerAdvanceReceiptDialog";
 import CustomerSettlementDialog from "../components/CustomerSettlementDialog";
 import CustomerStatementLedgerDialog from "../components/CustomerStatementLedgerDialog";
+import CustomerCreditNotesDialog from "../components/CustomerCreditNotesDialog";
 
 const initialFilters = {
   search: "",
@@ -24,7 +25,7 @@ const initialFilters = {
 
 // B2B covers retail & wholesale; B2C covers the rest
 const B2B_TYPES = ["retail", "wholesale"];
-const B2C_TYPES = ["hospital", "clinic", "corporate", "other"];
+const B2C_TYPES = ["hospital", "clinic", "corporate", "other", "walk_in"];
 
 const normalizeText = (value) =>
   String(value || "")
@@ -33,6 +34,7 @@ const normalizeText = (value) =>
 
 const formatCustomerType = (type) => {
   if (!type) return "Retail";
+  if (type === "walk_in") return "Walk-in";
   return String(type)
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
@@ -112,6 +114,8 @@ const CustomersPage = () => {
   const [isSettleModalOpen, setIsSettleModalOpen] = useState(false);
   const [statementCustomer, setStatementCustomer] = useState(null);
   const [isStatementLedgerOpen, setIsStatementLedgerOpen] = useState(false);
+  const [creditNotesCustomer, setCreditNotesCustomer] = useState(null);
+  const [isCreditNotesModalOpen, setIsCreditNotesModalOpen] = useState(false);
 
   const isLoading = getCustomersStatus === API_STATUS.LOADING;
   const isDeleting = deleteCustomerStatus === API_STATUS.LOADING;
@@ -134,6 +138,7 @@ const CustomersPage = () => {
         search: filters.search || undefined,
         status: filters.status !== "all" ? filters.status : undefined,
         customerType: apiCustomerType,
+        sort: "-updatedAt",
       });
     } catch {
       // Regulated by store selectors
@@ -169,7 +174,7 @@ const CustomersPage = () => {
   const filteredCustomers = useMemo(() => {
     const search = normalizeText(filters.search);
 
-    return mappedCustomers.filter((customer) => {
+    const list = mappedCustomers.filter((customer) => {
       const matchesSearch =
         !search ||
         normalizeText(customer.displayName).includes(search) ||
@@ -199,6 +204,32 @@ const CustomersPage = () => {
 
       return matchesSearch && matchesStatus && matchesType && matchesSegment;
     });
+
+    // Prioritize Walk-in customer first, then sort by recently updated descending
+    list.sort((a, b) => {
+      const aIsWalk = Boolean(
+        a.isWalkIn ||
+          a.customerType === "walk_in" ||
+          a.type === "walk_in" ||
+          a.customerCode === "WALK-IN" ||
+          a.displayCode === "WALK-IN",
+      );
+      const bIsWalk = Boolean(
+        b.isWalkIn ||
+          b.customerType === "walk_in" ||
+          b.type === "walk_in" ||
+          b.customerCode === "WALK-IN" ||
+          b.displayCode === "WALK-IN",
+      );
+      if (aIsWalk && !bIsWalk) return -1;
+      if (!aIsWalk && bIsWalk) return 1;
+      return (
+        new Date(b.updatedAt || b.createdAt || 0) -
+        new Date(a.updatedAt || a.createdAt || 0)
+      );
+    });
+
+    return list;
   }, [mappedCustomers, filters, activeSegment]);
 
   const stats = useMemo(() => {
@@ -428,6 +459,16 @@ const CustomersPage = () => {
     setStatementCustomer(null);
   }, []);
 
+  const handleOpenCreditNotes = useCallback((customer) => {
+    setCreditNotesCustomer(customer);
+    setIsCreditNotesModalOpen(true);
+  }, []);
+
+  const handleCloseCreditNotes = useCallback(() => {
+    setIsCreditNotesModalOpen(false);
+    setCreditNotesCustomer(null);
+  }, []);
+
   const handleViewTransactions = handleOpenStatementLedger;
 
   const [refreshKey, setRefreshKey] = useState(0);
@@ -573,6 +614,7 @@ const CustomersPage = () => {
     handleDeleteCustomer: handleRequestDeleteCustomer,
     handleReceiveAdvance: handleOpenReceiveAdvance,
     handleSettleCredit: handleOpenSettleCredit,
+    handleViewCreditNotes: handleOpenCreditNotes,
     handleViewTransactions,
     handleRefresh,
     refreshKey,
@@ -598,6 +640,7 @@ const CustomersPage = () => {
         onSuccess={triggerRefresh}
         onReceiveAdvance={handleOpenReceiveAdvance}
         onSettleCredit={handleOpenSettleCredit}
+        onViewCreditNotes={handleOpenCreditNotes}
         onViewTransactions={handleViewTransactions}
       />
 
@@ -620,6 +663,12 @@ const CustomersPage = () => {
         onClose={handleCloseStatementLedger}
         customer={statementCustomer}
         onSuccess={handleStatementSuccess}
+      />
+
+      <CustomerCreditNotesDialog
+        isOpen={isCreditNotesModalOpen}
+        onClose={handleCloseCreditNotes}
+        customer={creditNotesCustomer}
       />
 
       <UIConfirmDialog

@@ -283,7 +283,7 @@ export const B2bCustomerSearchBar = forwardRef(
     return (
       <div
         ref={containerRef}
-        className={cn("relative w-full select-none", className)}
+        className={cn("relative w-full select-none", isOpen && "z-30", className)}
       >
         {/* Search Input Box */}
         <div
@@ -344,7 +344,7 @@ export const B2bCustomerSearchBar = forwardRef(
         {isOpen && Boolean(currentValue?.trim()?.length >= 2) && (
           <div
             className={cn(
-              "absolute left-0 right-0 top-[calc(100%+6px)] z-50 overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--app-shadow-xl)] animate-in fade-in-50 zoom-in-95 duration-100",
+              "absolute left-0 right-0 top-[calc(100%+6px)] z-30 overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--app-shadow-xl)] animate-in fade-in-50 zoom-in-95 duration-100",
               dropdownClassName,
             )}
           >

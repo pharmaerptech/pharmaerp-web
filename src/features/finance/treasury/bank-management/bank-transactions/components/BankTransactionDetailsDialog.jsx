@@ -64,6 +64,21 @@ const formatTime = (val) => {
   });
 };
 
+const resolveTxTimestamp = (tx) => {
+  if (!tx) return null;
+  const d = tx.transactionDate ? new Date(tx.transactionDate) : null;
+  const isMidnightUTC =
+    d &&
+    !Number.isNaN(d.getTime()) &&
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0;
+
+  if (isMidnightUTC && (tx.postedAt || tx.createdAt)) {
+    return tx.postedAt || tx.createdAt;
+  }
+  return tx.transactionDate || tx.postedAt || tx.createdAt;
+};
 
 export const BankTransactionDetailsDialog = ({
   isOpen,
@@ -95,6 +110,7 @@ export const BankTransactionDetailsDialog = ({
     createdAt,
   } = transaction;
 
+  const effectiveTimestamp = resolveTxTimestamp(transaction);
   const isCredit = String(direction).toUpperCase() === "CREDIT";
 
   // Bank Account details
@@ -128,7 +144,7 @@ export const BankTransactionDetailsDialog = ({
       `Type: ${transactionType} (${direction})`,
       `Bank: ${bankName} (${maskedAccNo})`,
       `Amount: ₹${formatCurrency(amount)}`,
-      `Date: ${formatDate(transactionDate)} ${formatTime(transactionDate)}`,
+      `Date: ${formatDate(effectiveTimestamp)} ${formatTime(effectiveTimestamp)}`,
       referenceNumber ? `Reference/UTR: ${referenceNumber}` : null,
       narration ? `Narration: ${narration}` : null,
       `Status: ${status}`,
@@ -271,23 +287,32 @@ export const BankTransactionDetailsDialog = ({
             </div>
           </div>
 
-          {/* Shift UPI Settlement Banner */}
-          {(transaction.category === "UPI_SETTLEMENT" || transaction.shiftId) && (
+          {/* Business Day / Shift UPI Settlement Banner */}
+          {(transaction.category === "UPI_SETTLEMENT" || transaction.businessDayId || transaction.shiftId) && (
             <div className="p-4 rounded-xl border border-purple-500/30 bg-purple-500/5 space-y-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-purple-700 dark:text-purple-300">
                   <Sparkles className="size-4" />
-                  Consolidated Shift Settlement
+                  {transaction.businessDayId ? "Consolidated Business Day Settlement" : "Consolidated Shift Settlement"}
                 </div>
-                <Link
-                  to="/finance/treasury/upi-transactions"
-                  className="text-[11.5px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
-                >
-                  View Granular UPI Bills <ExternalLink className="size-3" />
-                </Link>
+                <div className="flex items-center gap-2.5">
+                  <Link
+                    to="/operations/business-days"
+                    className="text-[11.5px] font-semibold text-text-muted hover:text-text hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    Business Days <ExternalLink className="size-3" />
+                  </Link>
+                  <span className="text-border">•</span>
+                  <Link
+                    to="/finance/treasury/upi-transactions"
+                    className="text-[11.5px] font-semibold text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    View UPI Bills <ExternalLink className="size-3" />
+                  </Link>
+                </div>
               </div>
               <p className="text-xs text-text-muted leading-relaxed">
-                This transaction is an aggregated batch settlement from an active pharmacy shift. Individual UPI micro-transactions are held in the shift and released to your bank upon shift close to keep the bank ledger clean and audit-ready.
+                This transaction is an aggregated batch settlement from an active pharmacy operating day. Individual UPI micro-transactions across all shifts are held in transit clearing and credited to your bank account as a single consolidated entry at day-end.
               </p>
             </div>
           )}
@@ -319,11 +344,11 @@ export const BankTransactionDetailsDialog = ({
               </div>
               <div className="space-y-1">
                 <div className="text-sm font-bold text-text">
-                  {formatDate(transactionDate)}
+                  {formatDate(effectiveTimestamp)}
                 </div>
                 <div className="text-xs text-text-muted flex items-center gap-1 font-mono">
                   <Clock className="size-3" />
-                  {formatTime(transactionDate)}
+                  {formatTime(effectiveTimestamp)}
                 </div>
               </div>
             </div>

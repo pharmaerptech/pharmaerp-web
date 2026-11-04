@@ -51,6 +51,9 @@ import bankMasterReducer from "@/features/bank-master/store/bankMasterSlice";
 import marketplaceStoreReducer from "@/features/marketplace/stores/store/marketplaceStoreSlice";
 import marketplaceProductReducer from "@/features/marketplace/products/store/marketplaceProductSlice";
 
+// Sales
+import creditNoteReducer from '@/features/sales/credit-notes/store/creditNoteSlice';
+
 // Operations
 import shiftReducer from "@/features/operations/shifts/store/shiftSlice";
 import dayClosingReducer from "@/features/operations/day-closings/store/dayClosingSlice";
@@ -121,6 +124,9 @@ const appReducer = combineReducers({
   // Marketplace
   marketplaceStore: marketplaceStoreReducer,
   marketplaceProduct: marketplaceProductReducer,
+
+  // Sales
+  creditNote: creditNoteReducer,
 
   // Operations
   shift: shiftReducer,

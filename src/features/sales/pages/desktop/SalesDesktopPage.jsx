@@ -72,6 +72,7 @@ import {
 } from "../../components";
 import { useHoldBills } from "../../hooks/useHoldBills";
 import OpenBusinessDayDialog from "@/features/operations/business-days/components/OpenBusinessDayDialog";
+import { getOpenBusinessDay } from "@/features/operations/business-days/store/businessDayThunk";
 import { CreateShiftDialog } from "@/features/operations/shifts/components/CreateShiftDialog";
 import { QuickCreateDoctorModal } from "@/features/doctors/components/QuickCreateDoctorModal";
 
@@ -327,7 +328,35 @@ export const SalesDesktopPage = () => {
     }
     return null;
   });
+  const [defaultWalkInCustomer, setDefaultWalkInCustomer] = useState(null);
   const [b2bPartiesFromBackend, setB2bPartiesFromBackend] = useState([]);
+
+  // Auto-fetch singleton Walk-in Customer for counter POS sales
+  useEffect(() => {
+    let isMounted = true;
+    customerService
+      .getWalkInCustomer()
+      .then((res) => {
+        if (!isMounted) return;
+        const wCust = res.data?.data || res.data;
+        if (wCust) {
+          const mapped = {
+            ...wCust,
+            id: wCust._id || wCust.id,
+            name: wCust.name || "Walk-in Customer",
+            mobile: wCust.mobile || wCust.phone || "",
+            isWalkIn: true,
+          };
+          setDefaultWalkInCustomer(mapped);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch default Walk-in Customer:", err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const [isQuickCreateCustomerModalOpen, setIsQuickCreateCustomerModalOpen] = useState(false);
   const [quickCreateCustomerName, setQuickCreateCustomerName] = useState("");
@@ -396,7 +425,7 @@ export const SalesDesktopPage = () => {
   const { currentBranch } = useBranch();
   const { currentCompany } = useCompany();
   const branchId = currentBranch?._id || currentBranch?.id || null;
-  const { activeShift, status: shiftStatus } = useActiveShift(branchId);
+  const { activeShift, status: shiftStatus, refetch: refetchActiveShift } = useActiveShift(branchId);
   const navigate = useNavigate();
 
   // ── Route-based Invoice Hydration (Edit Invoice Mode & Refresh Support) ──
@@ -541,8 +570,28 @@ export const SalesDesktopPage = () => {
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
   const dispatch = useDispatch();
 
-  const handleCloseBusinessDayModal = () => setIsBusinessDayModalOpen(false);
-  const handleCloseShiftModal = () => setIsShiftModalOpen(false);
+  useEffect(() => {
+    if (branchId) {
+      dispatch(getOpenBusinessDay(branchId));
+    }
+  }, [branchId, dispatch]);
+
+  const handleCloseBusinessDayModal = () => {
+    setIsBusinessDayModalOpen(false);
+    if (branchId) {
+      dispatch(getOpenBusinessDay(branchId));
+    }
+  };
+
+  const handleCloseShiftModal = () => {
+    setIsShiftModalOpen(false);
+    if (typeof refetchActiveShift === "function") {
+      refetchActiveShift();
+    }
+    if (branchId) {
+      dispatch(getOpenBusinessDay(branchId));
+    }
+  };
 
   const getLocalDateString = (dateObj) => {
     const d = dateObj ? new Date(dateObj) : new Date();
@@ -625,10 +674,13 @@ export const SalesDesktopPage = () => {
       setTimeout(() => setToastMessage(null), 3000);
       return;
     }
-    if (billingMode === "B2C" && (!selectedB2cCustomer || !selectedB2cCustomer.name || selectedB2cCustomer.name.trim() === "")) {
-      setToastMessage("Please enter a customer name before creating the bill.");
-      setTimeout(() => setToastMessage(null), 3000);
-      return;
+    if (billingMode === "B2C") {
+      let currentCustomer = selectedB2cCustomer;
+      if (!currentCustomer || (!currentCustomer.name && !customerName)) {
+        setToastMessage("Please select or enter a customer name (or choose Walk-in) before creating the bill.");
+        setTimeout(() => setToastMessage(null), 3000);
+        return;
+      }
     }
     if (billingMode === "B2B" && (!selectedB2bParty || !selectedB2bParty.name || selectedB2bParty.name.trim() === "")) {
       setToastMessage("Please select a B2B party before creating the bill.");
@@ -1201,6 +1253,12 @@ export const SalesDesktopPage = () => {
 
   const handleClearCart = () => {
     setCart([]);
+    if (billingMode === "B2C") {
+      setSelectedB2cCustomer(null);
+      setCustomerName("");
+      setCustomerPhone("");
+      customerSearchBarRef.current?.clear?.();
+    }
   };
 
   // Line item amount calculation
@@ -1250,16 +1308,22 @@ export const SalesDesktopPage = () => {
         null;
     }
 
-    // Fallback: ONLY if NOT in edit mode and no customer explicitly selected (e.g. walk-in B2C), fetch or use first customer from backend
+    // Fallback: ONLY if NOT in edit mode and no customer explicitly selected (e.g. walk-in B2C), fetch or use walk-in customer from backend
     if (!isEditMode && (!targetCustomerId || targetCustomerId === "legacy")) {
       try {
-        const cRes = await customerService.getCustomers({ limit: 1 });
-        const cList = cRes.data?.data?.customers || cRes.data?.customers || cRes.data?.data || [];
-        if (cList.length > 0) {
-          targetCustomerId = cList[0]._id || cList[0].id;
+        const cRes = await customerService.getWalkInCustomer();
+        const walkIn = cRes.data?.data || cRes.data;
+        if (walkIn?._id || walkIn?.id) {
+          targetCustomerId = walkIn._id || walkIn.id;
+        } else {
+          const fallbackRes = await customerService.getCustomers({ limit: 1 });
+          const cList = fallbackRes.data?.data?.customers || fallbackRes.data?.customers || fallbackRes.data?.data || [];
+          if (cList.length > 0) {
+            targetCustomerId = cList[0]._id || cList[0].id;
+          }
         }
       } catch (cErr) {
-        console.warn("Could not fetch fallback customer for sale:", cErr);
+        console.warn("Could not fetch fallback walk-in customer for sale:", cErr);
       }
     }
 
@@ -1342,23 +1406,15 @@ export const SalesDesktopPage = () => {
     setIsReceiptOpen(true);
     setCart([]);
     setSelectedB2cCustomer(null);
-    setSelectedB2bParty(null);
     setCustomerName("");
     setCustomerPhone("");
+    setSelectedB2bParty(null);
     setDoctorName("");
     setSelectedDoctor(null);
     setShowCustomerHistory(false);
     setIsReturnInvoice(false);
     customerSearchBarRef.current?.clear?.();
     b2bCustomerSearchBarRef.current?.clear?.();
-    setToastMessage(
-      isEditMode
-        ? `✅ ${billingMode} Invoice ${actualInvoiceNo} updated successfully.`
-        : (isReturnInvoice || saleData.isReturn)
-        ? `✅ ${billingMode} Return Memo ${actualInvoiceNo} recorded & refunded successfully.`
-        : `✅ ${billingMode} Invoice ${actualInvoiceNo} created & saved in backend.`
-    );
-    setTimeout(() => setToastMessage(null), 4000);
   };
 
   if (isLoadingInvoice) {
@@ -1388,7 +1444,7 @@ export const SalesDesktopPage = () => {
     );
   }
 
-  if (shiftStatus === "loading" && !activeShift) {
+  if ((shiftStatus === "loading" || getOpenBusinessDayStatus === "loading") && !activeShift) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] space-y-4 p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -1398,7 +1454,9 @@ export const SalesDesktopPage = () => {
   }
 
   if (!activeShift) {
-    const isDayOpen = Boolean(openBusinessDay);
+    const isDayOpen = Boolean(
+      openBusinessDay && String(openBusinessDay.status || "").toLowerCase() === "open"
+    );
 
     return (
       <div className="relative min-h-[calc(100vh-80px)] w-full flex items-center justify-center p-6 bg-bg overflow-hidden font-sans">
@@ -1629,12 +1687,13 @@ export const SalesDesktopPage = () => {
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
 
           {/* Customer Strip */}
-          <div className="relative z-10 shrink-0 border-b border-border bg-surface">
+          <div className="relative z-25 shrink-0 border-b border-border bg-surface">
             {billingMode === "B2C" ? (
               <div className="px-4 pt-3.5 pb-2.5">
                 <SalesCustomerDoctorInfo
                   customerSearchBarRef={customerSearchBarRef}
                   selectedCustomer={selectedB2cCustomer}
+                  walkInCustomer={defaultWalkInCustomer}
                   onSelectCustomer={setSelectedB2cCustomer}
                   customerName={customerName}
                   onChangeCustomerName={setCustomerName}
@@ -1756,7 +1815,7 @@ export const SalesDesktopPage = () => {
           </div>
 
           {/* Product Search Bar */}
-          <div className="shrink-0 px-4 py-2 border-b border-border bg-surface-alt/30 flex items-center justify-between gap-4">
+          <div className="relative z-20 shrink-0 px-4 py-2 border-b border-border bg-surface-alt/30 flex items-center justify-between gap-4">
             <div className="w-full max-w-[540px]">
               <WorkspaceProductSearchBar
                 ref={searchBarRef}

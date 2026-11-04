@@ -15,3 +15,5 @@ export * from "./ActiveCompanyGuard";
 
 export { default as ActiveBranchGuard } from "./ActiveBranchGuard";
 export * from "./ActiveBranchGuard";
+export { default as PipelineLevelGuard } from "./PipelineLevelGuard";
+export * from "./PipelineLevelGuard";

@@ -65,7 +65,7 @@ const useBranch = () => {
   );
 
   const fetchCompanyBranches = useCallback(
-    () => dispatch(getCompanyBranches()).unwrap(),
+    (targetCompanyId) => dispatch(getCompanyBranches(targetCompanyId)).unwrap(),
     [dispatch],
   );
 
@@ -108,12 +108,25 @@ const useBranch = () => {
     dispatch(clearBranchMessage());
   }, [dispatch]);
 
-  const saveCurrentBranch = useCallback((payload) => {
-    dispatch(setCurrentBranch(payload));
-  }, [dispatch]);
+    const saveCurrentBranch = useCallback(
+    (payload) => {
+      dispatch(setCurrentBranch(payload));
+      try {
+        if (payload?._id) {
+          localStorage.setItem("pahuch_active_branch_id", payload._id);
+        } else {
+          localStorage.removeItem("pahuch_active_branch_id");
+        }
+      } catch {}
+    },
+    [dispatch],
+  );
 
   const removeCurrentBranch = useCallback(() => {
     dispatch(clearCurrentBranch());
+    try {
+      localStorage.removeItem("pahuch_active_branch_id");
+    } catch {}
   }, [dispatch]);
 
   const removeBranches = useCallback(() => {

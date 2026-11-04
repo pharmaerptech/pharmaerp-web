@@ -8,6 +8,8 @@ import { Search, ChevronRight, X, Lock } from "lucide-react";
 import { usePermission, FOCUS_SEARCH_EVENT } from "@/hooks";
 import { ROUTES } from "@/constants";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
+import { useWorkMode } from "@/contexts";
+import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
 import { uiToast } from "@/components/ui";
 import { getAccessibleSearchCommands } from "./accessibleSearchCommands";
 
@@ -15,6 +17,8 @@ const HeaderSearchBar = ({ className = "" }) => {
   const navigate = useNavigate();
   const { can, canAny, isOwner } = usePermission();
   const { isSetupComplete, companyCompleted } = useSetupStatus();
+  const { workMode } = useWorkMode();
+  const { currentLevel } = useNavigationPipeline();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
@@ -30,10 +34,10 @@ const HeaderSearchBar = ({ className = "" }) => {
   const shortcutText = isMac ? "⌘ K" : "Ctrl + K";
 
 
-  // Compute all commands the current user is permitted to see
+  // Compute all commands the current user is permitted to see, scoped by currentLevel
   const accessibleCommands = useMemo(() => {
-    return getAccessibleSearchCommands(can, canAny, isOwner);
-  }, [can, canAny, isOwner]);
+    return getAccessibleSearchCommands(can, canAny, isOwner, workMode, currentLevel);
+  }, [can, canAny, isOwner, workMode, currentLevel]);
 
   // Tag commands with setup locked status
   const commandsWithLockStatus = useMemo(() => {
@@ -190,7 +194,7 @@ const HeaderSearchBar = ({ className = "" }) => {
   return (
     <div
       ref={containerRef}
-      className={`group relative flex w-full max-w-[460px] lg:max-w-[540px] items-center ${className}`}
+      className={`group relative flex w-full max-w-[460px] lg:max-w-[540px] items-center ${searchFocused ? "z-[60]" : ""} ${className}`}
     >
       {/* Search Input styled with design system tokens */}
       <div className="relative flex w-full items-center">
@@ -238,7 +242,7 @@ const HeaderSearchBar = ({ className = "" }) => {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 4 }}
             transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
-            className="absolute left-0 right-0 top-[110%] z-50 overflow-hidden rounded-[14px] border border-border bg-surface p-2 shadow-[var(--app-shadow-xl)]"
+            className="absolute right-0 w-full sm:min-w-[420px] max-w-[calc(100vw-2rem)] top-[110%] z-[60] overflow-hidden rounded-[14px] border border-border bg-surface p-2 shadow-[var(--app-shadow-xl)]"
           >
             <div className="flex items-center justify-between px-2 py-1 text-[10.5px] font-bold uppercase tracking-wider text-text-muted/70">
               <span>Quick Navigation & Commands</span>

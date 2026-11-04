@@ -9,6 +9,7 @@ import { DoctorSearchBar } from "@/features/doctors/components/DoctorSearchBar";
 export const SalesCustomerDoctorInfo = ({
   customerSearchBarRef,
   selectedCustomer,
+  walkInCustomer,
   onSelectCustomer,
   customerName,
   onChangeCustomerName,
@@ -31,16 +32,19 @@ export const SalesCustomerDoctorInfo = ({
       {/* 1. Patient / Customer Name (search) */}
       <div className="flex-1 min-w-[220px] space-y-0.5">
         <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">
-          Patient / Customer *
+          Patient / Customer
         </span>
         <B2cCustomerSearchBar
           ref={activeRef}
           value={customerName}
           selectedCustomer={selectedCustomer}
+          walkInCustomer={walkInCustomer}
           onSelectCustomer={(cust) => {
             onSelectCustomer(cust);
             if (cust?.name) onChangeCustomerName(cust.name);
-            if (cust?.phone) onChangeCustomerPhone(cust.phone);
+            else onChangeCustomerName("");
+            if (cust?.phone || cust?.mobile) onChangeCustomerPhone(cust.phone || cust.mobile);
+            else onChangeCustomerPhone("");
           }}
           onInputChange={(val) => {
             if (selectedCustomer) onSelectCustomer(null);
@@ -48,7 +52,7 @@ export const SalesCustomerDoctorInfo = ({
           }}
           showAddNewAction={true}
           onAddNewCustomer={onAddNewCustomer}
-          placeholder="Search name or type new..."
+          placeholder="Search customer or select Walk-in..."
           size="sm"
         />
       </div>

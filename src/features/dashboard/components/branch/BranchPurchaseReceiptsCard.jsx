@@ -1,20 +1,47 @@
 // src/features/dashboard/components/branch/BranchPurchaseReceiptsCard.jsx
 
-import { ArrowRight } from "lucide-react";
+import React from "react";
+import { ArrowRight, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { UICard } from "@/components/ui";
+import { UICard, UIBadge, UIEmptyState, UISkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { ROUTES } from "@/constants";
 
-export const BranchPurchaseReceiptsCard = ({ receipts = [], className }) => {
+export const BranchPurchaseReceiptsCard = ({ receipts = [], className, isLoading = false }) => {
   const navigate = useNavigate();
 
-  const displayReceipts = receipts.length > 0 ? receipts : [
-    { id: "1", supplier: "Sun Pharma", invoiceNo: "SP-10283", items: 24, amount: 124580, status: "Received" },
-    { id: "2", supplier: "Mankind Pharma", invoiceNo: "MP-55821", items: 15, amount: 84320, status: "Received" },
-    { id: "3", supplier: "Cipla Distributors", invoiceNo: "CP-77810", items: 32, amount: 214500, status: "Pending" },
-    { id: "4", supplier: "Abbott Healthcare", invoiceNo: "AB-44128", items: 18, amount: 96420, status: "Received" },
-    { id: "5", supplier: "LifeCare Distributors", invoiceNo: "LC-99341", items: 28, amount: 152300, status: "Received" },
-  ];
+  if (isLoading) {
+    return (
+      <UICard
+        variant="default"
+        className={cn("p-4 rounded-xl border border-border bg-surface shadow-2xs", className)}
+      >
+        <div className="flex items-center justify-between pb-2 border-b border-border/60">
+          <UISkeleton className="h-4 w-40" />
+          <UISkeleton className="h-4 w-16" />
+        </div>
+        <div className="py-3 space-y-2.5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <UISkeleton className="h-3.5 w-24" />
+              <UISkeleton className="h-3.5 w-16" />
+              <UISkeleton className="h-3.5 w-16" />
+            </div>
+          ))}
+        </div>
+      </UICard>
+    );
+  }
+
+  const displayReceipts = Array.isArray(receipts) ? receipts : [];
+
+  const getStatusColor = (status) => {
+    const s = String(status || "").toLowerCase();
+    if (s.includes("received") || s.includes("confirmed")) return "success";
+    if (s.includes("draft")) return "secondary";
+    if (s.includes("pending")) return "warning";
+    return "primary";
+  };
 
   return (
     <UICard
@@ -32,7 +59,7 @@ export const BranchPurchaseReceiptsCard = ({ receipts = [], className }) => {
 
         <button
           type="button"
-          onClick={() => navigate("/purchases")}
+          onClick={() => navigate(ROUTES.PURCHASES || "/purchases")}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
           <span>View All</span>
@@ -40,53 +67,60 @@ export const BranchPurchaseReceiptsCard = ({ receipts = [], className }) => {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto my-auto py-1">
-        <table className="w-full text-left border-collapse text-[11px]">
-          <thead>
-            <tr className="border-b border-border/60 text-text-muted font-medium">
-              <th className="py-1.5 px-1 w-6">#</th>
-              <th className="py-1.5 px-2">Supplier</th>
-              <th className="py-1.5 px-2">Invoice No.</th>
-              <th className="py-1.5 px-2 text-center">Items</th>
-              <th className="py-1.5 px-2 text-right">Amount</th>
-              <th className="py-1.5 px-2 text-center">Status</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/40">
-            {displayReceipts.slice(0, 5).map((item, idx) => {
-              const isReceived = item.status === "Received";
-
-              return (
-                <tr key={item.id || idx} className="hover:bg-surface-alt/50 transition-colors">
-                  <td className="py-2 px-1 text-text-muted font-mono">{idx + 1}</td>
-                  <td className="py-2 px-2 font-medium text-text truncate max-w-[110px]">
-                    {item.supplier}
-                  </td>
-                  <td className="py-2 px-2 text-text-muted font-mono">{item.invoiceNo}</td>
-                  <td className="py-2 px-2 text-center font-mono tabular-nums text-text-muted">
-                    {item.items}
-                  </td>
-                  <td className="py-2 px-2 text-right font-bold font-mono text-text tabular-nums">
-                    ₹ {Number(item.amount).toLocaleString()}
-                  </td>
-                  <td className="py-2 px-2 text-center">
-                    <span
-                      className={cn(
-                        "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold",
-                        isReceived
-                          ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50"
-                          : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200/50"
-                      )}
-                    >
-                      {item.status}
-                    </span>
-                  </td>
+      {/* Content */}
+      <div className="my-auto py-1 min-w-0">
+        {displayReceipts.length === 0 ? (
+          <div className="py-6">
+            <UIEmptyState
+              icon={<Package className="size-8 text-text-muted" />}
+              title="No Inward Purchases Today"
+              description="Purchase bills inwarded at this branch today will appear here."
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr className="border-b border-border/60 text-text-muted font-medium">
+                  <th className="py-1.5 px-1 w-6">#</th>
+                  <th className="py-1.5 px-2">Supplier</th>
+                  <th className="py-1.5 px-2">Bill / Inv No.</th>
+                  <th className="py-1.5 px-2 text-center">Items</th>
+                  <th className="py-1.5 px-2 text-right">Amount</th>
+                  <th className="py-1.5 px-2 text-center">Status</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody className="divide-y divide-border/40">
+                {displayReceipts.slice(0, 5).map((item, idx) => (
+                  <tr key={item.id || idx} className="hover:bg-surface-alt/50 transition-colors">
+                    <td className="py-2 px-1 text-text-muted font-mono">{idx + 1}</td>
+                    <td className="py-2 px-2 font-medium text-text truncate max-w-[110px]" title={item.supplier}>
+                      {item.supplier}
+                    </td>
+                    <td className="py-2 px-2 text-text-muted font-mono text-[10px] truncate max-w-[90px]">
+                      {item.invoiceNo}
+                    </td>
+                    <td className="py-2 px-2 text-center font-mono tabular-nums text-text-muted">
+                      {item.items}
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold font-mono text-text tabular-nums whitespace-nowrap">
+                      ₹ {Number(item.amount || 0).toLocaleString("en-IN")}
+                    </td>
+                    <td className="py-2 px-2 text-center whitespace-nowrap">
+                      <UIBadge
+                        color={getStatusColor(item.status)}
+                        size="xs"
+                        variant="soft"
+                        label={item.status}
+                        className="shrink-0"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </UICard>
   );

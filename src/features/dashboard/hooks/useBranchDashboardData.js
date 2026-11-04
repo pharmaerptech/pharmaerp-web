@@ -8,21 +8,33 @@ export const useBranchDashboardData = (selectedDate = null) => {
   const currentWorkspace = useSelector((state) => state.workspace?.currentWorkspace);
   const currentCompany = useSelector((state) => state.company?.currentCompany);
   const currentBranch = useSelector((state) => state.branch?.currentBranch);
+  const user = useSelector((state) => state.user?.user);
 
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const workspaceId = currentWorkspace?._id;
-  const companyId = currentCompany?._id;
-  const branchId = currentBranch?._id;
+  const workspaceId =
+    currentWorkspace?._id ||
+    currentWorkspace?.id ||
+    user?.activeContext?.workspaceId;
+  const companyId =
+    currentCompany?._id ||
+    currentCompany?.id ||
+    user?.activeContext?.companyId;
+  const branchId =
+    currentBranch?._id ||
+    currentBranch?.id ||
+    user?.activeContext?.branchId;
 
   const fetchBranchDashboard = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
       const res = await dashboardService.getBranchDashboard({
-        date: selectedDate,
+        branchId: branchId || undefined,
+        companyId: companyId || undefined,
+        date: selectedDate && selectedDate !== "Today" ? selectedDate : undefined,
       });
       setData(res);
     } catch (err) {
@@ -30,15 +42,19 @@ export const useBranchDashboardData = (selectedDate = null) => {
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate]);
+  }, [branchId, companyId, selectedDate]);
 
   useEffect(() => {
     let active = true;
 
     const loadData = async () => {
       try {
+        setIsLoading(true);
+        setError(null);
         const res = await dashboardService.getBranchDashboard({
-          date: selectedDate,
+          branchId: branchId || undefined,
+          companyId: companyId || undefined,
+          date: selectedDate && selectedDate !== "Today" ? selectedDate : undefined,
         });
         if (active) {
           setData(res);
@@ -64,9 +80,6 @@ export const useBranchDashboardData = (selectedDate = null) => {
     isLoading,
     error,
     refresh: fetchBranchDashboard,
-    currentWorkspace,
-    currentCompany,
-    currentBranch,
   };
 };
 

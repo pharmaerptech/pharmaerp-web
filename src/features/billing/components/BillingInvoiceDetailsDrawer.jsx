@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+﻿import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
@@ -27,6 +27,7 @@ import {
   Check,
   Landmark,
   RotateCcw,
+  Wallet,
 } from "lucide-react";
 import { UIModal, UIButton, UIBadge } from "@/components/ui";
 import { PermissionGate } from "@/components/common/PermissionGate";
@@ -250,10 +251,15 @@ export const BillingInvoiceDetailsDrawer = ({
         items: [],
         cashTotal: 0,
         upiTotal: 0,
+        creditNoteTotal: 0,
+        advanceTotal: 0,
+        creditTotal: 0,
+        cardTotal: 0,
         otherTotal: 0,
         cashDenoms: [],
         returnedDenoms: [],
         upiDetails: [],
+        creditNoteAllocations: [],
         isSplit: false,
         cashTendered: 0,
         changeDue: 0,
@@ -265,20 +271,24 @@ export const BillingInvoiceDetailsDrawer = ({
     const items = Array.isArray(invoice.items) ? invoice.items : [];
     const paymentMethodUpper = String(invoice.paymentMode || invoice.paymentMethod || "").trim().toUpperCase();
     const rawPayments = Array.isArray(invoice.payments) ? invoice.payments : [];
-    const isSplit = paymentMethodUpper === "SPLIT" || rawPayments.length > 1;
 
     let cashTotal = 0;
     let upiTotal = 0;
+    let creditNoteTotal = Number(invoice.creditNoteTotal || 0);
+    let advanceTotal = 0;
+    let creditTotal = 0;
+    let cardTotal = 0;
     let otherTotal = 0;
     let cashDenoms = normalizeDenominations(invoice.denominations);
     let returnedDenoms = normalizeDenominations(invoice.returnedDenominations);
     const upiDetails = [];
+    let creditNoteAllocations = Array.isArray(invoice.creditNoteAllocations) ? invoice.creditNoteAllocations : [];
 
     const invoiceQrAccount = resolveUpiAccount(invoice);
 
     if (rawPayments.length > 0) {
       for (const p of rawPayments) {
-        const type = String(p.paymentType || p.paymentMode || p.type || "").toUpperCase();
+        const type = String(p.paymentType || p.paymentMode || p.type || "").toUpperCase().replace(/[\s_-]/g, "");
         const amt = Number(p.amount || 0);
         if (type.includes("UPI") || type.includes("QR")) {
           upiTotal += amt;
@@ -296,11 +306,22 @@ export const BillingInvoiceDetailsDrawer = ({
           if (p.returnedDenominations && p.returnedDenominations.length > 0 && returnedDenoms.length === 0) {
             returnedDenoms = normalizeDenominations(p.returnedDenominations);
           }
+        } else if (type.includes("CREDITNOTE")) {
+          creditNoteTotal += amt;
+          if (Array.isArray(p.creditNoteAllocations) && p.creditNoteAllocations.length > 0) {
+            creditNoteAllocations = p.creditNoteAllocations;
+          }
+        } else if (type.includes("ADVANCE")) {
+          advanceTotal += amt;
+        } else if (type.includes("CREDIT") || type.includes("UDHAR")) {
+          creditTotal += amt;
+        } else if (type.includes("CARD")) {
+          cardTotal += amt;
         } else {
           otherTotal += amt;
         }
       }
-    } else if (isSplit) {
+    } else if (paymentMethodUpper === "SPLIT") {
       const grand = Number(invoice.amount || 0);
       const tendered = Number(invoice.cashTendered || 0);
       if (tendered > 0) {
@@ -321,6 +342,16 @@ export const BillingInvoiceDetailsDrawer = ({
         ref: invoice.txnRefNo || invoice.referenceNo || null,
         account: invoiceQrAccount,
       });
+    } else if (paymentMethodUpper === "CASH") {
+      cashTotal = Number(invoice.amount || 0);
+    } else if (paymentMethodUpper.replace(/[\s_-]/g, "") === "CREDITNOTE") {
+      creditNoteTotal = Number(invoice.amount || 0);
+    } else if (paymentMethodUpper === "ADVANCE") {
+      advanceTotal = Number(invoice.amount || 0);
+    } else if (paymentMethodUpper === "CREDIT") {
+      creditTotal = Number(invoice.amount || 0);
+    } else if (paymentMethodUpper === "CARD") {
+      cardTotal = Number(invoice.amount || 0);
     } else {
       otherTotal = Number(invoice.amount || 0);
     }
@@ -333,7 +364,10 @@ export const BillingInvoiceDetailsDrawer = ({
       });
     }
 
-    const cashTendered = Number(invoice.cashTendered || invoice.paidAmount || cashTotal);
+    const activeModes = [cashTotal, upiTotal, creditNoteTotal, advanceTotal, creditTotal, cardTotal, otherTotal].filter(a => a > 0);
+    const isSplit = paymentMethodUpper === "SPLIT" || rawPayments.length > 1 || activeModes.length > 1;
+
+    const cashTendered = Number(invoice.cashTendered || invoice.paidAmount || (cashTotal > 0 ? cashTotal : 0));
     const changeDue = Number(invoice.changeDue || 0);
 
     return {
@@ -341,10 +375,15 @@ export const BillingInvoiceDetailsDrawer = ({
       items,
       cashTotal,
       upiTotal,
+      creditNoteTotal,
+      advanceTotal,
+      creditTotal,
+      cardTotal,
       otherTotal,
       cashDenoms,
       returnedDenoms,
       upiDetails,
+      creditNoteAllocations,
       isSplit,
       cashTendered,
       changeDue,
@@ -357,10 +396,15 @@ export const BillingInvoiceDetailsDrawer = ({
     items,
     cashTotal,
     upiTotal,
+    creditNoteTotal,
+    advanceTotal,
+    creditTotal,
+    cardTotal,
     otherTotal,
     cashDenoms,
     returnedDenoms,
     upiDetails,
+    creditNoteAllocations,
     isSplit,
     cashTendered,
     changeDue,
@@ -697,130 +741,230 @@ export const BillingInvoiceDetailsDrawer = ({
               <div className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Cash Portion Card */}
-                  <div className="p-3 rounded-xl bg-surface border border-emerald-500/20 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                        <Banknote className="size-4" /> Cash Portion
-                      </div>
-                      <span className="font-mono font-bold text-sm text-text tabular-nums">
-                        {formatCurrency(cashTotal)}
-                      </span>
-                    </div>
-
-                    {/* Cash Denomination List */}
-                    {cashDenoms.length > 0 ? (
-                      <div className="pt-2 border-t border-border/60 space-y-1.5">
-                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
-                          Cash Denominations Captured
+                  {cashTotal > 0 && (
+                    <div className="p-3 rounded-xl bg-surface border border-emerald-500/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                          <Banknote className="size-4" /> Cash Portion
+                        </div>
+                        <span className="font-mono font-bold text-sm text-text tabular-nums">
+                          {formatCurrency(cashTotal)}
                         </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {cashDenoms.map((d, i) => {
-                            const config = DENOM_CONFIG[d.note] || { label: `₹${d.note}`, color: "text-text bg-surface-alt border-border" };
-                            return (
+                      </div>
+
+                      {/* Cash Denomination List */}
+                      {cashDenoms.length > 0 ? (
+                        <div className="pt-2 border-t border-border/60 space-y-1.5">
+                          <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                            Cash Denominations Captured
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {cashDenoms.map((d, i) => {
+                              const config = DENOM_CONFIG[d.note] || { label: `₹${d.note}`, color: "text-text bg-surface-alt border-border" };
+                              return (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[11px] font-mono font-medium shadow-2xs",
+                                    config.color
+                                  )}
+                                >
+                                  <span className="font-bold">{config.label}</span>
+                                  <span className="text-text-muted">×</span>
+                                  <span className="font-bold text-text">{d.count}</span>
+                                  <span className="text-text-muted font-sans">=</span>
+                                  <span className="font-bold text-text">₹{d.total.toLocaleString("en-IN")}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : cashTendered > 0 ? (
+                        <div className="text-[11px] text-text-muted font-mono pt-1">
+                          Tendered: {formatCurrency(cashTendered)}
+                          {changeDue > 0 && <span className="ml-2 text-amber-600 font-semibold">• Change: {formatCurrency(changeDue)}</span>}
+                        </div>
+                      ) : null}
+
+                      {/* Returned Denominations if any */}
+                      {returnedDenoms.length > 0 && (
+                        <div className="pt-1.5 border-t border-border/60">
+                          <span className="text-[9.5px] font-bold text-amber-600 uppercase tracking-wider block mb-1">
+                            Change Returned Denominations
+                          </span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {returnedDenoms.map((d, i) => (
                               <div
                                 key={i}
-                                className={cn(
-                                  "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[11px] font-mono font-medium shadow-2xs",
-                                  config.color
-                                )}
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10.5px] font-mono"
                               >
-                                <span className="font-bold">{config.label}</span>
-                                <span className="text-text-muted">×</span>
-                                <span className="font-bold text-text">{d.count}</span>
-                                <span className="text-text-muted font-sans">=</span>
-                                <span className="font-bold text-text">₹{d.total.toLocaleString("en-IN")}</span>
+                                <span>₹{d.note} × {d.count} = ₹{d.total}</span>
                               </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : cashTendered > 0 ? (
-                      <div className="text-[11px] text-text-muted font-mono pt-1">
-                        Tendered: {formatCurrency(cashTendered)}
-                        {changeDue > 0 && <span className="ml-2 text-amber-600 font-semibold">• Change: {formatCurrency(changeDue)}</span>}
-                      </div>
-                    ) : null}
-
-                    {/* Returned Denominations if any */}
-                    {returnedDenoms.length > 0 && (
-                      <div className="pt-1.5 border-t border-border/60">
-                        <span className="text-[9.5px] font-bold text-amber-600 uppercase tracking-wider block mb-1">
-                          Change Returned Denominations
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {returnedDenoms.map((d, i) => (
-                            <div
-                              key={i}
-                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-[10.5px] font-mono"
-                            >
-                              <span>₹{d.note} × {d.count} = ₹{d.total}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* UPI Portion Card */}
-                  <div className="p-3 rounded-xl bg-surface border border-sky-500/20 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-sky-600 dark:text-sky-400">
-                        <QrCode className="size-4" /> UPI / QR Portion
-                      </div>
-                      <span className="font-mono font-bold text-sm text-text tabular-nums">
-                        {formatCurrency(upiTotal)}
-                      </span>
-                    </div>
-
-                    <div className="pt-2 border-t border-border/60 space-y-2">
-                      {upiDetails.length > 0 ? (
-                        upiDetails.map((u, i) => {
-                          const acc = u.account;
-                          return (
-                            <div
-                              key={i}
-                              className="p-2.5 rounded-lg bg-surface-alt/70 border border-border/60 space-y-1.5 text-xs"
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <Landmark className="size-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
-                                  <span className="font-semibold text-text truncate">
-                                    {acc?.mainTitle || "UPI Merchant QR"}
-                                  </span>
-                                </div>
-                                {u.amount && u.amount !== upiTotal && (
-                                  <span className="font-mono font-bold text-text shrink-0">
-                                    {formatCurrency(u.amount)}
-                                  </span>
-                                )}
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] font-mono text-text-muted pt-1 border-t border-border/40">
-                                {acc?.upiId ? (
-                                  <div className="truncate">
-                                    UPI ID: <span className="text-text font-medium">{acc.upiId}</span>
-                                  </div>
-                                ) : (
-                                  <div className="truncate text-text-muted">Dynamic QR Scan</div>
-                                )}
-                                {u.ref ? (
-                                  <div className="truncate">
-                                    Txn Ref: <span className="text-text font-bold">{u.ref}</span>
-                                  </div>
-                                ) : (
-                                  <div>Settlement: <span className="text-emerald-600 font-medium">Reconciled</span></div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
-                      ) : (
-                        <div className="text-[11px] text-text-muted font-mono">
-                          Digital UPI reconciliation complete
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
-                  </div>
+                  )}
+
+                  {/* UPI Portion Card */}
+                  {upiTotal > 0 && (
+                    <div className="p-3 rounded-xl bg-surface border border-sky-500/20 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-sky-600 dark:text-sky-400">
+                          <QrCode className="size-4" /> UPI / QR Portion
+                        </div>
+                        <span className="font-mono font-bold text-sm text-text tabular-nums">
+                          {formatCurrency(upiTotal)}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t border-border/60 space-y-2">
+                        {upiDetails.length > 0 ? (
+                          upiDetails.map((u, i) => {
+                            const acc = u.account;
+                            return (
+                              <div
+                                key={i}
+                                className="p-2.5 rounded-lg bg-surface-alt/70 border border-border/60 space-y-1.5 text-xs"
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <Landmark className="size-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+                                    <span className="font-semibold text-text truncate">
+                                      {acc?.mainTitle || "UPI Merchant QR"}
+                                    </span>
+                                  </div>
+                                  {u.amount && u.amount !== upiTotal && (
+                                    <span className="font-mono font-bold text-text shrink-0">
+                                      {formatCurrency(u.amount)}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] font-mono text-text-muted pt-1 border-t border-border/40">
+                                  {acc?.upiId ? (
+                                    <div className="truncate">
+                                      UPI ID: <span className="text-text font-medium">{acc.upiId}</span>
+                                    </div>
+                                  ) : (
+                                    <div className="truncate text-text-muted">Dynamic QR Scan</div>
+                                  )}
+                                  {u.ref ? (
+                                    <div className="truncate">
+                                      Txn Ref: <span className="text-text font-bold">{u.ref}</span>
+                                    </div>
+                                  ) : (
+                                    <div>Settlement: <span className="text-emerald-600 font-medium">Reconciled</span></div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="text-[11px] text-text-muted font-mono">
+                            Digital UPI reconciliation complete
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Credit Note Portion Card */}
+                  {creditNoteTotal > 0 && (
+                    <div className="p-3 rounded-xl bg-surface border border-indigo-500/20 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                          <Receipt className="size-4" /> Credit Note Portion
+                        </div>
+                        <span className="font-mono font-bold text-sm text-text tabular-nums">
+                          {formatCurrency(creditNoteTotal)}
+                        </span>
+                      </div>
+
+                      <div className="pt-2 border-t border-border/60 space-y-1.5">
+                        <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                          Redeemed Credit Notes {creditNoteAllocations.length > 0 ? `(${creditNoteAllocations.length})` : ""}
+                        </span>
+                        {creditNoteAllocations.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {creditNoteAllocations.map((cn, i) => (
+                              <div
+                                key={i}
+                                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-[11px] font-mono font-medium shadow-2xs"
+                              >
+                                <span className="font-bold">{cn.creditNoteNumber || cn.creditNoteNo || `CN #${i + 1}`}</span>
+                                <span className="text-text-muted font-sans">:</span>
+                                <span className="font-bold">{formatCurrency(cn.amountApplied || cn.amount || 0)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-text-muted font-mono">
+                            Redeemed from customer credit note balance
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Customer Advance Portion Card */}
+                  {advanceTotal > 0 && (
+                    <div className="p-3 rounded-xl bg-surface border border-amber-500/20 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                          <Wallet className="size-4" /> Customer Advance Portion
+                        </div>
+                        <span className="font-mono font-bold text-sm text-text tabular-nums">
+                          {formatCurrency(advanceTotal)}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t border-border/60 text-[11px] text-text-muted font-mono">
+                        Adjusted from customer prepaid advance balance
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Credit (Udhar) Portion Card */}
+                  {creditTotal > 0 && (
+                    <div className="p-3 rounded-xl bg-surface border border-rose-500/20 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-rose-600 dark:text-rose-400">
+                          <CreditCard className="size-4" /> Credit (Udhar) Portion
+                        </div>
+                        <span className="font-mono font-bold text-sm text-text tabular-nums">
+                          {formatCurrency(creditTotal)}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t border-border/60 flex items-center justify-between text-[11px]">
+                        <span className="text-text-muted font-mono">
+                          {invoice.creditDueDate
+                            ? `Due: ${new Date(invoice.creditDueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}`
+                            : "Account receivable recorded"}
+                        </span>
+                        <UIBadge variant="soft" color="warning" size="xs">
+                          Pending Receivable
+                        </UIBadge>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Card / Other Portion */}
+                  {(cardTotal > 0 || otherTotal > 0) && (
+                    <div className="p-3 rounded-xl bg-surface border border-border space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-text">
+                          <CreditCard className="size-4 text-primary" /> Card / Other Portion
+                        </div>
+                        <span className="font-mono font-bold text-sm text-text tabular-nums">
+                          {formatCurrency(cardTotal || otherTotal)}
+                        </span>
+                      </div>
+                      <div className="pt-2 border-t border-border/60 text-[11px] text-text-muted font-mono">
+                        Processed via standard electronic payment
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : paymentMethodUpper === "CASH" ? (
@@ -907,7 +1051,7 @@ export const BillingInvoiceDetailsDrawer = ({
                   </div>
                 )}
               </div>
-            ) : paymentMethodUpper === "UPI" || (upiTotal > 0 && cashTotal === 0) ? (
+            ) : paymentMethodUpper === "UPI" || (upiTotal > 0 && cashTotal === 0 && creditNoteTotal === 0 && advanceTotal === 0 && creditTotal === 0) ? (
               /* Pure UPI Settlement with exact Bank / QR Account */
               <div className="p-3.5 rounded-xl bg-surface border border-sky-500/30 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
@@ -997,7 +1141,66 @@ export const BillingInvoiceDetailsDrawer = ({
                   )}
                 </div>
               </div>
-            ) : String(invoice.paymentMode || "").toUpperCase() === "CREDIT" || invoice.creditDueDate ? (
+            ) : paymentMethodUpper.replace(/[\s_-]/g, "") === "CREDITNOTE" || (creditNoteTotal > 0 && cashTotal === 0 && upiTotal === 0 && advanceTotal === 0 && creditTotal === 0) ? (
+              /* Pure Credit Note Settlement Card */
+              <div className="p-3.5 rounded-xl bg-surface border border-indigo-500/30 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold">
+                    <div className="size-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                      <Receipt className="size-4.5 stroke-[2]" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-text">Credit Note Redemption</div>
+                      <span className="text-[10px] font-medium text-text-muted">Settled via customer credit balance</span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] font-bold text-text-muted uppercase">Amount Settled</span>
+                    <p className="font-mono font-bold text-text text-base">
+                      {formatCurrency(invoice.amount || creditNoteTotal)}
+                    </p>
+                  </div>
+                </div>
+                {creditNoteAllocations.length > 0 && (
+                  <div className="pt-2.5 border-t border-border/80">
+                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1.5">
+                      Applied Credit Notes
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {creditNoteAllocations.map((cn, i) => (
+                        <div
+                          key={i}
+                          className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg border border-indigo-500/20 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 text-xs font-mono"
+                        >
+                          <span className="font-bold">{cn.creditNoteNumber || cn.creditNoteNo || `CN #${i + 1}`}</span>
+                          <span>:</span>
+                          <span className="font-bold">{formatCurrency(cn.amountApplied || cn.amount || 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : paymentMethodUpper === "ADVANCE" || (advanceTotal > 0 && cashTotal === 0 && upiTotal === 0 && creditNoteTotal === 0 && creditTotal === 0) ? (
+              /* Pure Customer Advance Settlement Card */
+              <div className="p-3.5 rounded-xl bg-amber-500/[0.08] dark:bg-amber-500/[0.12] border border-amber-500/30 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="size-8 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                    <Wallet className="size-4" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+                      Customer Advance
+                    </span>
+                    <p className="font-bold text-text text-sm">Prepaid Balance Utilized</p>
+                  </div>
+                </div>
+                <div className="font-mono text-right">
+                  <span className="text-[10px] text-text-muted block">Settled Amount</span>
+                  <span className="text-base font-bold text-text">{formatCurrency(invoice.amount || advanceTotal)}</span>
+                </div>
+              </div>
+            ) : String(invoice.paymentMode || "").toUpperCase() === "CREDIT" || invoice.creditDueDate || (creditTotal > 0 && cashTotal === 0 && upiTotal === 0) ? (
               /* Credit Sale Settlement Card */
               <div className="p-3.5 rounded-xl bg-amber-500/[0.08] dark:bg-amber-500/[0.12] border border-amber-500/30 flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2.5">
@@ -1042,7 +1245,6 @@ export const BillingInvoiceDetailsDrawer = ({
               </div>
             )}
           </div>
-
           {/* Purchased Line Items Table */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -1282,3 +1484,6 @@ export const BillingInvoiceDetailsDrawer = ({
 };
 
 export default BillingInvoiceDetailsDrawer;
+
+
+

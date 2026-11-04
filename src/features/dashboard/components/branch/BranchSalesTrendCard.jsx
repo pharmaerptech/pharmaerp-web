@@ -1,31 +1,58 @@
 // src/features/dashboard/components/branch/BranchSalesTrendCard.jsx
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
-import { UICard } from "@/components/ui";
+import { UICard, UISkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-export const BranchSalesTrendCard = ({ salesTrend, className }) => {
-  const [activePoint, setActivePoint] = useState(3); // default index 3 is 2:00 PM as shown in Image 1
+const formatCompactIndian = (val) => {
+  const num = Number(val || 0);
+  if (num >= 10000000) return `₹ ${(num / 10000000).toFixed(1)} Cr`;
+  if (num >= 100000) return `₹ ${(num / 100000).toFixed(1)} L`;
+  if (num >= 1000) return `₹ ${(num / 1000).toFixed(0)} k`;
+  return `₹ ${num}`;
+};
+
+export const BranchSalesTrendCard = ({ salesTrend, className, isLoading = false }) => {
+  const [activePoint, setActivePoint] = useState(null);
+
+  if (isLoading) {
+    return (
+      <UICard
+        variant="default"
+        className={cn("p-4 sm:p-4.5 rounded-xl border border-border bg-surface", className)}
+      >
+        <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+          <UISkeleton className="h-4 w-32" />
+          <UISkeleton className="h-5 w-16" />
+        </div>
+        <div className="pt-4 space-y-3">
+          <UISkeleton className="h-40 w-full" />
+        </div>
+      </UICard>
+    );
+  }
 
   const hourlyData = salesTrend?.hourlyData || [
-    { time: "8 AM", sales: 25000, invoices: 45 },
-    { time: "10 AM", sales: 48000, invoices: 82 },
-    { time: "12 PM", sales: 72000, invoices: 130 },
-    { time: "2 PM", sales: 124580, invoices: 218 },
-    { time: "4 PM", sales: 65000, invoices: 115 },
-    { time: "6 PM", sales: 88000, invoices: 160 },
-    { time: "8 PM", sales: 105000, invoices: 190 },
-    { time: "10 PM", sales: 124580, invoices: 218 },
+    { time: "8 AM", sales: 0, invoices: 0 },
+    { time: "10 AM", sales: 0, invoices: 0 },
+    { time: "12 PM", sales: 0, invoices: 0 },
+    { time: "2 PM", sales: 0, invoices: 0 },
+    { time: "4 PM", sales: 0, invoices: 0 },
+    { time: "6 PM", sales: 0, invoices: 0 },
+    { time: "8 PM", sales: 0, invoices: 0 },
+    { time: "10 PM", sales: 0, invoices: 0 },
   ];
 
-  const maxSales = 200000;
-  const maxInvoices = 250;
+  const highestSales = Math.max(...hourlyData.map((h) => Number(h.sales || 0)), 0);
+  const maxSales = highestSales > 0 ? Math.ceil(highestSales * 1.25) : 10000;
+
+  const highestInvoices = Math.max(...hourlyData.map((h) => Number(h.invoices || 0)), 0);
+  const maxInvoices = highestInvoices > 0 ? Math.ceil(highestInvoices * 1.25) : 10;
 
   // SVG viewBox coordinates
   const width = 500;
   const height = 180;
-  const paddingLeft = 45;
+  const paddingLeft = 52;
   const paddingRight = 20;
   const paddingTop = 25;
   const paddingBottom = 25;
@@ -33,19 +60,28 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  const stepX = chartWidth / (hourlyData.length - 1);
+  const stepX = hourlyData.length > 1 ? chartWidth / (hourlyData.length - 1) : chartWidth;
 
   // Line points string for invoices
   const linePoints = hourlyData
     .map((item, index) => {
       const x = paddingLeft + index * stepX;
-      const y = paddingTop + chartHeight - (item.invoices / maxInvoices) * chartHeight;
+      const invoiceRatio = maxInvoices > 0 ? Number(item.invoices || 0) / maxInvoices : 0;
+      const y = paddingTop + chartHeight - invoiceRatio * chartHeight;
       return `${x},${y}`;
     })
     .join(" ");
 
-  const activeItem = hourlyData[activePoint] || hourlyData[3];
-  const activeX = paddingLeft + activePoint * stepX;
+  const yTicks = [
+    { label: formatCompactIndian(maxSales), val: maxSales },
+    { label: formatCompactIndian(maxSales * 0.75), val: maxSales * 0.75 },
+    { label: formatCompactIndian(maxSales * 0.5), val: maxSales * 0.5 },
+    { label: formatCompactIndian(maxSales * 0.25), val: maxSales * 0.25 },
+    { label: "₹ 0", val: 0 },
+  ];
+
+  const activeItem = activePoint !== null ? hourlyData[activePoint] : null;
+  const activeX = activePoint !== null ? paddingLeft + activePoint * stepX : 0;
 
   return (
     <UICard
@@ -59,19 +95,12 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
       <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-border/60">
         <div>
           <h2 className="text-sm sm:text-base font-bold text-text tracking-tight">
-            Sales Trend
+            Hourly Sales Trend
           </h2>
         </div>
 
-        {/* Timeframe Dropdown */}
-        <div className="relative inline-block">
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-surface-alt/50 text-xs font-medium text-text hover:bg-surface-hover transition-colors cursor-pointer"
-          >
-            <span>Today</span>
-            <ChevronDown className="size-3 text-text-muted" />
-          </button>
+        <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-border bg-surface-alt/60 text-xs font-medium text-text-muted">
+          <span>{salesTrend?.timeframe || "Today"}</span>
         </div>
       </div>
 
@@ -93,17 +122,11 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
           viewBox={`0 0 ${width} ${height}`}
           className="w-full h-auto overflow-visible select-none"
         >
-          {/* Horizontal Gridlines & Y-Axis Labels */}
-          {[
-            { label: "₹ 2.0 L", val: 200000 },
-            { label: "₹ 1.5 L", val: 150000 },
-            { label: "₹ 1.0 L", val: 100000 },
-            { label: "₹ 50 K", val: 50000 },
-            { label: "₹ 0", val: 0 },
-          ].map((grid, idx) => {
+          {/* Horizontal Gridlines & Dynamic Y-Axis Labels */}
+          {yTicks.map((grid, idx) => {
             const y = paddingTop + (idx / 4) * chartHeight;
             return (
-              <g key={grid.label}>
+              <g key={grid.label + idx}>
                 <text
                   x={paddingLeft - 8}
                   y={y + 3.5}
@@ -129,7 +152,8 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
           {hourlyData.map((item, idx) => {
             const barWidth = 14;
             const x = paddingLeft + idx * stepX - barWidth / 2;
-            const barHeight = Math.max(4, (item.sales / maxSales) * chartHeight);
+            const salesNum = Number(item.sales || 0);
+            const barHeight = salesNum > 0 ? Math.max(4, (salesNum / maxSales) * chartHeight) : 0;
             const y = paddingTop + chartHeight - barHeight;
             const isActive = idx === activePoint;
 
@@ -148,6 +172,7 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
                     : "fill-emerald-400/80 hover:fill-emerald-500"
                 )}
                 onMouseEnter={() => setActivePoint(idx)}
+                onMouseLeave={() => setActivePoint(null)}
               />
             );
           })}
@@ -165,7 +190,8 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
           {/* Points for line */}
           {hourlyData.map((item, idx) => {
             const x = paddingLeft + idx * stepX;
-            const y = paddingTop + chartHeight - (item.invoices / maxInvoices) * chartHeight;
+            const invoiceRatio = maxInvoices > 0 ? Number(item.invoices || 0) / maxInvoices : 0;
+            const y = paddingTop + chartHeight - invoiceRatio * chartHeight;
             const isActive = idx === activePoint;
 
             return (
@@ -179,6 +205,7 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
                   isActive ? "fill-blue-600 stroke-white stroke-2" : "fill-blue-500"
                 )}
                 onMouseEnter={() => setActivePoint(idx)}
+                onMouseLeave={() => setActivePoint(null)}
               />
             );
           })}
@@ -200,7 +227,7 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
           })}
         </svg>
 
-        {/* Interactive Floating Tooltip (matching Image 1 at 2:00 PM) */}
+        {/* Interactive Floating Tooltip */}
         {activeItem && (
           <div
             className="absolute pointer-events-none rounded-lg border border-border bg-surface/95 px-2.5 py-1.5 shadow-md backdrop-blur-sm text-[11px] font-sans z-10 transition-all duration-150"
@@ -213,11 +240,11 @@ export const BranchSalesTrendCard = ({ salesTrend, className }) => {
             <div className="font-bold text-text mb-0.5">{activeItem.time}</div>
             <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
               <span className="size-1.5 rounded-full bg-emerald-500" />
-              <span>Sales: ₹{activeItem.sales.toLocaleString()}</span>
+              <span>Sales: ₹ {Number(activeItem.sales || 0).toLocaleString("en-IN")}</span>
             </div>
             <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium">
               <span className="size-1.5 rounded-full bg-blue-500" />
-              <span>Invoices: {activeItem.invoices}</span>
+              <span>Invoices: {activeItem.invoices || 0}</span>
             </div>
           </div>
         )}

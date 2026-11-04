@@ -5,8 +5,9 @@ const branchService = {
     return apiClient.post(ENDPOINTS.BRANCH.CREATE, payload);
   },
 
-  getCompanyBranches() {
-    return apiClient.get(ENDPOINTS.BRANCH.LIST);
+  getCompanyBranches(companyId = null) {
+    const headers = companyId ? { "x-company-id": companyId } : {};
+    return apiClient.get(ENDPOINTS.BRANCH.LIST, { headers });
   },
 
   getWorkspaceBranches() {

@@ -33,6 +33,7 @@ import {
   CheckCircle2,
   Building2,
   Contact,
+  Store,
 } from "lucide-react";
 
 import {
@@ -93,6 +94,7 @@ const getInitials = (name) => {
 
 const CUSTOMER_TYPE_OPTIONS = [
   { label: "All Customer Types", value: "all" },
+  { label: "Walk-in", value: "walk_in" },
   { label: "Retail", value: "retail" },
   { label: "Wholesale", value: "wholesale" },
   { label: "Hospital", value: "hospital" },
@@ -117,6 +119,7 @@ const STATUS_OPTIONS = [
 ];
 
 const SORT_SELECT_OPTIONS = [
+  { label: "Recently Updated", value: "updatedAt-desc" },
   { label: "Name: A to Z", value: "name-asc" },
   { label: "Name: Z to A", value: "name-desc" },
   { label: "Credit Due: High to Low", value: "due-desc" },
@@ -140,6 +143,7 @@ export const CustomersDesktopPage = ({
   handleDeleteCustomer,
   handleReceiveAdvance,
   handleSettleCredit,
+  handleViewCreditNotes,
   handleViewTransactions,
   handleRefresh: propHandleRefresh,
   activeSegment: propActiveSegment,
@@ -155,6 +159,44 @@ export const CustomersDesktopPage = ({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+
+  // Walk-in Customer detection & creation
+  const [hasWalkInCustomer, setHasWalkInCustomer] = useState(true);
+  const [isCreatingWalkIn, setIsCreatingWalkIn] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    customerService
+      .getWalkInCustomer()
+      .then((res) => {
+        if (!isMounted) return;
+        const exists = Boolean(res.data?.data || res.data);
+        setHasWalkInCustomer(exists);
+      })
+      .catch(() => {
+        if (isMounted) setHasWalkInCustomer(false);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshKey]);
+
+  const handleCreateWalkInCustomer = async () => {
+    try {
+      setIsCreatingWalkIn(true);
+      await customerService.ensureWalkInCustomer();
+      setHasWalkInCustomer(true);
+      if (propHandleRefresh) {
+        propHandleRefresh();
+      } else {
+        fetchInitialCustomers();
+      }
+    } catch (err) {
+      console.error("Failed to ensure walk-in customer:", err);
+    } finally {
+      setIsCreatingWalkIn(false);
+    }
+  };
 
   // Global Financial & Count Statistics (independent of pagination)
   const [stats, setStats] = useState({
@@ -184,7 +226,7 @@ export const CustomersDesktopPage = ({
   const [selectedType, setSelectedType] = useState("all");
   const [selectedBalanceType, setSelectedBalanceType] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [sortOption, setSortOption] = useState("name-asc");
+  const [sortOption, setSortOption] = useState("updatedAt-desc");
 
   // Filter Modal Dialog state
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -195,7 +237,7 @@ export const CustomersDesktopPage = ({
     if (selectedType !== "all") count++;
     if (selectedBalanceType !== "all") count++;
     if (selectedStatus !== "all") count++;
-    if (sortOption !== "name-asc") count++;
+    if (sortOption !== "updatedAt-desc") count++;
     return count;
   }, [selectedType, selectedBalanceType, selectedStatus, sortOption]);
 
@@ -260,6 +302,10 @@ export const CustomersDesktopPage = ({
       0,
       Number(c.creditOutstanding ?? c.credit ?? c.creditDue ?? 0),
     );
+    const creditNoteBalance = Math.max(
+      0,
+      Number(c.creditNoteBalance ?? 0),
+    );
     const outstandingAmount = Math.max(
       0,
       Number(c.outstandingAmount ?? creditOutstanding ?? 0),
@@ -288,12 +334,15 @@ export const CustomersDesktopPage = ({
       creditDays,
       advanceBalance,
       creditOutstanding,
+      creditNoteBalance,
       outstandingAmount,
       balanceType,
       city,
       state,
       gstNumber,
       drugLicense,
+      isWalkIn: Boolean(c.isWalkIn || type === "walk_in" || customerCode === "WALK-IN"),
+      isSystemCustomer: Boolean(c.isSystemCustomer),
       createdAt: c.createdAt || null,
       updatedAt: c.updatedAt || null,
       rawCustomer: c,
@@ -322,12 +371,30 @@ export const CustomersDesktopPage = ({
       } else if (customerScope === "b2b") {
         params.customerType = "retail,wholesale";
       } else if (customerScope === "b2c") {
-        params.customerType = "hospital,clinic,corporate,other";
+        params.customerType = "walk_in,hospital,clinic,corporate,other";
+      }
+
+      // Backend sort query mapping
+      if (sortOption === "name-asc") {
+        params.sort = "name";
+      } else if (sortOption === "name-desc") {
+        params.sort = "-name";
+      } else if (sortOption === "due-desc") {
+        params.sort = "-creditOutstanding";
+      } else if (sortOption === "adv-desc") {
+        params.sort = "-advanceBalance";
+      } else if (sortOption === "createdAt-desc") {
+        params.sort = "-createdAt";
+      } else if (sortOption === "createdAt-asc") {
+        params.sort = "createdAt";
+      } else {
+        // Default recently updated
+        params.sort = "-updatedAt";
       }
 
       return params;
     },
-    [debouncedSearch, selectedStatus, selectedType, customerScope],
+    [debouncedSearch, selectedStatus, selectedType, customerScope, sortOption],
   );
 
   // Fetch initial batch (Page 1) or full refresh
@@ -518,7 +585,7 @@ export const CustomersDesktopPage = ({
     setSelectedType("all");
     setSelectedBalanceType("all");
     setSelectedStatus("all");
-    setSortOption("name-asc");
+    setSortOption("updatedAt-desc");
     setCustomerScope("all");
     navigate(ROUTES.CUSTOMERS, { replace: true });
   }, [navigate]);
@@ -553,7 +620,26 @@ export const CustomersDesktopPage = ({
 
     // Sort result
     result.sort((a, b) => {
+      // Priority: Walk-in customer is always first
+      const aIsWalkIn = Boolean(
+        a.isWalkIn ||
+          a.customerType === "walk_in" ||
+          a.customerCode === "WALK-IN",
+      );
+      const bIsWalkIn = Boolean(
+        b.isWalkIn ||
+          b.customerType === "walk_in" ||
+          b.customerCode === "WALK-IN",
+      );
+      if (aIsWalkIn && !bIsWalkIn) return -1;
+      if (!aIsWalkIn && bIsWalkIn) return 1;
+
       switch (sortOption) {
+        case "updatedAt-desc":
+          return (
+            new Date(b.updatedAt || b.createdAt || 0) -
+            new Date(a.updatedAt || a.createdAt || 0)
+          );
         case "name-asc":
           return a.name.localeCompare(b.name);
         case "name-desc":
@@ -567,7 +653,10 @@ export const CustomersDesktopPage = ({
         case "createdAt-asc":
           return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
         default:
-          return 0;
+          return (
+            new Date(b.updatedAt || b.createdAt || 0) -
+            new Date(a.updatedAt || a.createdAt || 0)
+          );
       }
     });
 
@@ -967,6 +1056,22 @@ export const CustomersDesktopPage = ({
             )}
           </PermissionGate>
 
+          {!hasWalkInCustomer && (
+            <PermissionGate permission="customer:create">
+              <UIButton
+                type="button"
+                variant="outline"
+                size="md"
+                startIcon={<Store className="size-3.5 text-emerald-600 dark:text-emerald-400" />}
+                onClick={handleCreateWalkInCustomer}
+                isLoading={isCreatingWalkIn}
+                className="h-10 px-3.5 text-xs font-semibold border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shadow-xs"
+              >
+                Create Walk-in Customer
+              </UIButton>
+            </PermissionGate>
+          )}
+
           <PermissionGate permission="customer:create">
             <UIButton
               type="button"
@@ -1015,6 +1120,9 @@ export const CustomersDesktopPage = ({
                 <UITableHead sticky align="right" className="min-w-[130px]">
                   Credit Due (DR)
                 </UITableHead>
+                <UITableHead sticky align="right" className="min-w-[125px]">
+                  Credit Note
+                </UITableHead>
                 <UITableHead sticky align="right" className="min-w-[80px]">
                   Actions
                 </UITableHead>
@@ -1023,10 +1131,10 @@ export const CustomersDesktopPage = ({
 
             <UITableBody>
               {isLoading ? (
-                <UITableLoading colSpan={6} rows={5} />
+                <UITableLoading colSpan={7} rows={5} />
               ) : filteredAndSortedCustomers.length === 0 ? (
                 <UITableEmpty
-                  colSpan={6}
+                  colSpan={7}
                   title="No customers found"
                   description={
                     debouncedSearch || activeFilterCount > 0
@@ -1068,7 +1176,10 @@ export const CustomersDesktopPage = ({
                       key={c._id}
                       ref={isTriggerRow ? eighthRowCallbackRef : null}
                       onClick={() => handleViewCustomer(c.rawCustomer || c)}
-                      className="group cursor-pointer transition-colors hover:bg-surface-hover/70 h-13"
+                      className={cn(
+                        "group cursor-pointer transition-colors hover:bg-surface-hover/70 h-13",
+                        c.isWalkIn && "bg-emerald-500/[0.04] hover:bg-emerald-500/[0.09]"
+                      )}
                     >
                       {/* 1. Customer: Line 1 = Name, Line 2 = Mobile (No Customer ID) */}
                       <UITableCell className="py-2.5">
@@ -1104,9 +1215,16 @@ export const CustomersDesktopPage = ({
                         align="center"
                         className="whitespace-nowrap py-2"
                       >
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-alt border border-border/60 text-text-muted capitalize">
-                          {c.customerType}
-                        </span>
+                        {c.isWalkIn ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
+                            <Store className="size-3 text-emerald-600 dark:text-emerald-400" />
+                            Walk-in
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-alt border border-border/60 text-text-muted capitalize">
+                            {c.customerType}
+                          </span>
+                        )}
                       </UITableCell>
 
                       {/* 3. Credit Limit */}
@@ -1181,6 +1299,35 @@ export const CustomersDesktopPage = ({
                         )}
                       </UITableCell>
 
+                      {/* 7. Credit Note Balance */}
+                      <UITableCell
+                        align="right"
+                        className="whitespace-nowrap font-mono tabular-nums text-xs py-2"
+                      >
+                        {c.creditNoteBalance > 0 ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewCreditNotes?.(c.rawCustomer || c);
+                            }}
+                            className="inline-flex items-baseline gap-1 px-2 py-0.5 rounded-full bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 transition-colors cursor-pointer group"
+                            title="View customer credit notes"
+                          >
+                            <span className="font-semibold font-mono">
+                              ₹{formatCurrency(c.creditNoteBalance)}
+                            </span>
+                            <span className="text-[9.5px] font-bold text-indigo-700/80 dark:text-indigo-300/80">
+                              CN
+                            </span>
+                          </button>
+                        ) : (
+                          <span className="text-text-muted/30 font-mono text-xs">
+                            0.00
+                          </span>
+                        )}
+                      </UITableCell>
+
                       {/* 8. Refined Row Actions */}
                       <UITableCell align="right" className="py-2">
                         <div
@@ -1205,28 +1352,43 @@ export const CustomersDesktopPage = ({
                               align="right"
                               className="w-52 shadow-lg"
                             >
-                              <UIDropdownItem
-                                icon={
-                                  <Wallet className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                                }
-                                onClick={(e) => {
-                                  e?.stopPropagation?.();
-                                  handleReceiveAdvance(c.rawCustomer || c);
-                                }}
-                              >
-                                Receive Advance
-                              </UIDropdownItem>
-                              <UIDropdownItem
-                                icon={
-                                  <Receipt className="size-4 text-rose-600 dark:text-rose-400 shrink-0" />
-                                }
-                                onClick={(e) => {
-                                  e?.stopPropagation?.();
-                                  handleSettleCredit(c.rawCustomer || c);
-                                }}
-                              >
-                                Settle Credit
-                              </UIDropdownItem>
+                              {!c.isWalkIn && (
+                                <>
+                                  <UIDropdownItem
+                                    icon={
+                                      <Wallet className="size-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                    }
+                                    onClick={(e) => {
+                                      e?.stopPropagation?.();
+                                      handleReceiveAdvance(c.rawCustomer || c);
+                                    }}
+                                  >
+                                    Receive Advance
+                                  </UIDropdownItem>
+                                  <UIDropdownItem
+                                    icon={
+                                      <Receipt className="size-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                                    }
+                                    onClick={(e) => {
+                                      e?.stopPropagation?.();
+                                      handleSettleCredit(c.rawCustomer || c);
+                                    }}
+                                  >
+                                    Settle Credit
+                                  </UIDropdownItem>
+                                  <UIDropdownItem
+                                    icon={
+                                      <Receipt className="size-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                                    }
+                                    onClick={(e) => {
+                                      e?.stopPropagation?.();
+                                      handleViewCreditNotes?.(c.rawCustomer || c);
+                                    }}
+                                  >
+                                    Credit Notes {c.creditNoteBalance > 0 ? `(₹${formatCurrency(c.creditNoteBalance)})` : ""}
+                                  </UIDropdownItem>
+                                </>
+                              )}
                               <UIDropdownItem
                                 icon={
                                   <BookOpen className="size-4 text-primary shrink-0" />
@@ -1260,19 +1422,23 @@ export const CustomersDesktopPage = ({
                               >
                                 Edit Profile
                               </UIDropdownItem>
-                              <UIDropdownDivider />
-                              <UIDropdownItem
-                                destructive
-                                icon={
-                                  <Trash2 className="size-4 text-error shrink-0" />
-                                }
-                                onClick={(e) => {
-                                  e?.stopPropagation?.();
-                                  handleDeleteCustomer(c.rawCustomer || c);
-                                }}
-                              >
-                                Delete Customer
-                              </UIDropdownItem>
+                              {!c.isWalkIn && (
+                                <>
+                                  <UIDropdownDivider />
+                                  <UIDropdownItem
+                                    destructive
+                                    icon={
+                                      <Trash2 className="size-4 text-error shrink-0" />
+                                    }
+                                    onClick={(e) => {
+                                      e?.stopPropagation?.();
+                                      handleDeleteCustomer(c.rawCustomer || c);
+                                    }}
+                                  >
+                                    Delete Customer
+                                  </UIDropdownItem>
+                                </>
+                              )}
                             </UIDropdownMenu>
                           </UIDropdown>
                         </div>
@@ -1417,7 +1583,7 @@ export const CustomersDesktopPage = ({
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-text flex items-center justify-between">
                 <span>Sort Sequence</span>
-                {sortOption !== "name-asc" && (
+                {sortOption !== "updatedAt-desc" && (
                   <span className="text-[11px] text-primary font-bold">
                     Custom Sort
                   </span>
@@ -1443,7 +1609,7 @@ export const CustomersDesktopPage = ({
               setSelectedType("all");
               setSelectedBalanceType("all");
               setSelectedStatus("all");
-              setSortOption("name-asc");
+              setSortOption("updatedAt-desc");
             }}
             className="text-text-muted hover:text-text text-xs"
           >

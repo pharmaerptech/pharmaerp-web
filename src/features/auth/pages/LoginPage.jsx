@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ROUTES, API_STATUS } from "@/constants";
+import { WORK_MODES, WORK_MODE_STORAGE_KEYS } from "@/contexts";
 import { validateLoginForm } from "@/utils";
 import { useIsMobile } from "@/hooks";
 
@@ -65,7 +66,22 @@ const LoginPage = () => {
 
     try {
       await login(payload);
-      navigate(ROUTES.DASHBOARD, { replace: true });
+
+      const hasSelected = localStorage.getItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED) === "true";
+      const currentMode = localStorage.getItem(WORK_MODE_STORAGE_KEYS.WORK_MODE);
+
+      // On login, pipeline elevator starts fresh at Workspace floor
+      try {
+        localStorage.setItem("pahuch_pipeline_level", "workspace");
+      } catch {}
+
+      if (!hasSelected) {
+        navigate(ROUTES.CHOOSE_MODE, { replace: true });
+      } else if (currentMode === WORK_MODES.VIEW) {
+        navigate(ROUTES.WORKSPACE_DASHBOARD, { replace: true });
+      } else {
+        navigate(ROUTES.COMPANIES, { replace: true });
+      }
     } catch {
       // Error handled in auth state
     }

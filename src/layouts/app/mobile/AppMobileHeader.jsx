@@ -12,11 +12,14 @@ import {
 
 import { ROUTES } from "@/constants";
 import { usePermission } from "@/hooks";
+import { useWorkMode } from "@/contexts";
+import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import {
   HeaderNotifications,
   HeaderProfileDropdown,
   HeaderAppMenu,
+  HeaderWorkModeToggle,
 } from "@/layouts/app/components/header";
 import { getAccessibleSearchCommands } from "@/layouts/app/components/header/accessibleSearchCommands";
 import { UIIconButton } from "@/components/ui";
@@ -82,6 +85,8 @@ const AppMobileHeader = ({ onMenuClick }) => {
   const location = useLocation();
   const { can, canAny, isOwner } = usePermission();
   const { isSetupComplete } = useSetupStatus();
+  const { workMode } = useWorkMode();
+  const { currentLevel } = useNavigationPipeline();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,10 +94,10 @@ const AppMobileHeader = ({ onMenuClick }) => {
 
   const pageTitle = useMemo(() => getPageTitle(location.pathname), [location.pathname]);
 
-  // Compute all commands accessible to the user
+  // Compute all commands accessible to the user scoped by currentLevel
   const accessibleCommands = useMemo(() => {
-    return getAccessibleSearchCommands(can, canAny, isOwner);
-  }, [can, canAny, isOwner]);
+    return getAccessibleSearchCommands(can, canAny, isOwner, workMode, currentLevel);
+  }, [can, canAny, isOwner, workMode, currentLevel]);
 
   useEffect(() => {
     if (searchOpen) {
@@ -113,8 +118,43 @@ const AppMobileHeader = ({ onMenuClick }) => {
     );
   }, [accessibleCommands, searchQuery]);
 
+  if (!workMode) {
+    return (
+      <header className="sticky top-0 z-[60] border-b border-border bg-surface/95 backdrop-blur-md">
+        <div className="flex h-13 items-center justify-between px-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <UIIconButton
+              type="button"
+              onClick={onMenuClick}
+              aria-label="Open navigation menu"
+              variant="ghost"
+              size="sm"
+            >
+              <Menu className="size-5" />
+            </UIIconButton>
+
+            <div className="flex items-center gap-2">
+              <div className="flex size-7 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-xs">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7.5V16.5L12 22L22 16.5V7.5L12 2ZM13 7V11H17V13H13V17H11V13H7V11H11V7H13Z" />
+                </svg>
+              </div>
+              <span className="text-sm font-bold tracking-tight text-text">
+                Pahuch <span className="text-primary font-bold">ERP</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5">
+            <HeaderProfileDropdown />
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface/95 backdrop-blur-md">
+    <header className="sticky top-0 z-[60] border-b border-border bg-surface/95 backdrop-blur-md">
       <div className="flex h-13 items-center justify-between px-3">
         {/* Left: Menu & Dynamic Title */}
         <div className="flex min-w-0 items-center gap-2">
@@ -142,8 +182,12 @@ const AppMobileHeader = ({ onMenuClick }) => {
           </AnimatePresence>
         </div>
 
-        {/* Right: Search, App Menu, Notifications, Profile */}
+        {/* Right: Work Mode, App Menu, Search, Notifications, Profile */}
         <div className="flex shrink-0 items-center gap-1.5">
+          {workMode && (
+            <HeaderWorkModeToggle />
+          )}
+
           <HeaderAppMenu />
 
           {isSetupComplete && (

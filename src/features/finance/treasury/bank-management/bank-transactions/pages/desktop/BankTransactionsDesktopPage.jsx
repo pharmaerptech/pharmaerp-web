@@ -88,6 +88,22 @@ const formatTime = (val) => {
   });
 };
 
+const resolveTxTimestamp = (tx) => {
+  if (!tx) return null;
+  const d = tx.transactionDate ? new Date(tx.transactionDate) : null;
+  const isMidnightUTC =
+    d &&
+    !Number.isNaN(d.getTime()) &&
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0;
+
+  if (isMidnightUTC && (tx.postedAt || tx.createdAt)) {
+    return tx.postedAt || tx.createdAt;
+  }
+  return tx.transactionDate || tx.postedAt || tx.createdAt;
+};
+
 const getTodayISTString = (date = new Date()) => {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kolkata",
@@ -514,8 +530,11 @@ export const BankTransactionsDesktopPage = () => {
       case "UPI":
         if (category === "UPI_SETTLEMENT") {
           badgeNode = (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30">
-              Shift Settlement
+            <span
+              title="Consolidated Business Day UPI Settlement"
+              className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-purple-500/15 text-purple-700 dark:text-purple-300 border border-purple-500/30"
+            >
+              Day Settlement
             </span>
           );
         } else {
@@ -1027,10 +1046,15 @@ export const BankTransactionsDesktopPage = () => {
 
                         {/* 3. Date & Time */}
                         <UITableCell className="py-2.5">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-text">{formatDate(txn.transactionDate)}</span>
-                            <span className="text-[10.5px] text-text-muted font-mono">{formatTime(txn.transactionDate)}</span>
-                          </div>
+                          {(() => {
+                            const effectiveTs = resolveTxTimestamp(txn);
+                            return (
+                              <div className="flex flex-col">
+                                <span className="font-medium text-text">{formatDate(effectiveTs)}</span>
+                                <span className="text-[10.5px] text-text-muted font-mono">{formatTime(effectiveTs)}</span>
+                              </div>
+                            );
+                          })()}
                         </UITableCell>
 
                         {/* 4. Bank Account */}

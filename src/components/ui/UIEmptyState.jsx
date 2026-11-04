@@ -17,6 +17,7 @@ const UIEmptyState = forwardRef(
       title = "No Records Found",
       description = "There is no data to display right now. Create a new item or adjust your search filters.",
       actionText,
+      actionLabel,
       onAction,
       actionVariant = "primary",
       actionIcon,
@@ -69,6 +70,7 @@ const UIEmptyState = forwardRef(
     };
 
     const curSize = sizeClasses[size] || sizeClasses.md;
+    const effectiveActionText = actionText || actionLabel;
 
     return (
       <div
@@ -90,7 +92,12 @@ const UIEmptyState = forwardRef(
               iconColors[iconColor] || iconColors.primary
             )}
           >
-            {icon}
+            {React.isValidElement(icon)
+              ? icon
+              : typeof icon === "function" ||
+                (typeof icon === "object" && icon !== null && "$$typeof" in icon)
+              ? React.createElement(icon, { className: curSize.iconSize })
+              : icon}
           </div>
         )}
 
@@ -119,16 +126,16 @@ const UIEmptyState = forwardRef(
         )}
 
         {/* Custom Body or Actions */}
-        {(actionText || secondaryText || children) && (
+        {(effectiveActionText || secondaryText || children) && (
           <div className="mt-5 sm:mt-6 flex flex-wrap items-center justify-center gap-3">
-            {actionText && (
+            {effectiveActionText && (
               <UIButton
                 variant={actionVariant}
                 size={size === "sm" ? "xs" : "sm"}
                 startIcon={actionIcon}
                 onClick={onAction}
               >
-                {actionText}
+                {effectiveActionText}
               </UIButton>
             )}
 

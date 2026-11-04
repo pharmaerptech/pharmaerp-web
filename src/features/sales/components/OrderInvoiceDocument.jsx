@@ -1,4 +1,4 @@
-// src/features/sales/components/OrderInvoiceDocument.jsx
+﻿// src/features/sales/components/OrderInvoiceDocument.jsx
 
 import React, { useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
@@ -35,6 +35,20 @@ const formatExpiry = (exp) => {
     }
   }
   return str;
+};
+
+const formatPaymentMode = (mode) => {
+  if (!mode) return "CASH";
+  const str = String(mode).trim();
+  const lower = str.toLowerCase();
+  if (lower === "creditnote" || lower === "credit_note" || lower === "credit note") return "CREDIT NOTE";
+  if (lower === "cash") return "CASH";
+  if (lower === "upi") return "UPI";
+  if (lower === "card") return "CARD";
+  if (lower === "credit") return "CREDIT (POST-PAY)";
+  if (lower === "advance") return "ADVANCE DEPOSIT";
+  if (lower === "split") return "SPLIT PAYMENT";
+  return str.toUpperCase();
 };
 
 export const OrderInvoiceDocument = ({
@@ -559,6 +573,13 @@ export const OrderInvoiceDocument = ({
               </div>
             )}
 
+            {safeNum(saleData.creditNoteTotal) > 0 && (
+              <div className="flex justify-between text-[9.5px] text-indigo-700 font-semibold">
+                <span className="font-sans">Credit Note Adjusted:</span>
+                <span>-₹{safeNum(saleData.creditNoteTotal).toFixed(2)}</span>
+              </div>
+            )}
+
             {/* Payable Amount Highlight */}
             <div className="flex justify-between items-baseline pt-2 mt-1 border-t-2 border-slate-900 text-slate-900">
               <span className="font-sans font-extrabold text-xs uppercase tracking-tight">
@@ -584,10 +605,23 @@ export const OrderInvoiceDocument = ({
               <div className="mt-1 space-y-0.5 border-t border-slate-200/60 pt-1 font-mono text-[9px]">
                 {saleData.payments.map((p, pIdx) => (
                   <div key={pIdx} className="flex justify-between text-slate-600">
-                    <span className="capitalize">{p.paymentType || p.mode}:</span>
+                    <span>{formatPaymentMode(p.paymentType || p.mode)}:</span>
                     <span className="font-semibold text-slate-900">
                       ₹{safeNum(p.amount).toFixed(2)}
                     </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Credit Notes Redeemed */}
+            {Array.isArray(saleData.creditNoteAllocations) && saleData.creditNoteAllocations.length > 0 && (
+              <div className="mt-1 pt-1 border-t border-slate-200/60 font-mono text-[8.5px] text-indigo-700">
+                <span className="font-bold block text-[8px] uppercase tracking-wider text-indigo-800">Credit Notes Redeemed:</span>
+                {saleData.creditNoteAllocations.map((cna, idx) => (
+                  <div key={idx} className="flex justify-between">
+                    <span>{cna.creditNoteNumber || cna.creditNoteNo || "CN"}:</span>
+                    <span className="font-bold">₹{safeNum(cna.amountApplied || cna.amount).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -608,3 +642,4 @@ export const OrderInvoiceDocument = ({
 };
 
 export default OrderInvoiceDocument;
+

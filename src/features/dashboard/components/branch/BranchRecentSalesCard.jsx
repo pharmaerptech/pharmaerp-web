@@ -1,30 +1,48 @@
 // src/features/dashboard/components/branch/BranchRecentSalesCard.jsx
 
-import { ArrowRight } from "lucide-react";
+import React from "react";
+import { ArrowRight, ShoppingCart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { UICard } from "@/components/ui";
+import { UICard, UIBadge, UIEmptyState, UISkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { ROUTES } from "@/constants";
 
-export const BranchRecentSalesCard = ({ sales = [], className }) => {
+export const BranchRecentSalesCard = ({ sales = [], className, isLoading = false }) => {
   const navigate = useNavigate();
 
-  const displaySales = sales.length > 0 ? sales : [
-    { id: "1", time: "02:15 PM", invoiceNo: "INV-10284", customer: "Walk-in", items: 3, amount: 1245, payment: "UPI" },
-    { id: "2", time: "01:48 PM", invoiceNo: "INV-10283", customer: "Rajesh Verma", items: 5, amount: 2380, payment: "Card" },
-    { id: "3", time: "01:20 PM", invoiceNo: "INV-10282", customer: "Walk-in", items: 2, amount: 560, payment: "Cash" },
-    { id: "4", time: "12:55 PM", invoiceNo: "INV-10281", customer: "Priya Sharma", items: 4, amount: 1920, payment: "UPI" },
-    { id: "5", time: "12:30 PM", invoiceNo: "INV-10280", customer: "Walk-in", items: 1, amount: 420, payment: "Cash" },
-  ];
+  if (isLoading) {
+    return (
+      <UICard
+        variant="default"
+        className={cn("p-4 rounded-xl border border-border bg-surface shadow-2xs", className)}
+      >
+        <div className="flex items-center justify-between pb-2 border-b border-border/60">
+          <UISkeleton className="h-4 w-36" />
+          <UISkeleton className="h-4 w-16" />
+        </div>
+        <div className="py-3 space-y-2.5">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex items-center justify-between gap-2">
+              <UISkeleton className="h-3.5 w-14" />
+              <UISkeleton className="h-3.5 w-20" />
+              <UISkeleton className="h-3.5 w-24" />
+              <UISkeleton className="h-3.5 w-16" />
+            </div>
+          ))}
+        </div>
+      </UICard>
+    );
+  }
 
-  const getPaymentBadge = (method) => {
-    const m = (method || "Cash").toUpperCase();
-    if (m.includes("UPI")) {
-      return "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border border-purple-200/50";
-    }
-    if (m.includes("CARD")) {
-      return "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200/50";
-    }
-    return "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50";
+  const displaySales = Array.isArray(sales) ? sales : [];
+
+  const getPaymentColor = (method) => {
+    const m = String(method || "Cash").toUpperCase();
+    if (m.includes("UPI")) return "purple";
+    if (m.includes("CARD")) return "info";
+    if (m.includes("CREDIT") || m.includes("KHATA")) return "warning";
+    if (m.includes("SPLIT")) return "primary";
+    return "success";
   };
 
   return (
@@ -43,7 +61,7 @@ export const BranchRecentSalesCard = ({ sales = [], className }) => {
 
         <button
           type="button"
-          onClick={() => navigate("/sales")}
+          onClick={() => navigate(ROUTES.SALES || "/sales")}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
           <span>View All</span>
@@ -51,49 +69,64 @@ export const BranchRecentSalesCard = ({ sales = [], className }) => {
         </button>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto my-auto py-1">
-        <table className="w-full text-left border-collapse text-[11px]">
-          <thead>
-            <tr className="border-b border-border/60 text-text-muted font-medium">
-              <th className="py-1.5 px-1">Time</th>
-              <th className="py-1.5 px-2">Invoice No.</th>
-              <th className="py-1.5 px-2">Customer</th>
-              <th className="py-1.5 px-1 text-center">Items</th>
-              <th className="py-1.5 px-2 text-right">Amount</th>
-              <th className="py-1.5 px-2 text-center">Payment</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/40">
-            {displaySales.slice(0, 5).map((item, idx) => (
-              <tr key={item.id || idx} className="hover:bg-surface-alt/50 transition-colors">
-                <td className="py-2 px-1 text-text-muted font-mono whitespace-nowrap">
-                  {item.time}
-                </td>
-                <td className="py-2 px-2 text-text-muted font-mono">{item.invoiceNo}</td>
-                <td className="py-2 px-2 font-medium text-text truncate max-w-[100px]">
-                  {item.customer}
-                </td>
-                <td className="py-2 px-1 text-center font-mono tabular-nums text-text-muted">
-                  {item.items}
-                </td>
-                <td className="py-2 px-2 text-right font-bold font-mono text-text tabular-nums">
-                  ₹ {Number(item.amount).toLocaleString()}
-                </td>
-                <td className="py-2 px-2 text-center">
-                  <span
-                    className={cn(
-                      "inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold",
-                      getPaymentBadge(item.payment)
-                    )}
-                  >
-                    {item.payment}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Content */}
+      <div className="my-auto py-1 min-w-0">
+        {displaySales.length === 0 ? (
+          <div className="py-6">
+            <UIEmptyState
+              icon={<ShoppingCart className="size-8 text-text-muted" />}
+              title="No Sales Recorded Today"
+              description="Completed counter sales invoices will stream here in real time."
+              actionText="Open Billing"
+              onAction={() => navigate(ROUTES.SALES || "/sales")}
+              variant="inline"
+              size="sm"
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto no-scrollbar">
+            <table className="w-full text-left border-collapse text-[11px]">
+              <thead>
+                <tr className="border-b border-border/60 text-text-muted font-medium">
+                  <th className="py-1.5 px-1">Time</th>
+                  <th className="py-1.5 px-2">Invoice No.</th>
+                  <th className="py-1.5 px-2">Customer</th>
+                  <th className="py-1.5 px-1 text-center">Items</th>
+                  <th className="py-1.5 px-2 text-right">Amount</th>
+                  <th className="py-1.5 px-2 text-center">Payment</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/40">
+                {displaySales.slice(0, 5).map((item, idx) => (
+                  <tr key={item.id || idx} className="hover:bg-surface-alt/50 transition-colors">
+                    <td className="py-2 px-1 text-text-muted font-mono whitespace-nowrap">
+                      {item.time}
+                    </td>
+                    <td className="py-2 px-2 text-text-muted font-mono">{item.invoiceNo}</td>
+                    <td className="py-2 px-2 font-medium text-text truncate max-w-[110px]" title={item.customer}>
+                      {item.customer}
+                    </td>
+                    <td className="py-2 px-1 text-center font-mono tabular-nums text-text-muted">
+                      {item.items}
+                    </td>
+                    <td className="py-2 px-2 text-right font-bold font-mono text-text tabular-nums whitespace-nowrap">
+                      ₹ {Number(item.amount || 0).toLocaleString("en-IN")}
+                    </td>
+                    <td className="py-2 px-2 text-center whitespace-nowrap">
+                      <UIBadge
+                        color={getPaymentColor(item.payment)}
+                        size="xs"
+                        variant="soft"
+                        label={item.payment}
+                        className="shrink-0"
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </UICard>
   );

@@ -20,9 +20,15 @@ export const createBranch = createAsyncThunk(
 
 export const getCompanyBranches = createAsyncThunk(
   "branch/getCompanyBranches",
-  async (_, { rejectWithValue }) => {
+  async (targetCompanyId, { getState, rejectWithValue }) => {
     try {
-      const response = await branchService.getCompanyBranches();
+      const state = getState();
+      const companyId =
+        targetCompanyId ||
+        state.company?.currentCompany?._id ||
+        null;
+
+      const response = await branchService.getCompanyBranches(companyId);
 
       return response.data?.data;
     } catch (error) {

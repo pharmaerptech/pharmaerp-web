@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Banknote,
   QrCode,
-  CreditCard,
   Wallet,
   CheckCircle2,
   AlertCircle,
@@ -17,7 +16,8 @@ import {
   X,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { getOpenBusinessDay } from "@/features/operations/business-days/store/businessDayThunk";
 import { UIModal, UIButton, UIIconButton, UISelect } from "@/components/ui";
 import { PermissionGate } from "@/components/common/PermissionGate";
 import usePaymentQr from "@/features/finance/treasury/payment-qr/hooks/usePaymentQr";
@@ -25,10 +25,11 @@ import { useBranchCash } from "@/features/finance/treasury/cash-management/branc
 import useBranch from "@/features/branch/hooks/useBranch";
 import { ROUTES } from "@/constants";
 import { cn } from "@/lib/utils";
-import { CashBreakdownModal } from "./CashBreakdownModal";
+import { CashBreakdownModal, decomposeAmount } from "./CashBreakdownModal";
 import { getBranchInitials } from "@/utils";
 import invoiceService from "../services/invoiceService";
 import customerService from "@/features/parties/customers/services/customerService";
+import creditNoteService from "@/features/sales/credit-notes/services/creditNoteService";
 
 /** Safe number parser */
 const safeNum = (v) => {
@@ -55,14 +56,67 @@ const computeSchemeDiscount = (qty, schemePercent) => {
   return { schemeApply: false, finalDiscountPercent: 0 };
 };
 
+/**
+ * Intelligently balances payments so that total equals grandTotal.
+ * When `targetIndex` is set to `desiredAmount`, any excess over grandTotal
+ * is deducted from other payment legs (prioritizing the row directly above, then cash/upi/card).
+ */
+const rebalancePaymentsOnUpdate = (currentPayments, targetIndex, desiredAmount, targetGrandTotal) => {
+  const next = currentPayments.map((p) => ({ ...p }));
+  const clampedDesired = Math.max(0, Number(desiredAmount) || 0);
+  next[targetIndex].amount = clampedDesired;
+  if (next[targetIndex].paymentType === "Cash") {
+    next[targetIndex].cashDetails = null;
+  }
 
+  // Calculate total across all rows
+  let currentTotal = next.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  let excess = Math.round((currentTotal - targetGrandTotal) * 100) / 100;
+
+  if (excess > 0.005) {
+    // Priority for reduction:
+    // 1. First look at row directly above targetIndex
+    // 2. Then other non-target rows
+    const otherIndices = [];
+    if (targetIndex > 0) otherIndices.push(targetIndex - 1);
+    for (let i = 0; i < next.length; i++) {
+      if (i !== targetIndex && !otherIndices.includes(i)) {
+        otherIndices.push(i);
+      }
+    }
+
+    for (const idx of otherIndices) {
+      if (excess <= 0.005) break;
+      const availableInRow = Number(next[idx].amount) || 0;
+      if (availableInRow <= 0) continue;
+
+      const deduction = Math.min(availableInRow, excess);
+      next[idx].amount = Math.round((availableInRow - deduction) * 100) / 100;
+      if (next[idx].paymentType === "Cash") {
+        next[idx].cashDetails = null;
+      }
+      excess = Math.round((excess - deduction) * 100) / 100;
+    }
+
+    // If there is still excess (i.e. even reducing all other rows to 0 wasn't enough),
+    // clamp the target row itself to targetGrandTotal!
+    if (excess > 0.005) {
+      next[targetIndex].amount = Math.max(0, Math.round((next[targetIndex].amount - excess) * 100) / 100);
+      if (next[targetIndex].paymentType === "Cash") {
+        next[targetIndex].cashDetails = null;
+      }
+    }
+  }
+
+  return next;
+};
 
 const PAYMENT_TYPE_OPTIONS = [
   { value: "Cash", label: "Cash", icon: <Banknote className="size-4 text-emerald-600" /> },
   { value: "UPI", label: "UPI / QR", icon: <QrCode className="size-4 text-purple-600" /> },
   { value: "Credit", label: "Credit (Pay Later)", icon: <Receipt className="size-4 text-rose-600" /> },
   { value: "Advance", label: "Advance Deposit", icon: <Wallet className="size-4 text-amber-600" /> },
-  { value: "Card", label: "Card", icon: <CreditCard className="size-4 text-blue-600" /> },
+  { value: "CreditNote", label: "Credit Note", icon: <Receipt className="size-4 text-indigo-600" /> },
 ];
 
 export const SalesCheckoutModal = ({
@@ -82,12 +136,23 @@ export const SalesCheckoutModal = ({
   isReturnInvoice = false,
 }) => {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { currentBranch } = useBranch();
   const branchId = currentBranch?._id || currentBranch?.id;
   const { paymentQrs, getPaymentQrs } = usePaymentQr();
   const { fetchBranchCash, runningCash, runningDenominations } = useBranchCash();
   const reduxActiveShift = useSelector((state) => state.shift?.activeShift);
   const activeShift = activeShiftProp ?? reduxActiveShift;
+  const { openBusinessDay } = useSelector((state) => state.businessDay || {});
+
+  const isShiftClosed = !activeShift || String(activeShift.status || "").toLowerCase() !== "open";
+  // The business day is only considered closed if:
+  // 1. openBusinessDay exists in state and its status is not open, OR
+  // 2. openBusinessDay is missing/closed AND the cashier's activeShift is also closed
+  const isBusinessDayClosed = openBusinessDay
+    ? String(openBusinessDay.status || "").toLowerCase() !== "open"
+    : isShiftClosed;
+  const isSessionBlocked = isBusinessDayClosed || isShiftClosed;
 
   const hasReturnItems = useMemo(
     () => (cartSummary?.items || []).some((i) => i.isReturnItem),
@@ -99,8 +164,11 @@ export const SalesCheckoutModal = ({
     if (isOpen && branchId) {
       getPaymentQrs({ branchId, status: "ACTIVE" });
       fetchBranchCash(branchId);
+      if (!openBusinessDay) {
+        dispatch(getOpenBusinessDay(branchId));
+      }
     }
-  }, [isOpen, branchId, getPaymentQrs, fetchBranchCash]);
+  }, [isOpen, branchId, getPaymentQrs, fetchBranchCash, dispatch, openBusinessDay]);
 
   // Branch-scoped serial invoice or return memo number (e.g. AEB-2627-0001 or RET-AEB-2627-0001)
   const defaultInvoiceNo = useMemo(() => {
@@ -197,6 +265,7 @@ export const SalesCheckoutModal = ({
 
   // Real-time Customer Credit & Advance profile
   const [customerDetails, setCustomerDetails] = useState(null);
+  const [customerCreditNotes, setCustomerCreditNotes] = useState([]);
 
   useEffect(() => {
     const custId = customer?._id || customer?.id;
@@ -210,15 +279,43 @@ export const SalesCheckoutModal = ({
           }
         })
         .catch(() => {});
+
+      creditNoteService
+        .getCustomerCreditNotes(custId)
+        .then((res) => {
+          if (isMounted) {
+            const raw = res?.data?.data ?? res?.data;
+            const list = Array.isArray(raw)
+              ? raw
+              : Array.isArray(raw?.activeNotes)
+              ? raw.activeNotes
+              : Array.isArray(raw?.creditNotes)
+              ? raw.creditNotes
+              : [];
+            setCustomerCreditNotes(list);
+          }
+        })
+        .catch(() => {
+          if (isMounted) setCustomerCreditNotes([]);
+        });
+
       return () => {
         isMounted = false;
       };
     } else {
       setCustomerDetails(null);
+      setCustomerCreditNotes([]);
     }
   }, [isOpen, customer?._id, customer?.id]);
 
   const effectiveCustomer = customerDetails || customer;
+  const isWalkIn = Boolean(
+    effectiveCustomer?.isWalkIn ||
+    effectiveCustomer?.customerType === "walk_in" ||
+    customer?.isWalkIn ||
+    customer?.customerType === "walk_in" ||
+    (customer?.name && customer.name.toLowerCase().includes("walk-in"))
+  );
   const creditLimit = Number(effectiveCustomer?.creditLimit || 0);
   const creditOutstanding = Number(effectiveCustomer?.creditOutstanding || 0);
   const availableCredit = Number(
@@ -227,6 +324,11 @@ export const SalesCheckoutModal = ({
       : Math.max(0, creditLimit - creditOutstanding)
   );
   const advanceBalance = Number(effectiveCustomer?.advanceBalance || 0);
+  const creditNoteBalance = Number(
+    effectiveCustomer?.creditNoteBalance !== undefined
+      ? effectiveCustomer.creditNoteBalance
+      : customerCreditNotes.reduce((s, cn) => s + (Number(cn.balanceAmount) || 0), 0)
+  );
   const creditDays = Number(effectiveCustomer?.creditDays || 15);
 
   // Detailed Billing & Tax Calculations
@@ -333,40 +435,65 @@ export const SalesCheckoutModal = ({
 
   const [cashBreakdownTarget, setCashBreakdownTarget] = useState(null); // index of row
 
-  const totalPaid = useMemo(() => payments.reduce((sum, p) => sum + Number(p.amount || 0), 0), [payments]);
-  const shortfall = Math.max(0, grandTotal - totalPaid);
+  const totalPaid = useMemo(
+    () => Math.round(payments.reduce((sum, p) => sum + Number(p.amount || 0), 0) * 100) / 100,
+    [payments]
+  );
+  const balanceDiff = Math.round((grandTotal - totalPaid) * 100) / 100;
+  const shortfall = Math.max(0, balanceDiff);
+  const overpayment = Math.max(0, -balanceDiff);
+  const isExactBalance = Math.abs(balanceDiff) <= 0.01;
 
-  const modeTabs = useMemo(() => {
-    if (isReturn) {
-      return [
-        { id: "Cash", label: "Cash Refund", icon: Banknote, color: "text-emerald-600", activeCls: "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30" },
-        { id: "Advance", label: "Keep as Advance", icon: Wallet, color: "text-amber-600", activeCls: "bg-amber-500/15 border-amber-500/50 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30" },
-        { id: "Credit", label: "Credit Note", icon: Receipt, color: "text-rose-600", activeCls: "bg-rose-500/15 border-rose-500/50 text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/30" },
-        { id: "UPI", label: "UPI / Bank", icon: QrCode, color: "text-purple-600", activeCls: "bg-purple-500/15 border-purple-500/50 text-purple-700 dark:text-purple-300 ring-1 ring-purple-500/30" },
-        { id: "Split", label: "Split", icon: Calculator, color: "text-indigo-600", activeCls: "bg-indigo-500/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/30" },
-      ];
+  const handleAddOrFillPayment = (paymentType, fillAmount) => {
+    setIsSplitMode(true);
+    const existingIdx = payments.findIndex((p) => p.paymentType === paymentType);
+    if (existingIdx >= 0) {
+      const updatedPayments = [...payments];
+      updatedPayments[existingIdx] = {
+        ...updatedPayments[existingIdx],
+        amount: Math.round(((Number(updatedPayments[existingIdx].amount) || 0) + fillAmount) * 100) / 100,
+      };
+      if (paymentType === "Cash") updatedPayments[existingIdx].cashDetails = null;
+      setPayments(updatedPayments);
+    } else {
+      const newRow = {
+        id: Date.now(),
+        paymentType,
+        amount: fillAmount,
+        branchId: branchId || "",
+      };
+      if (paymentType === "UPI" && primaryQr?._id) {
+        newRow.paymentQrId = String(primaryQr._id);
+      }
+      if (paymentType === "Credit") {
+        const baseDate = saleDate ? new Date(saleDate) : new Date();
+        const defaultDueDate = new Date(baseDate);
+        defaultDueDate.setDate(defaultDueDate.getDate() + (creditDays || 15));
+        newRow.creditDueDate = defaultDueDate.toISOString().split("T")[0];
+      }
+      setPayments([...payments, newRow]);
     }
-    return [
-      { id: "Cash", label: "Cash", icon: Banknote, color: "text-emerald-600", activeCls: "bg-emerald-500/15 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-500/30" },
-      { id: "UPI", label: "UPI", icon: QrCode, color: "text-purple-600", activeCls: "bg-purple-500/15 border-purple-500/50 text-purple-700 dark:text-purple-300 ring-1 ring-purple-500/30" },
-      { id: "Credit", label: "Credit", icon: Receipt, color: "text-rose-600", activeCls: "bg-rose-500/15 border-rose-500/50 text-rose-700 dark:text-rose-300 ring-1 ring-rose-500/30" },
-      { id: "Advance", label: "Advance", icon: Wallet, color: "text-amber-600", activeCls: "bg-amber-500/15 border-amber-500/50 text-amber-700 dark:text-amber-300 ring-1 ring-amber-500/30" },
-      { id: "Split", label: "Split", icon: Calculator, color: "text-indigo-600", activeCls: "bg-indigo-500/15 border-indigo-500/50 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/30" },
-    ];
-  }, [isReturn]);
+    setErrorMessage(null);
+  };
+
 
   const paymentTypeOptions = useMemo(() => {
     if (isReturn) {
+      if (isWalkIn) {
+        return [
+          { value: "Cash", label: "Cash Refund", icon: <Banknote className="size-4 text-emerald-600" /> },
+        ];
+      }
       return [
         { value: "Cash", label: "Cash Refund", icon: <Banknote className="size-4 text-emerald-600" /> },
-        { value: "Advance", label: "Keep as Advance (Deposit)", icon: <Wallet className="size-4 text-amber-600" /> },
-        { value: "Credit", label: "Credit Note", icon: <Receipt className="size-4 text-rose-600" /> },
-        { value: "UPI", label: "UPI / Bank Transfer", icon: <QrCode className="size-4 text-purple-600" /> },
-        { value: "Card", label: "Card Refund", icon: <CreditCard className="size-4 text-blue-600" /> },
+        { value: "CreditNote", label: "Issue Credit Note", icon: <Receipt className="size-4 text-indigo-600" /> },
       ];
     }
+    if (isWalkIn) {
+      return PAYMENT_TYPE_OPTIONS.filter((opt) => opt.value === "Cash" || opt.value === "UPI");
+    }
     return PAYMENT_TYPE_OPTIONS;
-  }, [isReturn]);
+  }, [isReturn, isWalkIn]);
 
   const handleUpdate = (index, field, value) => {
     const next = [...payments];
@@ -375,13 +502,16 @@ export const SalesCheckoutModal = ({
       updated.branchId = branchId || "";
       delete updated.paymentQrId;
       delete updated.creditDueDate;
+      delete updated.creditNoteAllocations;
+      updated.cashDetails = null;
     }
     // Auto-select primary QR when switching to UPI
-    if (field === "paymentType" && (value === "UPI")) {
+    if (field === "paymentType" && value === "UPI") {
       if (!updated.paymentQrId && primaryQr?._id) {
         updated.paymentQrId = String(primaryQr._id);
       }
       delete updated.creditDueDate;
+      delete updated.creditNoteAllocations;
     }
     if (field === "paymentType" && value === "Credit") {
       if (!updated.creditDueDate) {
@@ -391,18 +521,79 @@ export const SalesCheckoutModal = ({
         updated.creditDueDate = defaultDueDate.toISOString().split("T")[0];
       }
       delete updated.paymentQrId;
+      delete updated.creditNoteAllocations;
     }
     if (field === "paymentType" && value === "Advance") {
       delete updated.paymentQrId;
       delete updated.creditDueDate;
+      delete updated.creditNoteAllocations;
+      delete updated.cashDetails;
+      if (!effectiveCustomer?._id && !effectiveCustomer?.id) {
+        setErrorMessage("Advance payment requires selecting a registered customer profile with available deposit.");
+      } else {
+        const available = Number(advanceBalance || 0);
+        if (available <= 0) {
+          setErrorMessage(`Customer "${effectiveCustomer?.name || "Customer"}" has no advance deposit available (Balance: ₹0.00).`);
+        } else if (next.length === 1 && available < grandTotal) {
+          // Smart auto-split: Maximum possible from advance deposit, remainder in cash
+          setIsSplitMode(true);
+          const remainder = Math.round((grandTotal - available) * 100) / 100;
+          updated.amount = available;
+          next[index] = updated;
+          next.push({
+            id: Date.now() + 1,
+            paymentType: "Cash",
+            amount: remainder,
+            branchId: branchId || "",
+            cashDetails: null,
+          });
+          setPayments(next);
+          return;
+        }
+      }
+    }
+    if (field === "paymentType" && value === "Card") {
+      delete updated.paymentQrId;
+      delete updated.creditDueDate;
+      delete updated.creditNoteAllocations;
+    }
+    if (field === "paymentType" && value === "CreditNote") {
+      delete updated.paymentQrId;
+      delete updated.creditDueDate;
+      delete updated.cashDetails;
+      if (isReturn) {
+        updated.amount = grandTotal;
+      } else {
+        if (!effectiveCustomer?._id && !effectiveCustomer?.id) {
+          setErrorMessage("Credit Note payment requires selecting a registered customer profile first.");
+        } else {
+          const available = Number(creditNoteBalance || 0);
+          if (available <= 0) {
+            setErrorMessage(`Customer "${effectiveCustomer?.name || "Customer"}" has no available credit notes to redeem (Balance: ₹0.00).`);
+          } else if (next.length === 1 && available < grandTotal) {
+            // Smart auto-split: Maximum possible from credit note, remainder in cash
+            setIsSplitMode(true);
+            const remainder = Math.round((grandTotal - available) * 100) / 100;
+            updated.amount = available;
+            next[index] = updated;
+            next.push({
+              id: Date.now() + 1,
+              paymentType: "Cash",
+              amount: remainder,
+              branchId: branchId || "",
+              cashDetails: null,
+            });
+            setPayments(next);
+            return;
+          }
+        }
+      }
     }
     if (field === "paymentType" && value !== "Cash") {
       delete updated.cashDetails;
     }
-    if (field === "amount" && updated.paymentType === "Cash" && updated.cashDetails) {
-      if (Number(value) !== Number(next[index].amount)) {
-        updated.cashDetails = null;
-      }
+    if (field === "amount" && updated.paymentType === "Cash") {
+      updated.cashDetails = null;
     }
     next[index] = updated;
     setPayments(next);
@@ -421,81 +612,6 @@ export const SalesCheckoutModal = ({
     });
   }, [payments]);
 
-  const handleSelectPrimaryMode = (mode) => {
-    if (mode === "Split") {
-      setIsSplitMode(true);
-      if (payments.length === 1) {
-        const curType = payments[0]?.paymentType || "Cash";
-        const otherType = curType === "Cash" ? "UPI" : "Cash";
-        const half1 = Math.round(grandTotal / 2);
-        const half2 = grandTotal - half1;
-        setPayments([
-          {
-            ...payments[0],
-            amount: half1,
-            cashDetails: null,
-          },
-          {
-            id: Date.now() + 1,
-            paymentType: otherType,
-            amount: half2,
-            paymentQrId: otherType === "UPI" && primaryQr?._id ? String(primaryQr._id) : undefined,
-            branchId: otherType === "Cash" ? branchId || "" : undefined,
-          },
-        ]);
-      }
-      return;
-    }
-
-    setIsSplitMode(false);
-    if (mode === "Cash") {
-      setPayments([
-        {
-          id: Date.now(),
-          paymentType: "Cash",
-          amount: grandTotal,
-          branchId: branchId || "",
-        },
-      ]);
-    } else if (mode === "UPI") {
-      setPayments([
-        {
-          id: Date.now(),
-          paymentType: "UPI",
-          amount: grandTotal,
-          paymentQrId: primaryQr?._id ? String(primaryQr._id) : undefined,
-        },
-      ]);
-    } else if (mode === "Credit") {
-      const baseDate = saleDate ? new Date(saleDate) : new Date();
-      const defaultDueDate = new Date(baseDate);
-      defaultDueDate.setDate(defaultDueDate.getDate() + (creditDays || 15));
-      setPayments([
-        {
-          id: Date.now(),
-          paymentType: "Credit",
-          amount: grandTotal,
-          creditDueDate: defaultDueDate.toISOString().split("T")[0],
-        },
-      ]);
-    } else if (mode === "Advance") {
-      setPayments([
-        {
-          id: Date.now(),
-          paymentType: "Advance",
-          amount: grandTotal,
-        },
-      ]);
-    } else if (mode === "Card") {
-      setPayments([
-        {
-          id: Date.now(),
-          paymentType: "Card",
-          amount: grandTotal,
-        },
-      ]);
-    }
-  };
 
   const handleAddRow = () => {
     setIsSplitMode(true);
@@ -529,11 +645,35 @@ export const SalesCheckoutModal = ({
   const [errorMessage, setErrorMessage] = useState(null);
 
   const handleProcessSale = async () => {
-    if (totalPaid < grandTotal) {
+    if (isBusinessDayClosed && isShiftClosed) {
+      setErrorMessage("Cannot create sale bill. The shift is closed, the business day is closed.");
+      return;
+    }
+
+    if (isBusinessDayClosed) {
+      setErrorMessage("Cannot create sale bill. The Business Day is closed for this branch.");
+      return;
+    }
+
+    if (isShiftClosed) {
+      setErrorMessage("Cannot create sale bill. The shift is closed. Please open a shift before billing.");
+      return;
+    }
+
+    if (shortfall > 0.01) {
       setErrorMessage(
         isReturn
           ? `Cannot process return. Settled refund amount (₹${totalPaid.toFixed(2)}) is less than total refund due (₹${grandTotal.toFixed(2)}).`
-          : `Cannot process sale. Collected amount (₹${totalPaid.toFixed(2)}) is less than Grand Total (₹${grandTotal.toFixed(2)}).`
+          : `Cannot process sale. Collected amount (₹${totalPaid.toFixed(2)}) is less than Grand Total (₹${grandTotal.toFixed(2)}). Allocate any remaining balance to Credit (Udhar) or another payment mode.`
+      );
+      return;
+    }
+
+    if (overpayment > 0.01) {
+      setErrorMessage(
+        isReturn
+          ? `Cannot process return. Settled refund amount (₹${totalPaid.toFixed(2)}) exceeds total refund due (₹${grandTotal.toFixed(2)}).`
+          : `Cannot process sale. Total payment amount (₹${totalPaid.toFixed(2)}) exceeds Grand Total (₹${grandTotal.toFixed(2)}). Customer cannot pay more than the bill amount.`
       );
       return;
     }
@@ -547,17 +687,35 @@ export const SalesCheckoutModal = ({
       return;
     }
 
+    const creditNoteRow = payments.find((p) => p.paymentType === "CreditNote");
+    const hasCreditNote = Boolean(creditNoteRow);
     const creditRow = payments.find((p) => p.paymentType === "Credit");
     const hasCredit = Boolean(creditRow);
     const advanceRow = payments.find((p) => p.paymentType === "Advance");
     const hasAdvance = Boolean(advanceRow);
     const hasCust = Boolean(effectiveCustomer?._id || effectiveCustomer?.id);
 
-    if ((hasCredit || hasAdvance) && !hasCust) {
+    if (isWalkIn) {
+      const hasDisallowed = payments.some((p) =>
+        ["Credit", "Advance", "CreditNote"].includes(p.paymentType)
+      );
+      if (hasDisallowed) {
+        setErrorMessage(
+          isReturn
+            ? "Returns for Walk-in Customers can only be settled via Cash Refund. Register customer phone number to issue Credit Notes."
+            : "Walk-in customers cannot bill on Credit, use Advances, or redeem Credit Notes. Please choose Cash or UPI."
+        );
+        return;
+      }
+    }
+
+    if ((hasCredit || hasAdvance || hasCreditNote) && !hasCust) {
       setErrorMessage(
-        hasCredit
-          ? (isReturn ? "Credit Note requires selecting a registered customer profile first." : "Credit billing requires selecting a registered customer profile first.")
-          : (isReturn ? "Retaining advance deposit requires selecting a registered customer profile." : "Advance payment requires selecting a registered customer profile with available deposit.")
+        hasCreditNote
+          ? (isReturn ? "Issuing a Credit Note requires selecting a registered customer profile first." : "Redeeming a Credit Note requires selecting a registered customer profile.")
+          : hasCredit
+          ? "Credit billing requires selecting a registered customer profile first."
+          : "Advance payment requires selecting a registered customer profile with available deposit."
       );
       return;
     }
@@ -600,7 +758,7 @@ export const SalesCheckoutModal = ({
         billingMode,
         partyType: isB2B ? customer?.partyType || "wholesaler" : "retail_consumer",
         isReturn,
-        returnType: isReturn ? (payments[0]?.paymentType === "Advance" ? "advance_credit" : (payments[0]?.paymentType === "Credit" ? "credit_note" : "cash_refund")) : undefined,
+        returnType: isReturn ? (payments[0]?.paymentType === "CreditNote" || payments[0]?.paymentType === "Credit" ? "credit_note" : "cash_refund") : undefined,
         items,
         subtotal,
         itemDiscount,
@@ -611,28 +769,46 @@ export const SalesCheckoutModal = ({
         roundOff,
         grandTotal,
         gstSlabs,
-        paymentMethod: (isSplitMode || payments.length > 1) ? "Split" : (payments[0]?.paymentType || "Cash"),
+        paymentMethod: isReturn ? (payments[0]?.paymentType === "CreditNote" || payments[0]?.paymentType === "Credit" ? "Credit Note" : "Cash") : ((isSplitMode || payments.length > 1) ? "Split" : (payments[0]?.paymentType || "Cash")),
         shiftId: shiftIdProp || activeShift?._id || null,
         creditDueDate: creditRow?.creditDueDate || undefined,
         creditStatus: hasCredit ? "PENDING" : undefined,
         cashTendered: payments.reduce((sum, p) => p.paymentType === "Cash" ? sum + (p.cashDetails?.receivedTotal || Number(p.amount)) : sum, 0),
         changeDue: payments.reduce((sum, p) => p.paymentType === "Cash" ? sum + (p.cashDetails?.returnedTotal || 0) : sum, 0),
         denominations: [],
-        payments: payments.map(p => ({
-          paymentType: p.paymentType,
-          amount: Number(p.amount),
-          paymentQrId: p.paymentQrId,
-          txnRefNo: p.txnRefNo,
-          creditDueDate: p.paymentType === "Credit" ? p.creditDueDate : undefined,
-          branchId: p.paymentType === "Cash" ? branchId : undefined,
-          cashPartition: p.paymentType === "Cash" ? "running" : undefined,
-          denominations: p.cashDetails?.received 
-            ? Object.entries(p.cashDetails.received).map(([val, qty]) => ({ denomination: Number(val), quantity: qty }))
-            : [],
-          returnedDenominations: p.cashDetails?.returned 
-            ? Object.entries(p.cashDetails.returned).map(([val, qty]) => ({ denomination: Number(val), quantity: qty }))
-            : [],
-        })),
+        payments: payments.map(p => {
+          const amt = Number(p.amount) || 0;
+          let cashDenoms = [];
+          let retDenoms = [];
+          if (p.paymentType === "Cash") {
+            if (p.cashDetails?.received) {
+              cashDenoms = Object.entries(p.cashDetails.received)
+                .filter(([, qty]) => Number(qty) > 0)
+                .map(([val, qty]) => ({ denomination: Number(val), quantity: Number(qty) }));
+            }
+            if (cashDenoms.length === 0 && amt > 0) {
+              const autoD = decomposeAmount(amt);
+              cashDenoms = Object.entries(autoD).map(([val, qty]) => ({ denomination: Number(val), quantity: Number(qty) }));
+            }
+            if (p.cashDetails?.returned) {
+              retDenoms = Object.entries(p.cashDetails.returned)
+                .filter(([, qty]) => Number(qty) > 0)
+                .map(([val, qty]) => ({ denomination: Number(val), quantity: Number(qty) }));
+            }
+          }
+          return {
+            paymentType: p.paymentType,
+            amount: amt,
+            paymentQrId: p.paymentType === "UPI" ? (p.paymentQrId || (primaryQr?._id ? String(primaryQr._id) : undefined)) : undefined,
+            txnRefNo: p.txnRefNo,
+            creditDueDate: p.paymentType === "Credit" ? p.creditDueDate : undefined,
+            creditNoteAllocations: p.paymentType === "CreditNote" ? (p.creditNoteAllocations || []) : undefined,
+            branchId: p.paymentType === "Cash" ? branchId : undefined,
+            cashPartition: p.paymentType === "Cash" ? "running" : undefined,
+            denominations: cashDenoms,
+            returnedDenominations: retDenoms,
+          };
+        }),
         notes,
       };
 
@@ -671,9 +847,22 @@ export const SalesCheckoutModal = ({
               {/* Billed To */}
               <div className="px-4 py-2.5 border-b border-dashed border-border/70">
                 <div className="text-[9.5px] font-bold uppercase tracking-wider text-text-muted mb-0.5">Billed To</div>
-                <p className="font-bold text-xs text-text leading-tight">{customer?.name || "Walk-in Customer"}</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="font-bold text-xs text-text leading-tight">{customer?.name || "Walk-in Customer"}</p>
+                  {isWalkIn && (
+                    <span className="px-1.5 py-0.5 rounded text-[9.5px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                      Walk-in
+                    </span>
+                  )}
+                </div>
                 {customer?.mobile && <p className="text-[10.5px] text-text-muted font-mono mt-0.5">{customer.mobile}</p>}
                 {customer?.gstin && <p className="text-[10px] text-text-muted font-mono">GSTIN: {customer.gstin}</p>}
+                {!isWalkIn && creditNoteBalance > 0 && (
+                  <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
+                    <Receipt className="size-3" />
+                    <span>Credit Note: ₹{creditNoteBalance.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
 
               {/* Items list (compact) */}
@@ -743,9 +932,29 @@ export const SalesCheckoutModal = ({
 
               {/* Grand Total Bar */}
               <div className="px-4 py-2.5 bg-primary text-primary-contrast flex justify-between items-center">
-                <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">Grand Total</span>
+                <span className="text-[10px] font-bold uppercase tracking-widest opacity-80">
+                  {isReturn ? "Refund Total" : "Grand Total"}
+                </span>
                 <span className="text-lg font-black font-mono tabular-nums">₹{grandTotal.toFixed(2)}</span>
               </div>
+
+              {/* Payment Summary in receipt preview if Credit Note applied */}
+              {(() => {
+                const cnRow = payments.find((p) => p.paymentType === "CreditNote");
+                const cnAmt = Number(cnRow?.amount || 0);
+                if (cnAmt > 0) {
+                  return (
+                    <div className="px-4 py-1.5 bg-indigo-500/10 border-t border-indigo-500/20 text-[10.5px] font-mono flex justify-between items-center text-indigo-700 dark:text-indigo-300">
+                      <span className="font-bold flex items-center gap-1">
+                        <Receipt className="size-3" />
+                        {isReturn ? "Credit Note to Issue:" : "Credit Note Applied:"}
+                      </span>
+                      <span className="font-black">₹{cnAmt.toFixed(2)}</span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Extra Discount Controls */}
               <div className="px-4 py-2.5 border-t border-dashed border-border/60 bg-surface-alt/50 space-y-1.5">
@@ -806,14 +1015,48 @@ export const SalesCheckoutModal = ({
               </p>
             </div>
             <div className={cn(
-              "px-3 py-1 rounded-xl text-xs font-bold border transition-all",
-              shortfall === 0
+              "px-3 py-1 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5",
+              isExactBalance
                 ? "bg-success-soft text-success border-success/30"
+                : overpayment > 0
+                ? "bg-error-soft text-error border-error/30"
                 : "bg-warning-soft text-warning border-warning/30"
             )}>
-              {shortfall === 0 ? "✓ Balanced" : isReturn ? `Pending Refund ₹${shortfall.toFixed(2)}` : `Short ₹${shortfall.toFixed(2)}`}
+              {isExactBalance
+                ? "✓ Balanced"
+                : overpayment > 0
+                ? (isReturn ? `Excess Refund ₹${overpayment.toFixed(2)}` : `Overpaid by ₹${overpayment.toFixed(2)}`)
+                : (isReturn ? `Pending Refund ₹${shortfall.toFixed(2)}` : `Short ₹${shortfall.toFixed(2)}`)}
             </div>
           </div>
+
+          {/* Overpayment Warning & Auto-Balance Banner */}
+          {overpayment > 0 && (
+            <div className="mx-5 mt-3 p-3 rounded-xl bg-error/10 border-2 border-error/40 text-error flex items-center justify-between gap-3 animate-in fade-in shrink-0 shadow-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                <AlertCircle className="size-4.5 text-error shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[10px] font-black uppercase tracking-wider block text-error">
+                    Overpayment Detected
+                  </span>
+                  <p className="text-xs font-semibold text-error truncate">
+                    Total payments (₹{totalPaid.toFixed(2)}) exceed bill amount by ₹{overpayment.toFixed(2)}. Payments must exactly equal ₹{grandTotal.toFixed(2)}.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const rebalanced = rebalancePaymentsOnUpdate(payments, payments.length - 1, payments[payments.length - 1].amount, grandTotal);
+                  setPayments(rebalanced);
+                  setErrorMessage(null);
+                }}
+                className="px-3 py-1 rounded-lg bg-error text-white text-[11px] font-bold hover:bg-error/90 cursor-pointer shadow-xs whitespace-nowrap shrink-0 transition-colors"
+              >
+                Auto-Balance Split
+              </button>
+            </div>
+          )}
 
           {/* Prominent Full Error Message Banner */}
           {errorMessage && (
@@ -840,42 +1083,25 @@ export const SalesCheckoutModal = ({
             </div>
           )}
 
-          {/* Quick Payment Mode Tabs */}
-          <div className="px-5 pt-2.5 pb-2 border-b border-border bg-surface-alt/20 shrink-0">
-            <div className="text-[9.5px] font-bold uppercase tracking-wider text-text-muted mb-1.5 flex items-center justify-between">
-              <span>{isReturn ? "Refund Settlement Mode" : "Payment Mode"}</span>
-              {isSplitMode && (
-                <span className="text-[9.5px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-full border border-indigo-500/20">
-                  Split Mode Active ({payments.length} parts)
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-5 gap-1.5">
-              {modeTabs.map((m) => {
-                const Icon = m.icon;
-                const isActive = isSplitMode ? m.id === "Split" : (!isSplitMode && payments.length === 1 && payments[0]?.paymentType === m.id);
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => handleSelectPrimaryMode(m.id)}
-                    className={cn(
-                      "flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border text-xs font-bold transition-all cursor-pointer",
-                      isActive
-                        ? m.activeCls
-                        : "border-border bg-surface text-text hover:bg-surface-hover"
-                    )}
-                  >
-                    <Icon className={cn("size-3.5", m.color)} />
-                    <span className="truncate">{m.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
           {/* Payment Methods (2-column grid layout, fits without scrolling) */}
           <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3">
+            {payments.length > 1 && (
+              <div className="flex items-center justify-between px-1 text-xs">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                  Split Tender Active ({payments.length} parts)
+                </span>
+                <span className={cn(
+                  "text-[10px] font-bold px-2 py-0.5 rounded-full border",
+                  isExactBalance
+                    ? "text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 border-indigo-500/20"
+                    : overpayment > 0
+                    ? "text-error bg-error/10 border-error/30"
+                    : "text-amber-600 bg-amber-500/10 border-amber-500/30"
+                )}>
+                  Paid: ₹{totalPaid.toFixed(2)} / ₹{grandTotal.toFixed(2)}
+                </span>
+              </div>
+            )}
             {payments.map((row, index) => (
               <div key={row.id} className="p-3.5 rounded-xl border border-border bg-surface shadow-xs space-y-2.5">
 
@@ -898,16 +1124,38 @@ export const SalesCheckoutModal = ({
                       <label className="text-[10px] font-bold uppercase tracking-wider text-text-muted block">
                         {isReturn ? "Refund Amount (₹)" : "Amount (₹)"}
                       </label>
-                      {payments.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveRow(index)}
-                          className="text-text-muted hover:text-error transition-colors p-0.5 cursor-pointer rounded"
-                          title="Remove payment row"
-                        >
-                          <Trash2 className="size-3" />
-                        </button>
-                      )}
+                      <div className="flex items-center gap-1.5">
+                        {shortfall > 0 && payments.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdate(index, "amount", Math.round(((Number(row.amount) || 0) + shortfall) * 100) / 100)}
+                            className="text-[9.5px] font-bold text-primary hover:underline cursor-pointer"
+                            title="Add shortfall to this payment mode"
+                          >
+                            + Fill ₹{shortfall.toFixed(2)}
+                          </button>
+                        )}
+                        {overpayment > 0 && Number(row.amount || 0) >= overpayment && (
+                          <button
+                            type="button"
+                            onClick={() => handleUpdate(index, "amount", Math.round(((Number(row.amount) || 0) - overpayment) * 100) / 100)}
+                            className="text-[9.5px] font-bold text-error hover:underline cursor-pointer"
+                            title="Trim overpayment from this payment mode"
+                          >
+                            - Trim ₹{overpayment.toFixed(2)}
+                          </button>
+                        )}
+                        {payments.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveRow(index)}
+                            className="text-text-muted hover:text-error transition-colors p-0.5 cursor-pointer rounded"
+                            title="Remove payment row"
+                          >
+                            <Trash2 className="size-3" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="relative">
                       <input
@@ -1033,7 +1281,7 @@ export const SalesCheckoutModal = ({
                 {row.paymentType === "Cash" && isReturn && availableCash < Number(row.amount || 0) && (
                   <div className="p-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 flex items-center gap-1.5 text-[10.5px] text-amber-700 dark:text-amber-300 font-medium">
                     <AlertCircle className="size-3.5 text-amber-600 shrink-0" />
-                    <span>Current drawer cash (₹{availableCash.toFixed(2)}) is less than refund amount (₹{Number(row.amount || 0).toFixed(2)}). Consider 'Keep as Advance'.</span>
+                    <span>Current drawer cash (₹{availableCash.toFixed(2)}) is less than refund amount (₹{Number(row.amount || 0).toFixed(2)}). Consider 'Issue Credit Note'.</span>
                   </div>
                 )}
 
@@ -1090,6 +1338,23 @@ export const SalesCheckoutModal = ({
                             </span>
                           </div>
                         </div>
+
+                        {availableCredit > 0 && Number(row.amount || 0) < Math.min(grandTotal, availableCredit) && (
+                          <div className="flex justify-end pt-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const maxCred = Math.min(grandTotal, availableCredit);
+                                const rebalanced = rebalancePaymentsOnUpdate(payments, index, maxCred, grandTotal);
+                                setPayments(rebalanced);
+                                setErrorMessage(null);
+                              }}
+                              className="px-2.5 py-1 rounded bg-rose-600 text-white text-[10.5px] font-bold hover:bg-rose-700 cursor-pointer transition-all shadow-2xs"
+                            >
+                              Max Credit (₹{Math.min(grandTotal, availableCredit).toFixed(2)})
+                            </button>
+                          </div>
+                        )}
 
                         {Number(row.amount || 0) > availableCredit && (
                           <div className="p-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1.5">
@@ -1165,6 +1430,127 @@ export const SalesCheckoutModal = ({
                   </div>
                 )}
 
+                {/* If Credit Note: Customer Credit Note Balance & Auto-Apply */}
+                {row.paymentType === "CreditNote" && (
+                  <div className="pt-2 border-t border-indigo-500/20 space-y-2 animate-in fade-in">
+                    {!effectiveCustomer?._id && !effectiveCustomer?.id ? (
+                      <div className="p-2 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-xs text-indigo-600 dark:text-indigo-400 font-medium flex items-center gap-2">
+                        <AlertCircle className="size-4 shrink-0" />
+                        <span>Credit Note requires selecting a registered customer profile first.</span>
+                      </div>
+                    ) : isReturn ? (
+                      <div className="p-3 rounded-xl border border-indigo-500/25 bg-indigo-500/10 space-y-1.5">
+                        <div className="flex items-center gap-2">
+                          <Receipt className="size-4 text-indigo-600 shrink-0" />
+                          <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">
+                            Issue Credit Note Voucher of ₹{Number(row.amount || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-text-muted leading-relaxed">
+                          A formal return Credit Note voucher will be generated and credited to{" "}
+                          <strong>{effectiveCustomer?.name || "Customer"}</strong>&apos;s account.
+                          The customer can redeem this balance during future sales checkouts.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="p-2.5 rounded-lg border border-indigo-500/20 bg-indigo-500/5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Receipt className="size-4 text-indigo-600" />
+                              <div>
+                                <span className="text-[9.5px] font-bold text-text-muted uppercase block leading-none">
+                                  Available Credit Note Balance
+                                </span>
+                                <span className="text-xs font-mono font-bold text-indigo-600">
+                                  ₹{creditNoteBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {creditNoteBalance > 0 && Number(row.amount || 0) < Math.min(grandTotal, creditNoteBalance) && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const maxCn = Math.min(grandTotal, creditNoteBalance);
+                                    const rebalanced = rebalancePaymentsOnUpdate(payments, index, maxCn, grandTotal);
+                                    setPayments(rebalanced);
+                                    setErrorMessage(null);
+                                  }}
+                                  className="px-2.5 py-1 rounded bg-indigo-600 text-white text-[10.5px] font-bold hover:bg-indigo-700 cursor-pointer transition-all shadow-2xs"
+                                >
+                                  Max Apply (₹{Math.min(grandTotal, creditNoteBalance).toFixed(2)})
+                                </button>
+                              )}
+                              <div className="text-right">
+                                <span className="text-[9.5px] font-bold text-text-muted uppercase block leading-none">
+                                  Balance After Bill
+                                </span>
+                                <span className={cn(
+                                  "text-xs font-mono font-bold",
+                                  creditNoteBalance >= Number(row.amount || 0) ? "text-emerald-600" : "text-rose-600"
+                                )}>
+                                  ₹{Math.max(0, creditNoteBalance - Number(row.amount || 0)).toFixed(2)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {Number(row.amount || 0) > creditNoteBalance && (
+                          <div className="p-1.5 rounded-lg border border-rose-500/30 bg-rose-500/10 text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1.5">
+                            <AlertCircle className="size-3.5 shrink-0" />
+                            <span>Requested amount exceeds available credit note balance by ₹{(Number(row.amount || 0) - creditNoteBalance).toFixed(2)}</span>
+                          </div>
+                        )}
+
+                        {customerCreditNotes.length > 0 && (
+                          <div className="p-2.5 rounded-lg border border-border bg-surface-alt/40 space-y-2">
+                            <div className="flex items-center justify-between text-[10px] font-bold text-text-muted uppercase tracking-wider">
+                              <span>Available Credit Notes ({customerCreditNotes.length})</span>
+                              <span className="text-primary font-mono lowercase text-[9.5px]">Auto-FIFO FIFO enabled</span>
+                            </div>
+                            <div className="max-h-28 overflow-y-auto space-y-1.5 pr-1">
+                              {customerCreditNotes.map((cn) => {
+                                const noteBal = Number(cn.balanceAmount || 0);
+                                const issueDate = cn.issueDate || cn.date || cn.createdAt;
+                                const formattedDate = issueDate ? new Date(issueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+                                return (
+                                  <div
+                                    key={cn._id}
+                                    className="flex items-center justify-between text-[11px] p-1.5 rounded-lg border border-border/70 bg-surface text-text hover:border-primary/40 transition-colors"
+                                  >
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <Receipt className="size-3 text-indigo-600 shrink-0" />
+                                      <div className="min-w-0">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-mono font-bold text-primary truncate">{cn.creditNoteNo}</span>
+                                          <span className="text-text-muted text-[9.5px]">({formattedDate})</span>
+                                        </div>
+                                        {cn.sourceReturnNo && (
+                                          <span className="text-[9.5px] text-text-muted block">
+                                            Return: {cn.sourceReturnNo}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <div className="text-right shrink-0">
+                                      <span className="font-mono font-bold text-emerald-600 text-xs block">
+                                        ₹{noteBal.toFixed(2)}
+                                      </span>
+                                      <span className="text-[9px] text-text-muted">Available</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {/* If Advance: Prepaid Deposit Balance Info */}
                 {row.paymentType === "Advance" && (
                   <div className="pt-2 border-t border-amber-500/20 space-y-2 animate-in fade-in">
@@ -1172,33 +1558,6 @@ export const SalesCheckoutModal = ({
                       <div className="p-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400 font-medium flex items-center gap-2">
                         <AlertCircle className="size-4 shrink-0" />
                         <span>Advance billing requires selecting a registered customer profile.</span>
-                      </div>
-                    ) : isReturn ? (
-                      <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Wallet className="size-4 text-amber-600" />
-                            <div>
-                              <span className="text-[9.5px] font-bold text-text-muted uppercase block leading-none">
-                                Current Customer Advance
-                              </span>
-                              <span className="text-xs font-mono font-bold text-amber-600">
-                                ₹{advanceBalance.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-[9.5px] font-bold text-text-muted uppercase block leading-none">
-                              New Advance After Refund
-                            </span>
-                            <span className="text-xs font-mono font-bold text-emerald-600">
-                              ₹{(advanceBalance + Number(row.amount || 0)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                            </span>
-                          </div>
-                        </div>
-                        <p className="text-[10px] text-amber-700 dark:text-amber-300 font-medium">
-                          ✓ The refund amount of ₹{Number(row.amount || 0).toFixed(2)} will be retained as customer advance deposit for future purchases.
-                        </p>
                       </div>
                     ) : (
                       <>
@@ -1214,16 +1573,32 @@ export const SalesCheckoutModal = ({
                               </span>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <span className="text-[9.5px] font-bold text-text-muted uppercase block leading-none">
-                              Remaining After Bill
-                            </span>
-                            <span className={cn(
-                              "text-xs font-mono font-bold",
-                              advanceBalance >= Number(row.amount || 0) ? "text-emerald-600" : "text-rose-600"
-                            )}>
-                              ₹{Math.max(0, advanceBalance - Number(row.amount || 0)).toFixed(2)}
-                            </span>
+                          <div className="flex items-center gap-2">
+                            {advanceBalance > 0 && Number(row.amount || 0) < Math.min(grandTotal, advanceBalance) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const maxAdv = Math.min(grandTotal, advanceBalance);
+                                  const rebalanced = rebalancePaymentsOnUpdate(payments, index, maxAdv, grandTotal);
+                                  setPayments(rebalanced);
+                                  setErrorMessage(null);
+                                }}
+                                className="px-2.5 py-1 rounded bg-amber-600 text-white text-[10.5px] font-bold hover:bg-amber-700 cursor-pointer transition-all shadow-2xs"
+                              >
+                                Max Apply (₹{Math.min(grandTotal, advanceBalance).toFixed(2)})
+                              </button>
+                            )}
+                            <div className="text-right">
+                              <span className="text-[9.5px] font-bold text-text-muted uppercase block leading-none">
+                                Remaining After Bill
+                              </span>
+                              <span className={cn(
+                                "text-xs font-mono font-bold",
+                                advanceBalance >= Number(row.amount || 0) ? "text-emerald-600" : "text-rose-600"
+                              )}>
+                                ₹{Math.max(0, advanceBalance - Number(row.amount || 0)).toFixed(2)}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
@@ -1240,15 +1615,67 @@ export const SalesCheckoutModal = ({
               </div>
             ))}
 
+            {/* Quick Settle Shortfall Options */}
+            {shortfall > 0 && !isReturn && (
+              <div className="p-2.5 rounded-xl border border-warning/30 bg-warning-soft/10 space-y-1.5 animate-in fade-in">
+                <div className="flex items-center justify-between text-[10px] font-bold text-warning uppercase tracking-wider">
+                  <span>Settle Shortfall (₹{shortfall.toFixed(2)} remaining)</span>
+                  <span>Select mode</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {!isWalkIn && effectiveCustomer?._id && availableCredit > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleAddOrFillPayment("Credit", Math.min(shortfall, availableCredit))}
+                      className="px-2.5 py-1 rounded-md text-[10.5px] font-bold bg-rose-500/15 hover:bg-rose-500/25 text-rose-600 border border-rose-500/30 flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                    >
+                      <Receipt className="size-3" />
+                      + Put ₹{Math.min(shortfall, availableCredit).toFixed(2)} on Credit (Udhar)
+                    </button>
+                  )}
+                  {!isWalkIn && effectiveCustomer?._id && creditNoteBalance > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleAddOrFillPayment("CreditNote", Math.min(shortfall, creditNoteBalance))}
+                      className="px-2.5 py-1 rounded-md text-[10.5px] font-bold bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-600 border border-indigo-500/30 flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                    >
+                      <Receipt className="size-3" />
+                      + Pay ₹{Math.min(shortfall, creditNoteBalance).toFixed(2)} from Credit Note
+                    </button>
+                  )}
+                  {!isWalkIn && effectiveCustomer?._id && advanceBalance > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleAddOrFillPayment("Advance", Math.min(shortfall, advanceBalance))}
+                      className="px-2.5 py-1 rounded-md text-[10.5px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 border border-amber-500/30 flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                    >
+                      <Wallet className="size-3" />
+                      + Pay ₹{Math.min(shortfall, advanceBalance).toFixed(2)} from Advance
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleAddOrFillPayment("UPI", shortfall)}
+                    className="px-2.5 py-1 rounded-md text-[10.5px] font-bold bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 border border-purple-500/30 flex items-center gap-1 cursor-pointer transition-all shadow-2xs"
+                  >
+                    <QrCode className="size-3" />
+                    + Add ₹{shortfall.toFixed(2)} UPI
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Compact Add Split Payment */}
-            <button
-              type="button"
-              onClick={handleAddRow}
-              className="w-full py-2 rounded-lg border border-dashed border-primary/40 text-primary text-xs font-bold bg-primary-soft/5 hover:bg-primary-soft/15 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <PlusCircle className="size-3.5" />
-              {isReturn ? "Add Split Refund Method" : "Add Split Payment Method"}
-            </button>
+            {!isReturn && (
+              <button
+                type="button"
+                onClick={handleAddRow}
+                className="w-full py-2 rounded-lg border border-dashed border-primary/40 text-primary text-xs font-bold bg-primary-soft/5 hover:bg-primary-soft/15 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <PlusCircle className="size-3.5" />
+                Add Split Payment Method
+              </button>
+            )}
           </div>
 
           {/* Footer: Compact, Shorter Confirm Button (Fit) */}
@@ -1265,6 +1692,35 @@ export const SalesCheckoutModal = ({
                     {errorMessage}
                   </span>
                 </div>
+              ) : isBusinessDayClosed && isShiftClosed ? (
+                <div className="flex items-center gap-1.5 text-error">
+                  <AlertCircle className="size-3.5 shrink-0 text-error" />
+                  <span className="text-[11px] font-bold truncate block">
+                    ⚠️ The shift is closed, the business day is closed
+                  </span>
+                </div>
+              ) : isBusinessDayClosed ? (
+                <div className="flex items-center gap-1.5 text-error">
+                  <AlertCircle className="size-3.5 shrink-0 text-error" />
+                  <span className="text-[11px] font-bold truncate block">
+                    ⚠️ The Business Day is closed for this branch
+                  </span>
+                </div>
+              ) : isShiftClosed ? (
+                <div className="flex items-center gap-1.5 text-error">
+                  <AlertCircle className="size-3.5 shrink-0 text-error" />
+                  <span className="text-[11px] font-bold truncate block">
+                    ⚠️ The shift is closed. Open a shift to bill
+                  </span>
+                </div>
+              ) : overpayment > 0 ? (
+                <span className="text-[11px] font-bold text-error truncate block">
+                  ⚠️ Overpaid by ₹{overpayment.toFixed(2)}. Payments must equal ₹{grandTotal.toFixed(2)}
+                </span>
+              ) : shortfall > 0 ? (
+                <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 truncate block">
+                  ⚠️ Short by ₹{shortfall.toFixed(2)}. Settle remaining shortfall to continue
+                </span>
               ) : hasUncapturedCash ? (
                 <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-300 truncate block">
                   ⚠️ Select cash denominations to continue
@@ -1294,11 +1750,29 @@ export const SalesCheckoutModal = ({
                   className="px-5 font-bold"
                   isLoading={isSubmitting}
                   loadingText={isReturn ? "Processing Return..." : "Processing..."}
-                  disabled={isSubmitting || shortfall > 0 || hasUncapturedCash}
+                  disabled={isSubmitting || !isExactBalance || hasUncapturedCash || isSessionBlocked}
                   onClick={handleProcessSale}
                   startIcon={isReturn ? <RotateCcw className="size-4" /> : <CheckCircle2 className="size-4" />}
                 >
-                  {isReturn ? "Confirm Return & Refund" : "Confirm Sale"}
+                  {isBusinessDayClosed && isShiftClosed
+                    ? "Shift & Business Day Closed"
+                    : isBusinessDayClosed
+                    ? "Business Day Closed"
+                    : isShiftClosed
+                    ? "Shift Closed"
+                    : overpayment > 0
+                    ? `Overpaid by ₹${overpayment.toFixed(2)}`
+                    : shortfall > 0
+                    ? `Short by ₹${shortfall.toFixed(2)}`
+                    : isReturn
+                        ? (payments[0]?.paymentType === "CreditNote" || payments[0]?.paymentType === "Credit"
+                            ? "Confirm Return & Issue Credit Note"
+                            : "Confirm Return & Dispense Cash")
+                        : (isSplitMode || payments.length > 1
+                            ? "Confirm Split Sale"
+                            : payments[0]?.paymentType === "CreditNote"
+                            ? "Confirm Sale (Paid by Credit Note)"
+                            : "Confirm Sale")}
                 </UIButton>
               </PermissionGate>
             </div>
@@ -1328,3 +1802,4 @@ export const SalesCheckoutModal = ({
 };
 
 export default SalesCheckoutModal;
+

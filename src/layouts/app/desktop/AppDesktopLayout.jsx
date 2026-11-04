@@ -6,7 +6,9 @@ import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { cn } from "@/lib/utils";
 import { useMargShortcuts } from "@/hooks";
+import { useWorkMode } from "@/contexts";
 import { KeyboardShortcutsModal } from "@/components/ui";
+import ChooseWorkModeView from "@/features/operations/components/ChooseWorkModeView";
 
 import AppDesktopHeader from "./AppDesktopHeader";
 import AppDesktopSidebar from "./AppDesktopSidebar";
@@ -17,6 +19,7 @@ const SIDEBAR_COLLAPSED_WIDTH = 68;
 
 const AppDesktopLayout = () => {
   const location = useLocation();
+  const { workMode } = useWorkMode();
   // Collapsed state (false = expanded 240px, true = collapsed icon rail 68px)
   const [collapsed, setCollapsed] = useState(false);
   const { currentCompany } = useCompany();
@@ -77,13 +80,19 @@ const AppDesktopLayout = () => {
 
         <main
           className={cn(
-            "mt-[62px] min-w-0 flex-1 px-3 sm:px-5 flex flex-col",
-            isFixedViewportPage
-              ? "h-[calc(100dvh-62px)] max-h-[calc(100dvh-62px)] overflow-hidden py-2 sm:py-2.5"
-              : "min-h-[calc(100dvh-62px)] overflow-y-auto py-3 sm:py-4"
+            "mt-[62px] min-w-0 flex-1 flex flex-col",
+            !workMode
+              ? "min-h-[calc(100dvh-62px)] overflow-y-auto p-0"
+              : isFixedViewportPage
+              ? "h-[calc(100dvh-62px)] max-h-[calc(100dvh-62px)] overflow-hidden py-2 sm:py-2.5 px-3 sm:px-5"
+              : "min-h-[calc(100dvh-62px)] overflow-y-auto py-3 sm:py-4 px-3 sm:px-5"
           )}
         >
-          <Outlet key={`${currentCompany?._id}-${currentBranch?._id}`} />
+          {!workMode ? (
+            <ChooseWorkModeView />
+          ) : (
+            <Outlet key={`${currentCompany?._id}-${currentBranch?._id}`} />
+          )}
         </main>
       </div>
 

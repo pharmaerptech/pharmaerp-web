@@ -239,7 +239,7 @@ export const DoctorSearchBar = forwardRef(
     const isSm = size === "sm";
 
     return (
-      <div ref={containerRef} className={cn("relative w-full", className)}>
+      <div ref={containerRef} className={cn("relative w-full", isOpen && "z-30", className)}>
         {/* Search input container */}
         <div className="relative flex items-center w-full">
           <Stethoscope
@@ -294,7 +294,7 @@ export const DoctorSearchBar = forwardRef(
         {isOpen && (currentValue || "").trim().length >= 2 && (
           <div
             className={cn(
-              "absolute left-0 right-0 top-[calc(100%+6px)] z-50 flex flex-col h-[340px] overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--app-shadow-xl)] animate-in fade-in-50 zoom-in-95 duration-100",
+              "absolute left-0 right-0 top-[calc(100%+6px)] z-30 flex flex-col h-[340px] overflow-hidden rounded-2xl border border-border bg-surface shadow-[var(--app-shadow-xl)] animate-in fade-in-50 zoom-in-95 duration-100",
               dropdownClassName
             )}
           >

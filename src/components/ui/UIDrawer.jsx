@@ -113,7 +113,7 @@ export const UIDrawer = forwardRef(
     return (
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-50 overflow-hidden font-sans">
+          <div className="fixed inset-0 z-[100] overflow-hidden font-sans">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
