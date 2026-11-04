@@ -28,6 +28,7 @@ import {
   RefreshCw,
   FolderTree,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
 
 import { ROUTES } from "@/constants";
@@ -99,6 +100,14 @@ export const SIDEBAR_NAV_GROUPS = [
         shortcut: "Alt + S",
         permission: "product:view",
         keywords: ["stock metrics", "stock matrix", "inventory", "batches", "batch stock", "qoh", "expiry"],
+      },
+      {
+        id: "expired-scrap",
+        label: "Expired & Scrap",
+        path: ROUTES.EXPIRED_SCRAP_ITEMS,
+        icon: Trash2,
+        permission: "product:view",
+        keywords: ["expired items", "scrap bin", "broken returns", "expired returns", "quarantine", "disposal"],
       },
       {
         id: "transfer-orders",

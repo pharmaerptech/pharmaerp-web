@@ -906,7 +906,7 @@ export const BillingInvoiceDetailsDrawer = ({
                             <span className="text-[10px] text-text-muted">{item.brand || "Pharma"} • {item.category || "Medicine"}</span>
                           </td>
                           <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted font-semibold">{item.batch || "—"}</td>
-                          <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted">{item.expiry || "—"}</td>
+                          <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted">{item.expiry || item.expiryDate || item.expDate || "—"}</td>
                           <td className="py-2.5 px-2 font-mono text-center font-bold text-purple-600 dark:text-purple-400">{item.gst || 5}%</td>
                           <td className="py-2.5 px-2 font-mono text-right font-bold text-text tabular-nums">
                             {soldQty}

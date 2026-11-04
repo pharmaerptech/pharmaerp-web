@@ -2152,6 +2152,7 @@ export const SalesDesktopPage = () => {
         onClose={() => setIsBatchModalOpen(false)}
         product={selectedProductForBatches}
         billingMode={billingMode}
+        branchName={currentBranch?.name || "Main Branch"}
         onConfirmAddToCart={handleConfirmAddBatchToCart}
       />
 

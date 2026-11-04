@@ -1,6 +1,7 @@
 // src/features/stock-metrics/pages/desktop/StockMetricsDesktopPage.jsx
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Layers,
@@ -14,6 +15,7 @@ import {
   Calendar,
   Clock,
   Check,
+  Trash2,
 } from "lucide-react";
 
 import {
@@ -30,6 +32,7 @@ import {
   UIInfiniteScroll,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { ROUTES } from "@/constants";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useUser from "@/features/user/hooks/useUser";
 import workspaceProductService from "@/features/workspace-products/services/workspaceProductService";
@@ -210,6 +213,7 @@ const HighlightedExpiryBadge = ({ expiryDate }) => {
 const PAGE_LIMIT = 25;
 
 export const StockMetricsDesktopPage = () => {
+  const navigate = useNavigate();
   const tableContainerRef = useRef(null);
   const { activeBranchId: userBranchId, activeCompanyId } = useUser();
   const { currentBranch } = useBranch();
@@ -713,8 +717,26 @@ export const StockMetricsDesktopPage = () => {
           </UIButton>
         )}
 
-        {/* Right-Aligned Cluster: Low Stock Switch & Refresh Button */}
+        {/* Right-Aligned Cluster: Expired Items Button, Low Stock Switch & Refresh */}
         <div className="flex items-center gap-2 ml-auto">
+          {/* Expired & Scrap Items Page Navigation Button */}
+          <UIButton
+            type="button"
+            variant="outline"
+            size="md"
+            onClick={() => navigate(ROUTES.EXPIRED_SCRAP_ITEMS)}
+            startIcon={<Trash2 className="size-4 text-rose-600 dark:text-rose-400" />}
+            className="h-10 px-3.5 text-xs font-semibold rounded-xl border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Open Expired & Scrap Items Register with filters and checkboxes"
+          >
+            <span>Expired & Scrap Items</span>
+            {stats.nearExpiryOrExpiredCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono bg-rose-600 text-white ml-0.5">
+                {stats.nearExpiryOrExpiredCount}
+              </span>
+            )}
+          </UIButton>
+
           {/* Low Stock Modern Toggle Switch */}
           <label
             className={cn(

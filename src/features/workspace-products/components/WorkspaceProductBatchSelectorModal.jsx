@@ -42,6 +42,52 @@ const parseExpiryDate = (raw) => {
   return isNaN(parsed.getTime()) ? new Date(9999, 11, 31) : parsed;
 };
 
+/**
+ * Safely extract MongoDB ObjectId string from string, ObjectId or populated object
+ */
+const extractId = (val) => {
+  if (!val) return "";
+  if (typeof val === "object") {
+    return String(val._id || val.id || "").trim();
+  }
+  return String(val).trim();
+};
+
+/**
+ * Format expiry date into clean MM/YY display string
+ */
+const formatExpDisplay = (raw) => {
+  if (!raw) return "N/A";
+  const str = String(raw).trim();
+  if (!str) return "N/A";
+  if (str.includes("/")) {
+    const parts = str.split("/");
+    if (parts.length === 2) {
+      const m = parts[0].padStart(2, "0");
+      let y = parts[1];
+      if (y.length === 4) y = y.slice(-2);
+      return `${m}/${y}`;
+    }
+    return str;
+  }
+  if (str.includes("-")) {
+    const parts = str.split("-");
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        return `${parts[1].padStart(2, "0")}/${parts[0].slice(-2)}`;
+      }
+    }
+    return str;
+  }
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const y = String(d.getFullYear()).slice(-2);
+    return `${m}/${y}`;
+  }
+  return str;
+};
+
 /** Safe number parser */
 const safeNum = (v) => {
   const n = Number(v);
@@ -147,10 +193,10 @@ export const WorkspaceProductBatchSelectorModal = ({
       userManuallySelectedRef.current = false;
       fetchBatchesForProduct(product);
       
-      const prodId = product._id || product.id;
+      const prodId = extractId(product._id || product.id);
       if (prodId) {
         Promise.all([
-          workspaceProductService.getProductFacilityBatchesByQueryV2({ filters: { product: prodId }, companyId: activeCompanyId, limit: 50 }),
+          workspaceProductService.getProductFacilityBatchesByQueryV2({ filters: { product: prodId }, companyId: activeCompanyId, limit: 100 }),
           branchService.getWorkspaceBranches().catch(() => ({ data: { data: [] } }))
         ]).then(([res, branchRes]) => {
           const apiBatches = res.data?.data?.batches || res.data?.batches || res.data?.data || [];
@@ -158,17 +204,18 @@ export const WorkspaceProductBatchSelectorModal = ({
           
           const branchMap = {};
           branches.forEach(b => {
-             branchMap[b._id || b.id] = b.name || b.branchName;
+             branchMap[extractId(b._id || b.id)] = b.name || b.branchName;
           });
 
           let otherStock = 0;
           const stockByBranch = {};
+          const currentActiveBranchId = extractId(activeBranchId);
 
           apiBatches.forEach(b => {
-             const bBranchId = String(b.branch_id || b.facility_id || b.facilityId || b.branchId || b.branch || "");
-             if (activeBranchId && bBranchId && bBranchId !== String(activeBranchId)) {
+             const bBranchId = extractId(b.branchId || b.branch_id || b.facility_id || b.facilityId || b.branch);
+             if (currentActiveBranchId && bBranchId && bBranchId !== currentActiveBranchId) {
                 const bStock = Number(b.stock ?? b.batchQty ?? b.qty ?? b.currentStock ?? 0);
-                if (bStock > 0) {
+                if (bStock > 0 && b.scrapType !== "EXPIRED" && b.scrapType !== "BROKEN") {
                   otherStock += bStock;
                   stockByBranch[bBranchId] = (stockByBranch[bBranchId] || 0) + bStock;
                 }
@@ -228,13 +275,32 @@ export const WorkspaceProductBatchSelectorModal = ({
         list = p.facilityBatches;
       } else if (p._id || p.id) {
         try {
-          const prodId = p._id || p.id;
+          const prodId = extractId(p._id || p.id);
+          const currentBranchFilter = extractId(activeBranchId);
+          // Query batches for the active branch first
           const res = await workspaceProductService.getProductFacilityBatchesByQueryV2({
-            filters: { product: prodId }, companyId: activeCompanyId, limit: 20,
+            filters: {
+              product: prodId,
+              ...(currentBranchFilter ? { facility: currentBranchFilter } : {}),
+              inStockOnly: true,
+            },
+            companyId: activeCompanyId,
+            limit: 50,
           });
           const apiBatches = res.data?.data?.batches || res.data?.batches || res.data?.data || [];
           if (Array.isArray(apiBatches) && apiBatches.length > 0) {
             list = apiBatches;
+          } else {
+            // Fallback: check across all branches in case branchId was missing/differently scoped
+            const fallbackRes = await workspaceProductService.getProductFacilityBatchesByQueryV2({
+              filters: { product: prodId, inStockOnly: true },
+              companyId: activeCompanyId,
+              limit: 50,
+            });
+            const fallbackBatches = fallbackRes.data?.data?.batches || fallbackRes.data?.batches || fallbackRes.data?.data || [];
+            if (Array.isArray(fallbackBatches) && fallbackBatches.length > 0) {
+              list = fallbackBatches;
+            }
           }
         } catch (apiErr) {
           console.warn("Batch query endpoint fallback:", apiErr);
@@ -242,24 +308,31 @@ export const WorkspaceProductBatchSelectorModal = ({
       }
 
       // Filter list strictly for selected product & non-zero stock
-      const targetId = String(p._id || p.id || "").toLowerCase();
+      const targetId = extractId(p._id || p.id).toLowerCase();
       const targetName = String(p.displayName || p.name || "").toLowerCase().trim();
+      const currentActiveBranchId = extractId(activeBranchId);
 
       let matchedList = list.filter((b) => {
         if (!b) return false;
 
-        const bBranchId = String(b.branch_id || b.facility_id || b.facilityId || b.branchId || b.branch || "");
-        if (activeBranchId && bBranchId && bBranchId !== String(activeBranchId)) {
+        // Never show scrap batches (expired or broken returns quarantined in scrap bin) in POS sale selector
+        if (
+          b.scrapType === "EXPIRED" ||
+          b.scrapType === "BROKEN" ||
+          (b.batchNo && (b.batchNo.includes("[EXPIRED]") || b.batchNo.includes("[BROKEN]")))
+        ) {
           return false;
         }
 
-        const bStock = Number(b.stock ?? b.batchQty ?? b.qty ?? b.currentStock ?? p.stock);
+        const bBranchId = extractId(b.branchId || b.branch_id || b.facility_id || b.facilityId || b.branch);
+        if (currentActiveBranchId && bBranchId && bBranchId !== currentActiveBranchId) {
+          return false;
+        }
+
+        const bStock = Number(b.stock ?? b.batchQty ?? b.qty ?? b.currentStock ?? 0);
         if (bStock <= 0) return false;
 
-        if (!b.productId && !b.workspaceProductId && !b.productName && (Array.isArray(p.batches) || Array.isArray(p.facilityBatches))) {
-          return true;
-        }
-        const bProdId = String(b.productId || b.workspaceProductId || b.product || "").toLowerCase();
+        const bProdId = extractId(b.productId || b.workspaceProductId || b.product).toLowerCase();
         const bProdName = String(b.productName || b.displayName || b.name || "").toLowerCase().trim();
 
         if (targetId && bProdId && (bProdId === targetId || targetId.includes(bProdId) || bProdId.includes(targetId))) {
@@ -268,16 +341,51 @@ export const WorkspaceProductBatchSelectorModal = ({
         if (targetName && bProdName && (bProdName === targetName || bProdName.includes(targetName) || targetName.includes(bProdName))) {
           return true;
         }
+        // If neither matched but it was loaded explicitly for this product
+        if (!bProdId && !bProdName) {
+          return true;
+        }
         return false;
       });
 
-      // Single batch fallback for product if list is empty
-      if (matchedList.length === 0) {
-        const baseMrp = Number(p.mrp ?? p.mrpPrice);
-        const basePrice = Number(p.rateC ?? p.rate ?? p.price ?? p.ptr);
-        const baseBatchNo = p.batchNo || p.batch || p.displaySku || p.sku;
-        const baseRack = p.rack || p.shelfLocation;
-        const basePack = p.pack || p.packaging || p.displayDosageForm;
+      // Normalize batches so fields are always clean
+      matchedList = matchedList.map((b, idx) => {
+        const bNo = b.batchNo || b.batchNumber || b.batch || `B-${idx + 1}`;
+        const bStock = Number(b.stock ?? b.batchQty ?? b.qty ?? b.currentStock ?? 0);
+        const bExp = b.expiry || b.expiryDate || b.expDate || "";
+        const bMrp = Number(b.mrp ?? b.MRP ?? p.mrp ?? p.mrpPrice ?? 0);
+        const bRateA = Number(b.rateA ?? b.ratea ?? b.rate ?? p.rateA ?? 0);
+        const bRateB = Number(b.rateB ?? b.rateb ?? b.ptr ?? p.rateB ?? 0);
+        const bRateC = Number(b.rateC ?? b.ratec ?? b.price ?? b.saleRate ?? p.rateC ?? p.price ?? bMrp);
+        const bRack = b.rack || p.rack || "";
+        const bPack = b.pack || p.pack || "";
+
+        return {
+          ...b,
+          id: b._id || b.id || `b-${bNo}-${idx}`,
+          batchNo: bNo,
+          stock: bStock,
+          batchQty: bStock,
+          qty: bStock,
+          expiry: bExp,
+          expiryDate: bExp,
+          mrp: bMrp,
+          price: bRateC,
+          rateC: bRateC,
+          rateB: bRateB,
+          rateA: bRateA,
+          rack: bRack,
+          pack: bPack,
+        };
+      });
+
+      // Fallback only if product itself carries explicit standalone stock & batch info
+      if (matchedList.length === 0 && (Number(p.stock || 0) > 0 || p.batchNo || p.expiryDate)) {
+        const baseMrp = Number(p.mrp ?? p.mrpPrice ?? 0);
+        const basePrice = Number(p.rateC ?? p.rate ?? p.price ?? p.ptr ?? baseMrp);
+        const baseBatchNo = p.batchNo || p.batch || p.displaySku || p.sku || "STANDARD";
+        const baseRack = p.rack || p.shelfLocation || "";
+        const basePack = p.pack || p.packaging || p.displayDosageForm || "PCS";
         const baseHsn =
           p.globalProduct?.hsn ||
           p.globalProduct?.hsnCode ||
@@ -296,33 +404,35 @@ export const WorkspaceProductBatchSelectorModal = ({
           p.taxRate ??
           p.hsnTaxpercent ??
           p.gst ??
-          p.HsnMaster?.gstRate
-        const baseExpiry = p.expiryDate || p.expDate || p.expiry || p.displayExpDate;
+          p.HsnMaster?.gstRate;
+        const baseExpiry = p.expiryDate || p.expDate || p.expiry || p.displayExpDate || "";
+        const baseStock = Number(p.stock || 0);
 
-        const baseRateB = Number(p.rateB ?? p.rateb ?? p.ptr ?? 0);
-        const baseRateA = Number(p.rateA ?? p.ratea ?? 0);
-        const baseSchemeDiscountPercent = Number(p.schemeDiscountPercent ?? 0);
-
-        matchedList = [
-          {
-            id: `b-${p._id || p.id || "1"}`,
-            batchNo: baseBatchNo,
-            mrp: baseMrp,
-            price: basePrice,
-            rateB: baseRateB,
-            rateA: baseRateA,
-            stock: p.stock,
-            expiry: baseExpiry,
-            rack: baseRack,
-            pack: basePack,
-            hsn: baseHsn,
-            gst: baseGst,
-            ratePct: p.rateCPercentage !== undefined && p.rateCPercentage !== null ? `${p.rateCPercentage}%` : (p.ratePct || p.marginPct || "16%"),
-            rateCPercentage: p.rateCPercentage,
-            productName: p.displayName || p.name,
-            schemeDiscountPercent: baseSchemeDiscountPercent,
-          },
-        ];
+        if (baseStock > 0) {
+          matchedList = [
+            {
+              id: `b-${p._id || p.id || "1"}`,
+              batchNo: baseBatchNo,
+              mrp: baseMrp,
+              price: basePrice,
+              rateB: Number(p.rateB ?? p.rateb ?? p.ptr ?? 0),
+              rateA: Number(p.rateA ?? p.ratea ?? 0),
+              stock: baseStock,
+              batchQty: baseStock,
+              qty: baseStock,
+              expiry: baseExpiry,
+              expiryDate: baseExpiry,
+              rack: baseRack,
+              pack: basePack,
+              hsn: baseHsn,
+              gst: baseGst,
+              ratePct: p.rateCPercentage !== undefined && p.rateCPercentage !== null ? `${p.rateCPercentage}%` : (p.ratePct || p.marginPct || "16%"),
+              rateCPercentage: p.rateCPercentage,
+              productName: p.displayName || p.name,
+              schemeDiscountPercent: Number(p.schemeDiscountPercent ?? 0),
+            },
+          ];
+        }
       }
 
       // FEFO Sort: Nearest Expiry Date first
@@ -501,17 +611,17 @@ export const WorkspaceProductBatchSelectorModal = ({
 
     const itemsToAdd = selectedBatchesList.map((b) => {
       const bId = b.id || b._id || b.batchNo;
-      const bNo = b.batchNo || b.batchNumber || b.batch;
+      const bNo = b.batchNo || b.batchNumber || b.batch || "STANDARD";
       const bRate = Number(b.rateC ?? b.rate ?? b.price ?? b.saleRate ?? b.rateA ?? product.rateC ?? product.price);
       const bMrp = Number(b.mrp ?? product.mrp);
-      const bExp = b.expiry || b.expiryDate || b.expDate;
+      const bExp = b.expiry || b.expiryDate || b.expDate || "";
       const bRack = b.rack || product.rack;
       const bPack = b.pack || product.pack;
       const bHsn = b.hsn || hsn;
       const bGst = b.gst ?? defaultGstRate;
       const bRatePct = b.rateCPercentage !== undefined && b.rateCPercentage !== null ? `${b.rateCPercentage}%` : (product.rateCPercentage !== undefined && product.rateCPercentage !== null ? `${product.rateCPercentage}%` : (b.ratePct || product.ratePct));
       const bRateCPercentage = b.rateCPercentage !== undefined && b.rateCPercentage !== null ? b.rateCPercentage : product.rateCPercentage;
-      const bStock = b.stock ?? b.batchQty;
+      const bStock = Number(b.stock ?? b.batchQty ?? b.qty ?? 0);
 
       const bRateB = Number(b.rateB ?? b.rateb ?? b.ptr ?? product.rateB ?? product.rateb ?? product.ptr ?? 0);
       const bRateA = Number(b.rateA ?? b.ratea ?? product.rateA ?? product.ratea ?? 0);
@@ -529,6 +639,7 @@ export const WorkspaceProductBatchSelectorModal = ({
         brand,
         category,
         batch: bNo,
+        batchNo: bNo,
         pack: bPack,
         rack: bRack,
         hsn: bHsn,
@@ -536,7 +647,10 @@ export const WorkspaceProductBatchSelectorModal = ({
         ratePct: bRatePct,
         rateCPercentage: bRateCPercentage,
         expiry: bExp,
+        expiryDate: bExp,
+        expDate: bExp,
         stock: bStock,
+        batchQty: bStock,
         mrp: bMrp,
         price: bRate,
         rateB: bRateB,
@@ -691,16 +805,16 @@ export const WorkspaceProductBatchSelectorModal = ({
                 const allocated = allocations[bId];
                 const isNearestExp = idx === 0;
 
-                const bNo = b.batchNo || b.batchNumber || b.batch;
-                const bMrp = Number(b.mrp ?? product.mrp);
+                const bNo = b.batchNo || b.batchNumber || b.batch || "STANDARD";
+                const bMrp = Number(b.mrp ?? product.mrp ?? 0);
                 const bRate = Number(
                   billingMode === "B2C"
-                    ? (b.rateC ?? b.rate ?? b.price ?? b.saleRate ?? product.rateC ?? product.price)
-                    : (b.price ?? b.rate ?? b.rateC ?? product.price)
+                    ? (b.rateC ?? b.rate ?? b.price ?? b.saleRate ?? product.rateC ?? product.price ?? bMrp)
+                    : (b.price ?? b.rate ?? b.rateC ?? product.price ?? bMrp)
                 );
-                const bStock = b.stock ?? b.batchQty;
-                const bExp = b.expiry || b.expiryDate || b.expDate;
-                const bRack = b.rack || product.rack
+                const bStock = Number(b.stock ?? b.batchQty ?? b.qty ?? 0);
+                const bExp = b.expiry || b.expiryDate || b.expDate || "";
+                const bRack = b.rack || product.rack;
                 const bSchemeDiscount = b.schemeDiscountPercent || product.schemeDiscountPercent;
 
                 // --- Scheme Discount Calculation ---
@@ -747,7 +861,7 @@ export const WorkspaceProductBatchSelectorModal = ({
                           )}
 
                           <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-text-muted bg-surface px-2 py-0.5 rounded border border-border">
-                            <Calendar className="size-3 text-amber-500" /> Exp: {bExp}
+                            <Calendar className="size-3 text-amber-500" /> Exp: {formatExpDisplay(bExp)}
                           </span>
                         </div>
 

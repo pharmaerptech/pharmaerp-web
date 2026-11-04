@@ -97,6 +97,7 @@ const getPageTitle = (pathname) => {
   if (pathname.startsWith("/doctors")) return "Doctors";
 
   // Inventory & Catalog
+  if (pathname.startsWith("/inventory/expired-scrap") || pathname === ROUTES.EXPIRED_SCRAP_ITEMS) return "Expired & Scrap Items Register";
   if (pathname.startsWith("/inventory/stock-metrics") || pathname.startsWith("/stock-metrics")) return "Stock Metrics";
   if (pathname.startsWith("/workspace-products/create")) return "Add Custom Product";
   if (pathname.startsWith("/workspace-products/") && pathname.includes("/edit")) return "Edit Custom Product";
@@ -399,6 +400,13 @@ const getBreadcrumbs = (pathname, isSetupComplete = false) => {
   }
 
   // Inventory & Stock
+  if (pathname === "/inventory/expired-scrap" || pathname === ROUTES.EXPIRED_SCRAP_ITEMS) {
+    return [
+      root,
+      { label: "Stock Matrix", to: ROUTES.STOCK_METRICS },
+      { label: "Expired & Scrap Items", to: null },
+    ];
+  }
   if (pathname === "/inventory/stock-metrics" || pathname === "/stock-metrics" || pathname === ROUTES.STOCK_METRICS) {
     return [root, { label: "Stock Metrics", to: null }];
   }

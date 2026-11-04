@@ -121,7 +121,7 @@ export const SalesInvoicePreviewModal = ({
         brand: item.brand || item.manufacturer || "",
         category: item.category || "",
         batch: item.batch || item.batchNo || "—",
-        expiry: item.expiry || item.expDate || "—",
+        expiry: item.expiry || item.expiryDate || item.expDate || "—",
         pack: item.pack || item.packSize || "",
         rack: item.rack || "",
         hsn: item.hsn || item.hsnCode || "300490",

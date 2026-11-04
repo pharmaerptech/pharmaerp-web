@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   RotateCcw,
   Search,
@@ -34,8 +35,8 @@ import useBranch from "@/features/branch/hooks/useBranch";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import salesReturnService from "../../services/salesReturnService";
 import SalesReturnDetailsDrawer from "../../components/SalesReturnDetailsDrawer";
-import CreateSalesReturnModal from "../../components/CreateSalesReturnModal";
 import { OrderInvoiceModal } from "@/features/sales/components";
+import { ROUTES } from "@/constants";
 
 const formatCurrency = (val) => {
   const num = Number(val) || 0;
@@ -82,6 +83,8 @@ const REFUND_TYPE_OPTIONS = [
 ];
 
 export const SalesReturnDesktopPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { currentBranch } = useBranch();
   const { currentCompany } = useWorkspace();
 
@@ -119,9 +122,6 @@ export const SalesReturnDesktopPage = () => {
   // Print Modal
   const [printReturn, setPrintReturn] = useState(null);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
-
-  // Create Return Modal
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Fetch Returns
   const fetchReturns = useCallback(async () => {
@@ -229,11 +229,19 @@ export const SalesReturnDesktopPage = () => {
     setIsDrawerOpen(true);
   };
 
-  const handleOpenPrint = (item, e) => {
+  const handleOpenPrint = useCallback((item, e) => {
     if (e) e.stopPropagation();
     setPrintReturn(item);
     setIsPrintOpen(true);
-  };
+  }, []);
+
+  // If navigated from create page with a new return memo to print
+  useEffect(() => {
+    if (location.state?.printReturn) {
+      handleOpenPrint(location.state.printReturn);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, handleOpenPrint]);
 
   return (
     <div className="flex-1 flex flex-col h-full bg-surface-alt/30 overflow-hidden">
@@ -265,7 +273,7 @@ export const SalesReturnDesktopPage = () => {
             variant="destructive"
             size="sm"
             icon={Plus}
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={() => navigate(ROUTES.CREATE_SALES_RETURN)}
           >
             New Sales Return
           </UIButton>
@@ -584,18 +592,6 @@ export const SalesReturnDesktopPage = () => {
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         returnItem={selectedReturn}
-      />
-
-      {/* Create Sales Return Modal */}
-      <CreateSalesReturnModal
-        open={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSuccess={(saved) => {
-          fetchReturns();
-          if (saved) {
-            handleOpenPrint(saved);
-          }
-        }}
       />
 
       {/* Printable Receipt Modal */}

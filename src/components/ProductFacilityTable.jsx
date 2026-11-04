@@ -1,6 +1,7 @@
 // src/components/ProductFacilityTable.jsx
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FiSearch,
   FiFilter,
@@ -14,7 +15,9 @@ import {
   FiEye,
   FiX,
   FiCheck,
+  FiTrash2,
 } from "react-icons/fi";
+import { ROUTES } from "@/constants";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useUser from "@/features/user/hooks/useUser";
 import {
@@ -191,6 +194,7 @@ const HighlightedExpiryBadge = ({ expiryDate }) => {
 };
 
 const ProductFacilityTable = ({ data }) => {
+  const navigate = useNavigate();
   /* ---------------- STATE ---------------- */
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -375,6 +379,17 @@ const ProductFacilityTable = ({ data }) => {
           >
             <FiAlertTriangle className={lowStockFilter ? "text-rose-600" : "text-text-muted"} />
             Low Stock
+          </button>
+
+          {/* Expired & Scrap Items Button */}
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.EXPIRED_SCRAP_ITEMS)}
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer"
+            title="Open Expired & Scrap Items Register"
+          >
+            <FiTrash2 className="text-rose-600" />
+            Expired & Scrap
           </button>
 
           {/* Refresh Button */}

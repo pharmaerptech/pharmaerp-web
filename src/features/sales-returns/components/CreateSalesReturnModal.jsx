@@ -430,20 +430,24 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
         paymentMethod: refundMode,
         refundMethod: refundMode,
         notes: notes || `Returned from bill #${originalInvoice?.invoiceNo}`,
-        items: activeReturnItems.map((i) => ({
-          productId: i.productId,
-          batchId: i.batchId,
-          batchNo: i.batch,
-          name: i.name,
-          pack: i.pack,
-          expiry: i.expiry,
-          price: i.price,
-          rate: i.price,
-          mrp: i.mrp,
-          qty: i.returnQty,
-          gst: i.tax,
-          total: i.price * i.returnQty,
-        })),
+        items: activeReturnItems.map((i) => {
+          const rawPid = i.productId?._id || i.productId || i._id || i.id;
+          const cleanPid = typeof rawPid === "string" && rawPid.includes("-") ? rawPid.split("-")[0] : rawPid;
+          return {
+            productId: cleanPid,
+            batchId: i.batchId,
+            batchNo: i.batch,
+            name: i.name,
+            pack: i.pack,
+            expiry: i.expiry,
+            price: i.price,
+            rate: i.price,
+            mrp: i.mrp,
+            qty: i.returnQty,
+            gst: i.tax,
+            total: i.price * i.returnQty,
+          };
+        }),
         denominations: Object.entries(cashDenominations)
           .map(([val, qty]) => ({ denomination: Number(val), quantity: Number(qty) }))
           .filter((d) => d.quantity > 0),

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   RotateCcw,
   Search,
@@ -16,8 +17,8 @@ import useBranch from "@/features/branch/hooks/useBranch";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import salesReturnService from "../../services/salesReturnService";
 import SalesReturnDetailsDrawer from "../../components/SalesReturnDetailsDrawer";
-import CreateSalesReturnModal from "../../components/CreateSalesReturnModal";
 import { OrderInvoiceModal } from "@/features/sales/components";
+import { ROUTES } from "@/constants";
 
 const formatCurrency = (val) => {
   const num = Number(val) || 0;
@@ -38,6 +39,8 @@ const formatDate = (val) => {
 };
 
 export const SalesReturnMobilePage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { currentBranch } = useBranch();
   const { currentCompany } = useWorkspace();
 
@@ -48,9 +51,16 @@ export const SalesReturnMobilePage = () => {
   const [refundType, setRefundType] = useState("all");
   const [selectedReturn, setSelectedReturn] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [printReturn, setPrintReturn] = useState(null);
   const [isPrintOpen, setIsPrintOpen] = useState(false);
+
+  useEffect(() => {
+    if (location.state?.printReturn) {
+      setPrintReturn(location.state.printReturn);
+      setIsPrintOpen(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   // Debounce search
   useEffect(() => {
@@ -100,7 +110,7 @@ export const SalesReturnMobilePage = () => {
           variant="destructive"
           size="sm"
           icon={Plus}
-          onClick={() => setIsCreateOpen(true)}
+          onClick={() => navigate(ROUTES.CREATE_SALES_RETURN)}
         >
           New Return
         </UIButton>
@@ -224,13 +234,6 @@ export const SalesReturnMobilePage = () => {
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         returnItem={selectedReturn}
-      />
-
-      {/* Create Modal */}
-      <CreateSalesReturnModal
-        open={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
-        onSuccess={() => fetchReturns()}
       />
 
       {/* Print Modal */}

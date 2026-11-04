@@ -227,8 +227,11 @@ export const ROUTES = {
   WORKSPACE_PRODUCT_IMPORT: "/workspace-products/import",
   WORKSPACE_PRODUCT_SEARCH: "/workspace-products/search",
 
-  // Inventory - Stock Metrics
+  // Inventory - Stock Metrics & Expired Stock Register
   STOCK_METRICS: "/inventory/stock-metrics",
+  EXPIRED_SCRAP_ITEMS: "/inventory/expired-scrap",
+  TRANSFER_ORDERS: "/inventory/transfer-orders",
+  CREATE_TRANSFER_ORDER: "/inventory/transfer-orders/create",
 
   // Catalog - HSN Master (Read-Only Workspace View)
   HSN_MASTER: "/catalog/hsn-master",
@@ -289,6 +292,7 @@ export const ROUTES = {
   // Billing & Invoices
   BILLING: "/billing",
   SALES_RETURNS: "/sales-returns",
+  CREATE_SALES_RETURN: "/sales-returns/create",
 
   // Purchases & Procurement
   PURCHASES: "/purchases",
