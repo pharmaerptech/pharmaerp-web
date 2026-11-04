@@ -1184,10 +1184,15 @@ export const SalesDesktopPage = () => {
       const resolvedOrigInvoiceNo = saleData.originalInvoiceNo || firstOrigItem?.originalInvoiceNo || (targetInvoiceNo?.startsWith("RET-") ? null : targetInvoiceNo);
       const resolvedOrigInvoiceId = saleData.originalInvoiceId || firstOrigItem?.originalInvoiceId || null;
 
+      const b2bPartyGst = (selectedB2bParty?.gstNumber || selectedB2bParty?.gstin || activeCustomer?.gstNumber || activeCustomer?.gstin || "").trim().toUpperCase();
+      const hasPartyGst = b2bPartyGst.length >= 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(b2bPartyGst);
+      const effectiveBillingMode = (billingMode === "B2B" && !hasPartyGst) ? "B2C" : billingMode;
+
       const payload = {
         customerId: targetCustomerId,
         invoiceNo: targetInvoiceNo,
-        billingMode,
+        billingMode: effectiveBillingMode,
+        customerGstin: b2bPartyGst || undefined,
         branchId: activeBranchId,
         subtotal: saleData.subtotal || saleData.subTotal,
         discount: saleData.extraDiscount || saleData.discount || saleData.totalDiscount,
@@ -1232,7 +1237,7 @@ export const SalesDesktopPage = () => {
       date: activeShift?.date ? new Date(activeShift.date).toISOString() : new Date().toISOString(),
       createdAt: savedSaleResult?.createdAt || new Date().toISOString(),
       updatedAt: savedSaleResult?.updatedAt || null,
-      billingMode,
+      billingMode: savedSaleResult?.billingMode || effectiveBillingMode,
       partyType: billingMode === "B2B" ? selectedB2bParty?.partyType || "wholesaler" : "retail",
     });
     setIsReceiptOpen(true);

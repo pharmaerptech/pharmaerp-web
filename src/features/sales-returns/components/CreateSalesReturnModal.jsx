@@ -416,13 +416,19 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
       const branchId = currentBranch?._id || currentBranch?.id || originalInvoice?.branchId;
       const customerId = originalInvoice?.customerId?._id || originalInvoice?.customerId;
 
+      const customerGstin = (originalInvoice?.customerId?.gstNumber || originalInvoice?.customerId?.gstin || originalInvoice?.customerGstin || "").trim().toUpperCase();
+      const hasCustomerGst = customerGstin.length >= 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(customerGstin);
+      const originalBillingMode = originalInvoice?.billingMode || "B2C";
+      const effectiveBillingMode = (hasCustomerGst && String(originalBillingMode).toUpperCase() === "B2B") ? "B2B" : "B2C";
+
       const payload = {
         branchId,
         date: new Date().toISOString(),
         shiftId: activeShift?._id || null,
         originalInvoiceId: originalInvoice?._id,
         originalInvoiceNo: originalInvoice?.invoiceNo,
-        billingMode: originalInvoice?.billingMode || "B2C",
+        billingMode: effectiveBillingMode,
+        customerGstin: customerGstin || undefined,
         subtotal,
         tax: totalGst,
         grandTotal,

@@ -418,13 +418,19 @@ export const CreateSalesReturnMobilePage = () => {
       const branchId = currentBranch?._id || currentBranch?.id || cart[0]?.branchId;
       const customerId = selectedCustomer?._id || selectedCustomer?.id;
 
+      const customerGstin = (selectedCustomer?.gstNumber || selectedCustomer?.gstin || "").trim().toUpperCase();
+      const hasCustomerGst = customerGstin.length >= 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(customerGstin);
+      const originalBillingMode = cart[0]?.billingMode || "B2C";
+      const effectiveBillingMode = (hasCustomerGst && String(originalBillingMode).toUpperCase() === "B2B") ? "B2B" : "B2C";
+
       const payload = {
         branchId,
         date: new Date().toISOString(),
         shiftId: activeShift?._id || null,
         originalInvoiceId: cart[0]?.originalInvoiceId,
         originalInvoiceNo: cart[0]?.originalInvoiceNo,
-        billingMode: cart[0]?.billingMode || "B2C",
+        billingMode: effectiveBillingMode,
+        customerGstin: customerGstin || undefined,
         subtotal: cartSubtotal,
         tax: cartTotalGst,
         grandTotal,

@@ -508,13 +508,19 @@ export const CreateSalesReturnDesktopPage = () => {
       const primaryBillId = cart[0]?.originalInvoiceId;
       const primaryBillNo = cart[0]?.originalInvoiceNo;
 
+      const customerGstin = (selectedCustomer?.gstNumber || selectedCustomer?.gstin || "").trim().toUpperCase();
+      const hasCustomerGst = customerGstin.length >= 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(customerGstin);
+      const originalBillingMode = cart[0]?.billingMode || "B2C";
+      const effectiveBillingMode = (hasCustomerGst && String(originalBillingMode).toUpperCase() === "B2B") ? "B2B" : "B2C";
+
       const payload = {
         branchId,
         date: new Date().toISOString(),
         shiftId: activeShift?._id || null,
         originalInvoiceId: primaryBillId,
         originalInvoiceNo: primaryBillNo,
-        billingMode: cart[0]?.billingMode || "B2C",
+        billingMode: effectiveBillingMode,
+        customerGstin: customerGstin || undefined,
         subtotal: cartSubtotal,
         tax: cartTotalGst,
         grandTotal,
@@ -712,6 +718,15 @@ export const CreateSalesReturnDesktopPage = () => {
                 <span className="font-bold text-text">{selectedCustomer.name}</span>
                 {selectedCustomer.mobile && (
                   <span className="font-mono text-[11px]">{selectedCustomer.mobile}</span>
+                )}
+                {selectedCustomer.gstNumber ? (
+                  <span className="font-mono text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    GST: {selectedCustomer.gstNumber} · Registered
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                    Unregistered Party
+                  </span>
                 )}
                 {selectedCustomer.advanceBalance > 0 && (
                   <span className="px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-700 dark:text-blue-300 font-mono font-bold text-[10.5px] border border-blue-500/20">

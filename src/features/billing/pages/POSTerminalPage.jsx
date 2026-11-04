@@ -720,9 +720,15 @@ export const POSTerminalPage = () => {
         }
       }
 
+      // Check if selected B2B party has a valid GST number; if not, create as B2C invoice
+      const partyGstin = (selectedParty?.gstNumber || selectedParty?.gstin || "").trim().toUpperCase();
+      const hasPartyGst = partyGstin.length >= 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(partyGstin);
+      const effectiveBillingMode = (billingMode === "B2B" && !hasPartyGst) ? "B2C" : billingMode;
+
       const salePayload = {
         invoiceNo,
-        billingMode,
+        billingMode: effectiveBillingMode,
+        customerGstin: partyGstin || undefined,
         branchId: currentBranch?._id || null,
         shiftId: activeShift?._id || initialInvoice?.shiftId || null,
         date: isEditMode && initialInvoice?.date ? initialInvoice.date : new Date().toISOString(),
@@ -830,6 +836,7 @@ export const POSTerminalPage = () => {
       const invoiceDocData = {
         ...salePayload,
         ...savedSaleResult,
+        billingMode: savedSaleResult?.billingMode || effectiveBillingMode,
         invoiceNo: actualInvoiceNo,
         customerName: billingMode === "B2B" ? selectedParty?.name || b2bSearchQuery : b2cName || "Walk-in Customer",
         customerPhone: billingMode === "B2B" ? selectedParty?.mobile : b2cPhone,
@@ -1492,10 +1499,16 @@ export const POSTerminalPage = () => {
                               <span className="text-[10px] text-text-muted font-mono">{selectedParty.mobile}</span>
                             )}
                           </div>
-                          {selectedParty.gstNumber && (
+                          {selectedParty.gstNumber ? (
                             <div className="flex items-center gap-1 mt-1">
                               <span className="text-[10px] text-text-muted">GST:</span>
                               <span className="text-[10px] font-mono font-semibold text-text">{selectedParty.gstNumber}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 mt-1">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                                No GSTIN · Invoiced as B2C
+                              </span>
                             </div>
                           )}
                           {selectedParty.billingAddress?.city && (
