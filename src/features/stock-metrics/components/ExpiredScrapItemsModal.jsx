@@ -894,8 +894,11 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
       rate: Number(item.pts || item.rate || 0),
       mrp: item.mrp || 0,
       gstPct: item.hsnTaxpercent || 12,
+      supplier: item.supplier || null,
       supplierId: item.supplierId || item.supplier?._id || null,
-      supplierName: item.supplierName || item.supplier?.businessName || "",
+      supplierName: item.supplierName || item.supplier?.businessName || item.supplier?.name || "",
+      supplierGst: item.supplierGst || item.supplier?.gstNumber || "",
+      supplierMobile: item.supplierMobile || item.supplier?.mobile || item.supplier?.phone || "",
       purchaseBillId: item.purchaseBillId || null,
       purchaseBillNo: item.purchaseBillNo || "",
     }));

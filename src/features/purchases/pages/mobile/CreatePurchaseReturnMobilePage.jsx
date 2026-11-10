@@ -77,17 +77,66 @@ export const CreatePurchaseReturnMobilePage = () => {
         rate: Number(p.rate || 0),
         discountPct: Number(p.discountPct || 0),
         gstPct: Number(p.gstPct || 12),
+        supplier: p.supplier || null,
+        supplierId: p.supplierId || p.supplier?._id || null,
+        supplierName: p.supplierName || p.supplier?.businessName || "",
       }));
       setItems(staged);
 
-      if (prefilledItems[0]?.supplierId && !selectedSupplier) {
-        setSelectedSupplier({
-          _id: prefilledItems[0].supplierId,
-          businessName: prefilledItems[0].supplierName || "Supplier",
-        });
+      const firstWithSupplier = prefilledItems.find((p) => p.supplier || p.supplierId);
+      if (firstWithSupplier) {
+        const sup = firstWithSupplier.supplier || {
+          _id: firstWithSupplier.supplierId,
+          businessName: firstWithSupplier.supplierName || "Supplier",
+          gstNumber: firstWithSupplier.supplierGst || "",
+          mobile: firstWithSupplier.supplierMobile || "",
+        };
+        setSelectedSupplier(sup);
       }
     }
   }, [prefilledItems]);
+
+  // Auto-resolve supplier for selected items if not yet set
+  useEffect(() => {
+    if (items.length > 0 && !selectedSupplier) {
+      const itemWithSupplier = items.find((i) => i.supplier || i.supplierId);
+      if (itemWithSupplier?.supplier) {
+        setSelectedSupplier(itemWithSupplier.supplier);
+        return;
+      }
+      if (itemWithSupplier?.supplierId) {
+        setSelectedSupplier({
+          _id: itemWithSupplier.supplierId,
+          businessName: itemWithSupplier.supplierName || "Supplier",
+        });
+        return;
+      }
+
+      const firstItem = items[0];
+      if (firstItem?.batchNo) {
+        purchaseReturnService
+          .getEligibleBatches({
+            branchId: activeBranchId,
+            search: firstItem.batchNo,
+            limit: 5,
+          })
+          .then((res) => {
+            const list = res?.data?.data || res?.data || [];
+            const matched =
+              list.find(
+                (b) =>
+                  (firstItem.batchId && String(b.batchId) === String(firstItem.batchId)) ||
+                  b.batchNo === firstItem.batchNo
+              ) || list[0];
+            if (matched?.supplier) {
+              setSelectedSupplier(matched.supplier);
+              uiToast.success(`Supplier auto-selected: ${matched.supplier.businessName || matched.supplier.name}`);
+            }
+          })
+          .catch((err) => console.warn(err));
+      }
+    }
+  }, [items, selectedSupplier, activeBranchId]);
 
   const handleSearchBatches = async (query) => {
     if (!query || query.trim().length < 2) {
@@ -129,7 +178,23 @@ export const CreatePurchaseReturnMobilePage = () => {
   }, [searchQuery]);
 
   const handleSelectBatch = (b) => {
-    if (!selectedSupplier && b.supplier) setSelectedSupplier(b.supplier);
+    const batchSupplier =
+      b.supplier ||
+      (b.supplierId
+        ? {
+            _id: b.supplierId,
+            businessName: b.supplierName,
+            gstNumber: b.supplierGst || "",
+            mobile: b.supplierMobile || "",
+          }
+        : null);
+
+    if (batchSupplier && !selectedSupplier) {
+      setSelectedSupplier(batchSupplier);
+      uiToast.success(
+        `Supplier auto-selected: ${batchSupplier.businessName || batchSupplier.name || "Supplier"}`
+      );
+    }
     const existingIndex = items.findIndex((i) => i.batchId === b.batchId);
     if (existingIndex > -1) {
       uiToast.info(`Batch ${b.batchNo} is already added.`);
