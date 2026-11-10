@@ -1,6 +1,5 @@
 // src/features/dashboard/components/branch/BranchInterBranchTransfersCard.jsx
 
-import React from "react";
 import { ArrowRight, ArrowLeftRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { UICard, UIBadge, UIEmptyState, UISkeleton } from "@/components/ui";
@@ -59,7 +58,7 @@ export const BranchInterBranchTransfersCard = ({ transfers = [], className, isLo
 
         <button
           type="button"
-          onClick={() => navigate("/inventory/transfer-orders")}
+          onClick={() => navigate("/reports/inventory")}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
           <span>View All</span>

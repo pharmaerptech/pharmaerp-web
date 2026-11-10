@@ -71,6 +71,7 @@ export const filterNavByPipeline = (
             label: "Settings",
             path: ROUTES.SETTINGS,
             icon: Settings,
+            collapsedRail: true,
             keywords: ["settings", "preferences", "account"],
           },
           {
@@ -121,6 +122,11 @@ export const filterNavByPipeline = (
     })
     .filter((group) => Array.isArray(group.items) && group.items.length > 0);
 };
+
+/**
+ * Curates the closed/collapsed sidebar rail so it never overflows or congests.
+ */
+export { filterNavForCollapsedRail } from "@/contexts/routePipelinePolicy";
 
 export default filterNavByPipeline;
 

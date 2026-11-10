@@ -1,11 +1,9 @@
 // src/layouts/app/mobile/AppMobileSidebar.jsx
 
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
 import { LogOut, X } from "lucide-react";
 import { ROUTES } from "@/constants";
 import useAuth from "@/features/auth/hooks/useAuth";
-import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
@@ -17,19 +15,22 @@ import {
   SIDEBAR_NAV_GROUPS,
   SidebarItem,
   SidebarLevelIndicator,
+  SidebarWorkModeSwitcher,
   SidebarUserProfile,
   SidebarScrollArea,
   filterNavByPipeline,
 } from "../components/sidebar";
 import { filterNavByPermission } from "../components/sidebar/filterNavByPermission";
-import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
+import {
+  useNavigationPipeline,
+  PIPELINE_STORAGE_KEYS,
+} from "@/contexts/NavigationPipelineContext";
+import { clearAllHeldBillsStorage } from "@/features/sales/services/holdBillStorage";
 
 const AppMobileSidebar = ({ open, onClose }) => {
-  const navigate = useNavigate();
   const { user, logout, clearCredentials } = useAuth();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const { currentWorkspace } = useWorkspace();
   const { currentCompany } = useCompany();
   const { currentBranch } = useBranch();
   const { isSetupComplete, companyCompleted, branchCompleted } = useSetupStatus();
@@ -37,22 +38,19 @@ const AppMobileSidebar = ({ open, onClose }) => {
   const { workMode } = useWorkMode();
   const { currentLevel } = useNavigationPipeline();
 
-  // Filter nav groups by active pipeline level and workMode first, then by permissions
   const visibleNavGroups = useMemo(() => {
-    const pipelineFiltered = filterNavByPipeline(SIDEBAR_NAV_GROUPS, currentLevel, workMode);
-    return filterNavByPermission(
-      pipelineFiltered,
-      can,
-      canAny,
-      isOwner,
-      { 
-        isSetupComplete, 
-        companyCompleted, 
-        branchCompleted, 
-        hasActiveCompany: !!currentCompany, 
-        hasActiveBranch: !!currentBranch 
-      },
+    const pipelineFiltered = filterNavByPipeline(
+      SIDEBAR_NAV_GROUPS,
+      currentLevel,
+      workMode
     );
+    return filterNavByPermission(pipelineFiltered, can, canAny, isOwner, {
+      isSetupComplete,
+      companyCompleted,
+      branchCompleted,
+      hasActiveCompany: !!currentCompany,
+      hasActiveBranch: !!currentBranch,
+    });
   }, [
     currentLevel,
     workMode,
@@ -78,10 +76,16 @@ const AppMobileSidebar = ({ open, onClose }) => {
       console.error("Logout failed:", err);
     } finally {
       clearCredentials();
+      clearAllHeldBillsStorage();
       try {
         localStorage.removeItem("pahuch_work_mode");
         localStorage.removeItem("pahuch_work_mode_selected");
-      } catch {}
+        localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL);
+        localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+        localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+      } catch {
+        // ignore storage errors
+      }
       setIsLogoutDialogOpen(false);
       onClose();
       window.location.href = ROUTES.LOGIN;
@@ -100,7 +104,7 @@ const AppMobileSidebar = ({ open, onClose }) => {
         ].join(" ")}
       />
 
-      {/* Slide-out Mobile Sidebar Sheet */}
+      {/* Slide-out Mobile Sidebar Drawer */}
       <aside
         className={[
           "fixed inset-y-0 left-0 z-50 w-[275px] max-w-[85vw] border-r border-border bg-surface shadow-[var(--app-shadow-xl)]",
@@ -108,7 +112,7 @@ const AppMobileSidebar = ({ open, onClose }) => {
           open ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
-        {/* ── TOP: Brand Header (Choose Mode) OR Company & Branch Selector ───────────────────── */}
+        {/* ── TOP: Brand Header (Choose Mode) OR Level Header ───────────────────── */}
         {!workMode ? (
           <div className="relative flex h-13 shrink-0 items-center justify-between border-b border-border px-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -157,12 +161,11 @@ const AppMobileSidebar = ({ open, onClose }) => {
           />
         )}
 
-        {/* ── MIDDLE: Multi-Level Navigation Tree (WhatsApp-Style Auto-Hiding Scrollbar) ── */}
+        {/* ── MIDDLE: Navigation Tree ── */}
         <SidebarScrollArea className="px-2 py-2 space-y-3">
           <nav className="space-y-3">
             {visibleNavGroups.map((group) => (
               <div key={group.id} className="space-y-0.5">
-                {/* Subtle Group Label (11px uppercase) */}
                 <div className="px-2.5 py-1 text-[11px] font-medium uppercase tracking-wider text-text-muted/70">
                   {group.label}
                 </div>
@@ -183,8 +186,9 @@ const AppMobileSidebar = ({ open, onClose }) => {
           </nav>
         </SidebarScrollArea>
 
-        {/* ── BOTTOM: User Profile ───────────────────────────────────── */}
+        {/* ── BOTTOM: Work Mode Switcher & User Profile ───────────────────────────────────── */}
         <div className="shrink-0">
+          <SidebarWorkModeSwitcher collapsed={false} onModeChange={onClose} />
           <SidebarUserProfile
             user={user}
             collapsed={false}

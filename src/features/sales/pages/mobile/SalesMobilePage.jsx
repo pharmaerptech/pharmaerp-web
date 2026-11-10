@@ -1,6 +1,6 @@
 // src/features/sales/pages/mobile/SalesMobilePage.jsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -40,13 +40,18 @@ import {
   ResumeConflictDialog,
 } from "../../components";
 import { useHoldBills } from "../../hooks/useHoldBills";
+import {
+  saveAutoHeldBill,
+  hasMeaningfulSalesDraft,
+} from "../../services/holdBillStorage";
+import { API_STATUS, TOKEN_KEY } from "@/constants";
+import { storage } from "@/utils";
 import { useSelector, useDispatch } from "react-redux";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { useActiveShift } from "@/features/operations/shifts/hooks/useActiveShift";
 import { getOpenBusinessDay } from "@/features/operations/business-days/store/businessDayThunk";
 import OpenBusinessDayDialog from "@/features/operations/business-days/components/OpenBusinessDayDialog";
 import { CreateShiftDialog } from "@/features/operations/shifts/components/CreateShiftDialog";
-import { API_STATUS } from "@/constants";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import invoiceService from "@/features/sales/services/invoiceService";
 import customerService from "@/features/parties/customers/services/customerService";
@@ -57,6 +62,7 @@ export const SalesMobilePage = () => {
   const location = useLocation();
   const { invoiceId: routeInvoiceId } = useParams();
   const initialInvoice = location.state?.invoice;
+  const initialResumeHeldBill = location.state?.resumeHeldBill;
   const [editInvoiceData, setEditInvoiceData] = useState(initialInvoice || null);
   const isEditMode = Boolean(routeInvoiceId || initialInvoice);
   const [isLoadingInvoice, setIsLoadingInvoice] = useState(!initialInvoice && Boolean(routeInvoiceId));
@@ -65,8 +71,12 @@ export const SalesMobilePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [defaultWalkInCustomer, setDefaultWalkInCustomer] = useState(null);
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [cart, setCart] = useState([]);
+  const [selectedCustomer, setSelectedCustomer] = useState(
+    initialResumeHeldBill?.customer || null
+  );
+  const [cart, setCart] = useState(
+    Array.isArray(initialResumeHeldBill?.cart) ? initialResumeHeldBill.cart : []
+  );
   const [isInvoicePreviewOpen, setIsInvoicePreviewOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
@@ -114,15 +124,159 @@ export const SalesMobilePage = () => {
     heldBills,
     count: heldBillsCount,
     holdBill,
+    getAutoHold,
+    consumeAutoHold,
+    removeAutoHold,
     resumeBill,
     discardBill,
     clearAll: clearAllHeldBills,
+    workspaceId: holdWorkspaceId,
+    companyId: holdCompanyId,
   } = useHoldBills();
 
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
   const [isHeldBillsModalOpen, setIsHeldBillsModalOpen] = useState(false);
   const [pendingResumeBill, setPendingResumeBill] = useState(null);
   const [isResumeConflictOpen, setIsResumeConflictOpen] = useState(false);
+
+  const hasInitializedAutoHoldRef = useRef(false);
+  const pendingExplicitResumeRef = useRef(initialResumeHeldBill || null);
+
+  const currentMobileDraft = {
+    workspaceId: holdWorkspaceId,
+    companyId: holdCompanyId,
+    branchId,
+    activeShift,
+    isEditMode,
+    billingMode: "B2C",
+    selectedCustomer,
+    customerName: selectedCustomer?.name || "",
+    customerPhone: selectedCustomer?.phone || selectedCustomer?.mobile || "",
+    cart,
+  };
+  const latestDraftRef = useRef(currentMobileDraft);
+  useEffect(() => {
+    latestDraftRef.current = currentMobileDraft;
+  });
+
+  const hydrateMobileDraft = (targetBill) => {
+    if (!targetBill) return;
+    const resolvedCustomer =
+      targetBill.customer ||
+      (targetBill.customerName
+        ? {
+            name: targetBill.customerName,
+            phone: targetBill.customerPhone || "",
+            mobile: targetBill.customerPhone || "",
+          }
+        : null);
+    const resolvedCart = Array.isArray(targetBill.cart) ? targetBill.cart : [];
+
+    setSelectedCustomer(resolvedCustomer);
+    setCart(resolvedCart);
+    latestDraftRef.current = {
+      ...latestDraftRef.current,
+      selectedCustomer: resolvedCustomer,
+      customerName: resolvedCustomer?.name || "",
+      customerPhone: resolvedCustomer?.phone || resolvedCustomer?.mobile || "",
+      cart: resolvedCart,
+    };
+  };
+
+  const clearMobileDraftState = () => {
+    setCart([]);
+    setSelectedCustomer(null);
+    latestDraftRef.current = {
+      ...latestDraftRef.current,
+      selectedCustomer: null,
+      customerName: "",
+      customerPhone: "",
+      cart: [],
+    };
+  };
+
+  useEffect(() => {
+    if (isEditMode || !branchId || !activeShift || hasInitializedAutoHoldRef.current) {
+      return;
+    }
+    hasInitializedAutoHoldRef.current = true;
+
+    const pendingResume = pendingExplicitResumeRef.current;
+    pendingExplicitResumeRef.current = null;
+    const existingAuto = getAutoHold();
+
+    if (pendingResume?.id) {
+      window.history.replaceState({}, document.title);
+
+      if (
+        existingAuto &&
+        existingAuto.id !== pendingResume.id &&
+        Array.isArray(existingAuto.cart) &&
+        existingAuto.cart.length > 0
+      ) {
+        const restoredAuto = consumeAutoHold();
+        if (restoredAuto) {
+          hydrateMobileDraft(restoredAuto);
+        }
+        setPendingResumeBill(pendingResume);
+        setIsResumeConflictOpen(true);
+        return;
+      }
+
+      if (existingAuto && existingAuto.id === pendingResume.id) {
+        consumeAutoHold();
+      } else {
+        resumeBill(pendingResume.id);
+      }
+      hydrateMobileDraft(pendingResume);
+      setToastMessage(`▶️ Resumed held bill ${pendingResume.holdNumber || ""}.`);
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+
+    if (existingAuto) {
+      const restoredAuto = consumeAutoHold();
+      if (restoredAuto) {
+        hydrateMobileDraft(restoredAuto);
+        setToastMessage("🔄 Auto-held bill restored.");
+        setTimeout(() => setToastMessage(null), 3000);
+      }
+    }
+  }, [branchId, activeShift, isEditMode, getAutoHold, consumeAutoHold, resumeBill]);
+
+  useEffect(() => {
+    const persistAutoHoldIfEligible = () => {
+      const draft = latestDraftRef.current;
+      if (!draft || draft.isEditMode) return;
+      if (!draft.branchId || !draft.activeShift) return;
+      if (!storage.get(TOKEN_KEY)) return;
+      if (!hasMeaningfulSalesDraft(draft)) return;
+
+      saveAutoHeldBill({
+        workspaceId: draft.workspaceId,
+        companyId: draft.companyId,
+        branchId: draft.branchId,
+        billingMode: "B2C",
+        customer: draft.selectedCustomer,
+        customerName: draft.selectedCustomer?.name || draft.customerName || "",
+        customerPhone:
+          draft.selectedCustomer?.phone ||
+          draft.selectedCustomer?.mobile ||
+          draft.customerPhone ||
+          "",
+        saleDate: new Date().toISOString(),
+        cart: draft.cart,
+      });
+    };
+
+    window.addEventListener("beforeunload", persistAutoHoldIfEligible);
+    window.addEventListener("pagehide", persistAutoHoldIfEligible);
+    return () => {
+      window.removeEventListener("beforeunload", persistAutoHoldIfEligible);
+      window.removeEventListener("pagehide", persistAutoHoldIfEligible);
+      persistAutoHoldIfEligible();
+    };
+  }, []);
 
   useEffect(() => {
     if (shiftStatus !== "loading") {
@@ -205,14 +359,15 @@ export const SalesMobilePage = () => {
       billingMode: "B2C",
       customer: selectedCustomer,
       customerName: selectedCustomer?.name || "",
-      customerPhone: selectedCustomer?.phone || "",
+      customerPhone: selectedCustomer?.phone || selectedCustomer?.mobile || "",
       doctorName: "",
       saleDate: new Date().toISOString(),
       cart,
       note,
     });
 
-    setCart([]);
+    removeAutoHold();
+    clearMobileDraftState();
     setIsHoldModalOpen(false);
     setToastMessage(`⏸️ Bill ${held?.holdNumber || ""} held successfully.`);
     setTimeout(() => setToastMessage(null), 3500);
@@ -220,8 +375,7 @@ export const SalesMobilePage = () => {
 
   const executeResumeBill = (targetBill) => {
     if (!targetBill) return;
-    setSelectedCustomer(targetBill.customer || POS_DEFAULT_CUSTOMERS[0]);
-    setCart(Array.isArray(targetBill.cart) ? targetBill.cart : []);
+    hydrateMobileDraft(targetBill);
     resumeBill(targetBill.id);
 
     setIsResumeConflictOpen(false);
@@ -346,8 +500,8 @@ export const SalesMobilePage = () => {
     const finalData = savedSale ? { ...saleData, ...savedSale } : saleData;
     setCompletedSale(finalData);
     setIsReceiptOpen(true);
-    setCart([]);
-    setSelectedCustomer(null);
+    removeAutoHold();
+    clearMobileDraftState();
   };
 
   const handleSelectWorkspaceProduct = (prod, details) => {

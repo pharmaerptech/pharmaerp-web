@@ -23,6 +23,10 @@ import { ROUTES } from "@/constants";
 import { SIDEBAR_NAV_GROUPS } from "../sidebar/sidebarNavConfig";
 import { filterNavByPipeline } from "../sidebar/filterNavByPipeline";
 import { getSafeWorkMode } from "@/contexts/WorkModeContext";
+import {
+  PIPELINE_LEVELS,
+  isRouteAllowedForPipeline,
+} from "@/contexts/routePipelinePolicy";
 
 /**
  * Recursively flattens sidebar nav items into searchable commands.
@@ -154,7 +158,7 @@ const QUICK_ACTIONS = [
     id: "action-create-role",
     label: "Create Custom Role",
     fullLabel: "Quick Actions › Create Role",
-    path: "/access-control/roles/create",
+    path: ROUTES.CREATE_ROLE,
     icon: ShieldAlert,
     permission: "role:create",
     category: "Access Control",
@@ -282,9 +286,21 @@ export const getAccessibleSearchCommands = (
   const uniqueQuickActions = filteredQuickActions.filter((a) => !existingPaths.has(a.path));
 
   const allItems = [...allNavItems, ...uniqueQuickActions];
+  const effectiveLevel = currentLevel || PIPELINE_LEVELS.WORKSPACE;
 
-  // Return only items the user has permission to access
+  // Return only items the user has permission to access and that satisfy current (level, mode) policy
   return allItems.filter((item) => {
+    if (activeMode) {
+      const check = isRouteAllowedForPipeline(item.path, {
+        currentLevel: effectiveLevel,
+        workMode: activeMode,
+        isSetupComplete: true,
+        hasActiveCompany: effectiveLevel !== PIPELINE_LEVELS.WORKSPACE,
+        hasActiveBranch: effectiveLevel === PIPELINE_LEVELS.BRANCH,
+      });
+      if (!check.allowed) return false;
+    }
+
     if (item.requireOwner && !isOwner) return false;
     if (item.permissions?.length) {
       return typeof canAny === "function"

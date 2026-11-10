@@ -1,10 +1,34 @@
 // src/services/interceptors.js
 
-import { TOKEN_KEY } from "../constants";
+import { TOKEN_KEY, USER_STORAGE_KEY } from "../constants";
 import { storage, getErrorMessage } from "../utils";
+import { clearAllHeldBillsStorage } from "@/features/sales/services/holdBillStorage";
+
+const activeInterceptors = new WeakMap();
+
+const PUBLIC_AUTH_PATHS = [
+  "/auth/login",
+  "/auth/register",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/send-email-otp",
+  "/auth/verify-email-otp",
+  "/auth/verify-email",
+  "/platform/",
+];
+
+const isPublicAuthRequest = (url = "") =>
+  PUBLIC_AUTH_PATHS.some((path) => url.includes(path));
 
 export const setupInterceptors = (apiClient, store) => {
-  apiClient.interceptors.request.use(
+  // Eject previously attached interceptors for this client (e.g. when store is injected)
+  const existing = activeInterceptors.get(apiClient);
+  if (existing) {
+    apiClient.interceptors.request.eject(existing.requestId);
+    apiClient.interceptors.response.eject(existing.responseId);
+  }
+
+  const requestId = apiClient.interceptors.request.use(
     (config) => {
       // 1. Authentication remains safely handled via tokens
       const token = storage.get(TOKEN_KEY);
@@ -62,13 +86,20 @@ export const setupInterceptors = (apiClient, store) => {
     (error) => Promise.reject(error),
   );
 
-  apiClient.interceptors.response.use(
+  const responseId = apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
       const statusCode = error?.response?.status;
+      const requestUrl = error?.config?.url || "";
 
-      if (statusCode === 401) {
+      if (statusCode === 401 && !isPublicAuthRequest(requestUrl)) {
         storage.remove(TOKEN_KEY);
+        storage.remove(USER_STORAGE_KEY);
+        clearAllHeldBillsStorage();
+
+        if (store && store.getState()?.auth?.isAuthenticated) {
+          store.dispatch({ type: "auth/clearCredentials" });
+        }
       }
 
       error.message = getErrorMessage(error);
@@ -76,4 +107,6 @@ export const setupInterceptors = (apiClient, store) => {
       return Promise.reject(error);
     },
   );
+
+  activeInterceptors.set(apiClient, { requestId, responseId });
 };

@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 
 import {
@@ -89,13 +90,16 @@ const useAuth = () => {
     dispatch(clearAuthMessage());
   };
 
-  const saveCredentials = (payload) => {
-    dispatch(setCredentials(payload));
-  };
+  const saveCredentials = useCallback(
+    (payload) => {
+      dispatch(setCredentials(payload));
+    },
+    [dispatch],
+  );
 
-  const removeCredentials = () => {
+  const removeCredentials = useCallback(() => {
     dispatch(clearCredentials());
-  };
+  }, [dispatch]);
 
   return {
     user,

@@ -1,8 +1,7 @@
 // src/layouts/app/components/sidebar/SidebarLevelIndicator.jsx
 
-import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Link } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -13,13 +12,13 @@ import {
   ChevronLeft,
   ChevronsUpDown,
   Check,
-  Plus,
   X,
   ArrowUp,
   ArrowRight,
 } from "lucide-react";
 
-import { ROUTES, API_STATUS } from "@/constants";
+import { API_STATUS, TOKEN_KEY } from "@/constants";
+import { storage } from "@/utils";
 import useCompany from "@/features/company/hooks/useCompany";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useBranch from "@/features/branch/hooks/useBranch";
@@ -27,7 +26,6 @@ import { usePermission } from "@/hooks";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import {
   useNavigationPipeline,
-  PIPELINE_LEVELS,
   PIPELINE_STORAGE_KEYS,
 } from "@/contexts/NavigationPipelineContext";
 import { UISkeleton } from "@/components/ui";
@@ -118,6 +116,7 @@ const SelectorSkeletonList = ({ count = 3, iconType = "avatar" }) => {
 export const SidebarLevelIndicator = ({
   collapsed = false,
   onToggleCollapse,
+  onExpand,
   showClose = false,
   onClose,
   onOpenChange,
@@ -129,7 +128,6 @@ export const SidebarLevelIndicator = ({
   const dropdownRef = useRef(null);
 
   const {
-    currentLevel,
     isWorkspaceLevel,
     isCompanyLevel,
     isBranchLevel,
@@ -141,7 +139,7 @@ export const SidebarLevelIndicator = ({
   } = useNavigationPipeline();
 
   const { currentWorkspace } = useWorkspace();
-  const { isOwner, can } = usePermission();
+  const { isOwner } = usePermission();
   const {
     companies = [],
     currentCompany,
@@ -157,47 +155,52 @@ export const SidebarLevelIndicator = ({
     getCompanyBranches,
     getCompanyBranchesStatus,
   } = useBranch();
-  const { companyCompleted, branchCompleted } = useSetupStatus();
+  const { companyCompleted } = useSetupStatus();
 
-  // Proactively fetch companies if workspace exists but companies have not loaded
+  const lastFetchedBranchesCompanyRef = useRef(null);
+
+  // Proactively fetch companies once if workspace exists and companies have not been fetched yet
   useEffect(() => {
     if (
       currentWorkspace?._id &&
-      (!companies?.length || getWorkspaceCompaniesStatus === API_STATUS.IDLE)
+      getWorkspaceCompaniesStatus === API_STATUS.IDLE &&
+      Boolean(storage.get(TOKEN_KEY))
     ) {
       getWorkspaceCompanies().catch(() => null);
     }
   }, [
     currentWorkspace?._id,
-    companies?.length,
     getWorkspaceCompaniesStatus,
     getWorkspaceCompanies,
   ]);
 
-  // Proactively fetch branches whenever an active company is present
+  // Proactively fetch branches once per active company change
   useEffect(() => {
-    if (currentCompany?._id) {
+    if (!currentCompany?._id) {
+      lastFetchedBranchesCompanyRef.current = null;
+      return;
+    }
+
+    if (
+      Boolean(storage.get(TOKEN_KEY)) &&
+      lastFetchedBranchesCompanyRef.current !== currentCompany._id &&
+      getCompanyBranchesStatus !== API_STATUS.LOADING
+    ) {
+      lastFetchedBranchesCompanyRef.current = currentCompany._id;
       getCompanyBranches(currentCompany._id).catch(() => null);
     }
-  }, [currentCompany?._id, getCompanyBranches]);
+  }, [currentCompany?._id, getCompanyBranches, getCompanyBranchesStatus]);
 
   // "companies" | "branches"
   const [dropdownType, setDropdownType] = useState("companies");
   const [isOpen, setIsOpen] = useState(false);
 
+  const dropdownOpen = isOpen && !collapsed;
+
   // Notify parent of dropdown open state to prevent unwanted auto-collapse
   useEffect(() => {
-    onOpenChange?.(isOpen);
-  }, [isOpen, onOpenChange]);
-
-  // Close dropdown immediately if sidebar collapses
-  useEffect(() => {
-    if (collapsed && isOpen) {
-      setIsOpen(false);
-    }
-  }, [collapsed, isOpen]);
-
-  const [isSwitchingBranch, setIsSwitchingBranch] = useState(false);
+    onOpenChange?.(dropdownOpen);
+  }, [dropdownOpen, onOpenChange]);
 
   const [dropdownCoords, setDropdownCoords] = useState({
     top: 0,
@@ -206,15 +209,11 @@ export const SidebarLevelIndicator = ({
   });
   const [collapsedTooltip, setCollapsedTooltip] = useState(null);
 
-  const canCreateCompany = isOwner || can("company:create");
-  const canCreateBranch = isOwner || can("branch:create");
-
   const isCompanyLoading =
     getWorkspaceCompaniesStatus === API_STATUS.LOADING ||
     (getWorkspaceCompaniesStatus === API_STATUS.IDLE && !companies?.length);
 
   const isBranchLoading =
-    isSwitchingBranch ||
     getCompanyBranchesStatus === API_STATUS.LOADING ||
     (Boolean(currentCompany?._id) &&
       getCompanyBranchesStatus === API_STATUS.IDLE &&
@@ -226,18 +225,27 @@ export const SidebarLevelIndicator = ({
 
   // Toggle Dropdown with specific type
   const handleToggleDropdown = (type) => {
-    if (isOpen && dropdownType === type) {
+    if (dropdownOpen && dropdownType === type) {
       setIsOpen(false);
     } else {
       setDropdownType(type);
       setIsOpen(true);
 
+      if (!storage.get(TOKEN_KEY)) return;
+
       if (type === "companies") {
-        if (!companies?.length || getWorkspaceCompaniesStatus !== API_STATUS.SUCCESS) {
+        if (
+          getWorkspaceCompaniesStatus !== API_STATUS.LOADING &&
+          (!companies?.length || getWorkspaceCompaniesStatus === API_STATUS.ERROR)
+        ) {
           getWorkspaceCompanies().catch(() => null);
         }
       } else if (type === "branches") {
-        if (currentCompany?._id) {
+        if (
+          currentCompany?._id &&
+          getCompanyBranchesStatus !== API_STATUS.LOADING &&
+          (!branches?.length || getCompanyBranchesStatus === API_STATUS.ERROR)
+        ) {
           getCompanyBranches(currentCompany._id).catch(() => null);
         }
       }
@@ -279,17 +287,17 @@ export const SidebarLevelIndicator = ({
   }, [collapsed, dropdownType]);
 
   useEffect(() => {
-    if (isOpen) {
+    if (dropdownOpen) {
       updateDropdownPosition();
       const handleResize = () => updateDropdownPosition();
       window.addEventListener("resize", handleResize, { passive: true });
       return () => window.removeEventListener("resize", handleResize);
     }
-  }, [isOpen, updateDropdownPosition]);
+  }, [dropdownOpen, updateDropdownPosition]);
 
   // Click outside and escape handling
   useEffect(() => {
-    if (!isOpen) return;
+    if (!dropdownOpen) return;
 
     const handleClickOutside = (event) => {
       const isInsideTrigger =
@@ -318,7 +326,7 @@ export const SidebarLevelIndicator = ({
       document.removeEventListener("mousedown", handleClickOutside);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [dropdownOpen]);
 
   // Switch / Enter Company Handler
   const handleSelectCompany = (company) => {
@@ -347,7 +355,9 @@ export const SidebarLevelIndicator = ({
       try {
         localStorage.setItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID, company._id);
         localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-      } catch {}
+      } catch {
+        // ignore storage errors
+      }
 
       // Pre-fetch branches for newly selected company in background
       getCompanyBranches(company._id).catch(() => null);
@@ -378,13 +388,15 @@ export const SidebarLevelIndicator = ({
       setCurrentBranch(branch);
       try {
         localStorage.setItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID, branch._id);
-      } catch {}
+      } catch {
+        // ignore storage errors
+      }
     }
   };
 
   // Tooltip for collapsed mode
   const handleMouseEnter = () => {
-    if (!collapsed || !triggerRef.current || isOpen) return;
+    if (!collapsed || !triggerRef.current || dropdownOpen) return;
     const rect = triggerRef.current.getBoundingClientRect();
     setCollapsedTooltip({
       top: rect.top + rect.height / 2,
@@ -475,20 +487,6 @@ export const SidebarLevelIndicator = ({
               </div>
             )}
           </div>
-
-          {canCreateCompany && (
-            <>
-              <div className="my-1.5 border-t border-border/70" />
-              <Link
-                to={ROUTES.CREATE_COMPANY}
-                onClick={() => setIsOpen(false)}
-                className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-soft active:scale-[0.98]"
-              >
-                <Plus className="size-3.5 stroke-[2.5]" />
-                <span>{companyCompleted ? "New Company" : "Create First Company"}</span>
-              </Link>
-            </>
-          )}
         </div>
       );
     }
@@ -546,20 +544,6 @@ export const SidebarLevelIndicator = ({
             </div>
           )}
         </div>
-
-        {canCreateBranch && (
-          <>
-            <div className="my-1.5 border-t border-border/70" />
-            <Link
-              to={ROUTES.CREATE_BRANCH}
-              onClick={() => setIsOpen(false)}
-              className="flex w-full items-center gap-2 rounded-[8px] px-2 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary-soft active:scale-[0.98]"
-            >
-              <Plus className="size-3.5 stroke-[2.5]" />
-              <span>{branchCompleted ? "New Branch" : "Create First Branch"}</span>
-            </Link>
-          </>
-        )}
       </div>
     );
   };
@@ -596,24 +580,28 @@ export const SidebarLevelIndicator = ({
         };
 
     const RailIcon = collapsedConfig.icon;
+    const handleCollapsedExpand = () => {
+      setCollapsedTooltip(null);
+      setIsOpen(false);
+      if (onExpand) {
+        onExpand();
+      } else {
+        onToggleCollapse?.();
+      }
+    };
 
     return (
       <div className="relative flex flex-col items-center justify-center border-b border-border p-2 gap-1.5">
           <button
             ref={triggerRef}
             type="button"
-            onClick={() => {
-              setCollapsedTooltip(null);
-              handleToggleDropdown(collapsedConfig.defaultType);
-            }}
+            onClick={handleCollapsedExpand}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
-            aria-label={collapsedConfig.title}
-            aria-expanded={isOpen}
+            aria-label={`${collapsedConfig.title} — Expand sidebar`}
             className={cn(
-              "relative flex size-9 cursor-pointer items-center justify-center rounded-xl border shadow-2xs transition-all active:scale-[0.96]",
-              collapsedConfig.color,
-              isOpen ? "ring-2 ring-primary ring-offset-1" : "hover:scale-105"
+              "relative flex size-9 cursor-pointer items-center justify-center rounded-xl border shadow-2xs transition-all hover:scale-105 active:scale-[0.96]",
+              collapsedConfig.color
             )}
           >
             <RailIcon className="size-4" />
@@ -627,10 +615,10 @@ export const SidebarLevelIndicator = ({
             </span>
           </button>
 
-          {onToggleCollapse && (
+          {(onExpand || onToggleCollapse) && (
             <button
               type="button"
-              onClick={onToggleCollapse}
+              onClick={handleCollapsedExpand}
               aria-label="Expand sidebar"
               title="Expand sidebar"
               className="flex size-6 cursor-pointer items-center justify-center rounded-md text-text-muted transition hover:bg-surface-hover hover:text-text active:scale-[0.95]"
@@ -641,7 +629,6 @@ export const SidebarLevelIndicator = ({
 
           {/* Floating Tooltip */}
           {collapsedTooltip &&
-            !isOpen &&
             createPortal(
               <div
                 style={{
@@ -664,63 +651,10 @@ export const SidebarLevelIndicator = ({
                   </span>
                   <p className="font-bold text-text">{collapsedConfig.title}</p>
                 </div>
+                <p className="text-[10px] text-text-muted">Click to expand sidebar</p>
               </div>,
               document.body
             )}
-
-          {/* Floating Portal Dropdown */}
-          {createPortal(
-            <AnimatePresence>
-              {isOpen && (
-                <motion.div
-                  ref={dropdownRef}
-                  initial={{ opacity: 0, scale: 0.96, x: -4 }}
-                  animate={{ opacity: 1, scale: 1, x: 0 }}
-                  exit={{ opacity: 0, scale: 0.96, x: -4 }}
-                  transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
-                  style={{
-                    position: "fixed",
-                    top: dropdownCoords.top,
-                    left: dropdownCoords.left,
-                    width: dropdownCoords.width,
-                    zIndex: 9999,
-                  }}
-                  className="overflow-hidden rounded-[14px] border border-border bg-surface p-2 shadow-[var(--app-shadow-xl)]"
-                >
-                  {/* Quick Ascend Button in Collapsed Mode if not in Workspace */}
-                  {isBranchLevel && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsOpen(false);
-                        ascendToCompany();
-                      }}
-                      className="w-full mb-1.5 flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold text-text-muted hover:text-primary hover:bg-surface-hover transition-colors"
-                    >
-                      <ArrowUp className="size-3 text-blue-500" />
-                      <span>Up to Company</span>
-                    </button>
-                  )}
-                  {isCompanyLevel && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsOpen(false);
-                        ascendToWorkspace();
-                      }}
-                      className="w-full mb-1.5 flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold text-text-muted hover:text-primary hover:bg-surface-hover transition-colors"
-                    >
-                      <ArrowUp className="size-3 text-purple-500" />
-                      <span>Up to Workspace</span>
-                    </button>
-                  )}
-
-                  {renderDropdownContent()}
-                </motion.div>
-              )}
-            </AnimatePresence>,
-            document.body
-          )}
         </div>
     );
   }
@@ -895,7 +829,7 @@ export const SidebarLevelIndicator = ({
         {/* Floating Portal Dropdown */}
         {createPortal(
           <AnimatePresence>
-            {isOpen && (
+            {dropdownOpen && (
               <motion.div
                 ref={dropdownRef}
                 initial={{ opacity: 0, scale: 0.97, y: -4 }}

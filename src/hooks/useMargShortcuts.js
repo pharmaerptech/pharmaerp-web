@@ -1,14 +1,21 @@
 // pharmaerp-web/src/hooks/useMargShortcuts.js
 //
 // Global keyboard event handler for Marg ERP shortcut navigation.
-// Intercepts hotkeys across the app, verifies user permissions and setup status,
-// and routes smoothly without browser conflicts.
+// Intercepts hotkeys across the app, verifies user permissions, setup status,
+// and active (currentLevel, workMode) pipeline boundaries before routing.
 
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 import { usePermission } from "@/hooks";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
+import {
+  useWorkMode,
+  useNavigationPipeline,
+  isRouteAllowedForPipeline,
+} from "@/contexts";
+import useCompany from "@/features/company/hooks/useCompany";
+import useBranch from "@/features/branch/hooks/useBranch";
 import { ROUTES } from "@/constants";
 import { uiToast } from "@/components/ui";
 import { MARG_SHORTCUTS } from "@/config/shortcutsConfig";
@@ -20,6 +27,10 @@ export const useMargShortcuts = () => {
   const location = useLocation();
   const { can, canAny, isOwner } = usePermission();
   const { isSetupComplete, companyCompleted } = useSetupStatus();
+  const { workMode } = useWorkMode();
+  const { currentLevel } = useNavigationPipeline();
+  const { currentCompany } = useCompany();
+  const { currentBranch } = useBranch();
 
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
 
@@ -35,7 +46,6 @@ export const useMargShortcuts = () => {
     setIsShortcutsModalOpen(false);
   }, []);
 
-  // Check if a specific shortcut is permitted for the current user
   const isShortcutAccessible = useCallback(
     (shortcut) => {
       if (shortcut.requireOwner && !isOwner) return false;
@@ -52,7 +62,6 @@ export const useMargShortcuts = () => {
     [can, canAny, isOwner]
   );
 
-  // Check if target path is locked behind onboarding / setup
   const isShortcutLockedBySetup = useCallback(
     (shortcut) => {
       if (isSetupComplete) return false;
@@ -74,11 +83,9 @@ export const useMargShortcuts = () => {
     [isSetupComplete, companyCompleted]
   );
 
-  // Execute a shortcut command
   const executeShortcut = useCallback(
     (shortcut) => {
       if (shortcut.path === "ACTION_SEARCH") {
-        // Dispatch focus event to HeaderSearchBar
         window.dispatchEvent(new CustomEvent(FOCUS_SEARCH_EVENT));
         return;
       }
@@ -88,7 +95,10 @@ export const useMargShortcuts = () => {
         return;
       }
 
-      // Check permissions
+      if (!workMode) {
+        return;
+      }
+
       if (!isShortcutAccessible(shortcut)) {
         uiToast.error(
           "Access Restricted",
@@ -97,7 +107,6 @@ export const useMargShortcuts = () => {
         return;
       }
 
-      // Check setup status
       if (isShortcutLockedBySetup(shortcut)) {
         uiToast.info(
           "Setup Required",
@@ -107,7 +116,25 @@ export const useMargShortcuts = () => {
         return;
       }
 
-      // Navigate to target route if not already there
+      const policyCheck = isRouteAllowedForPipeline(shortcut.path, {
+        currentLevel,
+        workMode,
+        isSetupComplete,
+        companyCompleted,
+        hasActiveCompany: Boolean(currentCompany?._id),
+        hasActiveBranch: Boolean(currentBranch?._id),
+      });
+
+      if (!policyCheck.allowed) {
+        uiToast.info(
+          "Shortcut Unavailable",
+          policyCheck.reason === "mode-mismatch"
+            ? `${shortcut.label} requires switching Work Mode in the sidebar.`
+            : `${shortcut.label} is not available at your current level.`
+        );
+        return;
+      }
+
       if (shortcut.path && location.pathname !== shortcut.path) {
         navigate(shortcut.path);
         if (isShortcutsModalOpen) {
@@ -116,8 +143,14 @@ export const useMargShortcuts = () => {
       }
     },
     [
+      workMode,
       isShortcutAccessible,
       isShortcutLockedBySetup,
+      currentLevel,
+      isSetupComplete,
+      companyCompleted,
+      currentCompany?._id,
+      currentBranch?._id,
       location.pathname,
       navigate,
       toggleShortcutsModal,
@@ -125,10 +158,8 @@ export const useMargShortcuts = () => {
     ]
   );
 
-  // Global keydown event listener
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Check if user is actively typing in a form input or text area
       const activeEl = document.activeElement;
       const isTyping =
         activeEl &&
@@ -137,7 +168,6 @@ export const useMargShortcuts = () => {
           activeEl.isContentEditable ||
           activeEl.getAttribute("role") === "textbox");
 
-      // 1. Escape key: Close modal if open
       if (e.key === "Escape") {
         if (isShortcutsModalOpen) {
           e.preventDefault();
@@ -146,18 +176,15 @@ export const useMargShortcuts = () => {
         }
       }
 
-      // 2. Question mark '?': Open cheatsheet (only when not typing in an input)
       if (!isTyping && e.key === "?" && !e.altKey && !e.ctrlKey && !e.metaKey) {
         e.preventDefault();
         toggleShortcutsModal();
         return;
       }
 
-      // 3. Search Bar Shortcuts:
-      // - Ctrl + K / Cmd + K
-      // - Alt + /
       const isSearchCombo =
-        ((e.ctrlKey || e.metaKey) && (e.code === "KeyK" || e.key.toLowerCase() === "k")) ||
+        ((e.ctrlKey || e.metaKey) &&
+          (e.code === "KeyK" || e.key.toLowerCase() === "k")) ||
         (e.altKey && (e.code === "Slash" || e.key === "/"));
 
       if (isSearchCombo) {
@@ -166,32 +193,29 @@ export const useMargShortcuts = () => {
         return;
       }
 
-      // 4. Alt + F1: Marg ERP built-in shortcut help
       if (e.altKey && (e.key === "F1" || e.code === "F1")) {
         e.preventDefault();
         toggleShortcutsModal();
         return;
       }
 
-      // 5. Check Alt-based navigation shortcuts
-      // Note: Alt shortcuts are allowed even while typing in an input,
-      // because Marg power users frequently navigate while in fields.
       if (e.altKey && !e.ctrlKey && !e.metaKey) {
         const keyChar = e.key ? e.key.toLowerCase() : "";
         const codeChar = e.code ? e.code.replace("Key", "").toLowerCase() : "";
         const isShift = e.shiftKey;
 
-        // Match against registered shortcuts
         const matched = MARG_SHORTCUTS.find((s) => {
-          if (s.path === "ACTION_SEARCH" || s.path === "ACTION_SHORTCUTS_MODAL") {
+          if (
+            s.path === "ACTION_SEARCH" ||
+            s.path === "ACTION_SHORTCUTS_MODAL"
+          ) {
             return false;
           }
 
-          // Parse shortcut keyCombo
           const parts = s.keyCombo.split("+");
           const hasAlt = parts.includes("Alt");
           const hasShift = parts.includes("Shift");
-          const keyPart = parts[parts.length - 1]; // e.g. "KeyN", "KeyP", "Comma"
+          const keyPart = parts[parts.length - 1];
 
           if (!hasAlt) return false;
           if (hasShift !== isShift) return false;

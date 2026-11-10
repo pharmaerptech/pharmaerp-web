@@ -1,4 +1,5 @@
 // src/contexts/NavigationPipelineContext.jsx
+/* eslint-disable react-refresh/only-export-components */
 
 import {
   createContext,
@@ -7,127 +8,77 @@ import {
   useEffect,
   useCallback,
   useMemo,
-  useRef,
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 
-import { ROUTES } from "@/constants";
 import { useWorkMode, WORK_MODES } from "./WorkModeContext";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import { ContextSwitchLoader } from "@/components/ui";
+import {
+  PIPELINE_LEVELS,
+  PIPELINE_STORAGE_KEYS,
+  getLevelFromPathname,
+  getPipelineDefaultRoute,
+  reconcilePipelineLevel,
+  isRouteAllowedForPipeline,
+  resolveRoutePolicy,
+} from "./routePipelinePolicy";
 
-export const PIPELINE_LEVELS = {
-  WORKSPACE: "workspace",
-  COMPANY: "company",
-  BRANCH: "branch",
-};
-
-export const PIPELINE_STORAGE_KEYS = {
-  ACTIVE_LEVEL: "pahuch_pipeline_level",
-  ACTIVE_COMPANY_ID: "pahuch_active_company_id",
-  ACTIVE_BRANCH_ID: "pahuch_active_branch_id",
-};
-
-/**
- * Maps a URL pathname to its intrinsic pipeline level.
- * Returns null if the route is neutral (e.g. /settings, /help-center, /).
- */
-export const getLevelFromPathname = (pathname = "", currentContext = {}) => {
-  if (!pathname) return null;
-  const path = pathname.toLowerCase();
-
-  // Root generic dashboard or home route: resolve contextually
-  if (path === "/dashboard" || path === "/dashboard/" || path === "/") {
-    if (!currentContext?.companyId) return PIPELINE_LEVELS.WORKSPACE;
-    if (currentContext?.companyId && !currentContext?.branchId) return PIPELINE_LEVELS.COMPANY;
-    return PIPELINE_LEVELS.BRANCH;
-  }
-
-  // 1. Workspace Level Routes
-  if (
-    path === "/dashboard/workspace" ||
-    path === ROUTES.WORKSPACE_DASHBOARD ||
-    path.startsWith("/companies") ||
-    path.startsWith("/members") ||
-    path.startsWith("/access-control") ||
-    path.startsWith("/roles") ||
-    path.startsWith("/subscription") ||
-    path.startsWith("/setup-center")
-  ) {
-    return PIPELINE_LEVELS.WORKSPACE;
-  }
-
-  // 2. Company Level Routes
-  if (
-    path === "/dashboard/company" ||
-    path === ROUTES.COMPANY_DASHBOARD ||
-    path.startsWith("/branches") ||
-    path.startsWith("/parties/customers") ||
-    path.startsWith("/customers") ||
-    path.startsWith("/parties/suppliers") ||
-    path.startsWith("/suppliers") ||
-    path.startsWith("/doctors") ||
-    path.startsWith("/finance") ||
-    path.startsWith("/treasury/bank-accounts") ||
-    path.startsWith("/bank-accounts")
-  ) {
-    return PIPELINE_LEVELS.COMPANY;
-  }
-
-  // 3. Branch Level Routes
-  if (
-    path === "/dashboard/branch" ||
-    path === ROUTES.BRANCH_DASHBOARD ||
-    path.startsWith("/sales") ||
-    path.startsWith("/sale") ||
-    path.startsWith("/billing") ||
-    path.startsWith("/credit-notes") ||
-    path.startsWith("/purchases") ||
-    path.startsWith("/workspace-products") ||
-    path.startsWith("/inventory") ||
-    path.startsWith("/stock-metrics") ||
-    path.startsWith("/operations/shifts") ||
-    path.startsWith("/operations/business-days") ||
-    path.startsWith("/finance/treasury/cash-management/branch-cash") ||
-    path.startsWith("/payment-qrs") ||
-    path.startsWith("/upi-transactions") ||
-    path.startsWith("/cash-transactions") ||
-    path.startsWith("/cash-counter")
-  ) {
-    return PIPELINE_LEVELS.BRANCH;
-  }
-
-  // Neutral routes (like /reports-hub when accessed directly, /settings, /help-center)
-  if (path.startsWith("/reports")) {
-    return PIPELINE_LEVELS.BRANCH;
-  }
-
-  return null;
-};
-
-/**
- * Returns default landing route for any (level, mode) combination
- */
-export const getPipelineDefaultRoute = (level, workMode) => {
-  const isOp = workMode === WORK_MODES.OPERATION;
-
-  switch (level) {
-    case PIPELINE_LEVELS.WORKSPACE:
-      return isOp ? "/companies" : ROUTES.WORKSPACE_DASHBOARD;
-    case PIPELINE_LEVELS.COMPANY:
-      return isOp ? "/branches" : ROUTES.COMPANY_DASHBOARD;
-    case PIPELINE_LEVELS.BRANCH:
-    default:
-      return isOp ? ROUTES.SALES : ROUTES.BRANCH_DASHBOARD;
-  }
+export {
+  PIPELINE_LEVELS,
+  PIPELINE_STORAGE_KEYS,
+  getLevelFromPathname,
+  getPipelineDefaultRoute,
+  reconcilePipelineLevel,
+  isRouteAllowedForPipeline,
+  resolveRoutePolicy,
 };
 
 const NavigationPipelineContext = createContext(null);
 
-export const NavigationPipelineProvider = ({ children }) => {
+const readStoredLevel = (fallbackPathname = "") => {
+  try {
+    const saved = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL);
+    if (
+      saved === PIPELINE_LEVELS.WORKSPACE ||
+      saved === PIPELINE_LEVELS.COMPANY ||
+      saved === PIPELINE_LEVELS.BRANCH
+    ) {
+      return saved;
+    }
+  } catch {
+    // ignore storage errors
+  }
+
+  const routeLevel = getLevelFromPathname(fallbackPathname);
+  if (routeLevel) return routeLevel;
+
+  return PIPELINE_LEVELS.WORKSPACE;
+};
+
+const safeSetStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const safeRemoveStorage = (key) => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore storage errors
+  }
+};
+
+export const NavigationPipelineProvider = ({
+  children,
+  isSyncComplete = true,
+}) => {
   const dispatch = useDispatch();
   const location = useLocation();
   const navigate = useNavigate();
@@ -135,9 +86,13 @@ export const NavigationPipelineProvider = ({ children }) => {
 
   const { currentWorkspace } = useWorkspace();
   const { currentCompany, setCurrentCompany, clearCurrentCompany } = useCompany();
-  const { currentBranch, setCurrentBranch, clearCurrentBranch, getCompanyBranches } = useBranch();
+  const {
+    currentBranch,
+    setCurrentBranch,
+    clearCurrentBranch,
+    getCompanyBranches,
+  } = useBranch();
 
-  // Centralized Level Transition Loader State
   const [transitionState, setTransitionState] = useState({
     isOpen: false,
     type: "workspace",
@@ -146,73 +101,42 @@ export const NavigationPipelineProvider = ({ children }) => {
     toName: "",
   });
 
-  // Resolve initial level based on stored preference or route or fallback
-  const [activeLevel, setActiveLevelState] = useState(() => {
-    const routeLevel = getLevelFromPathname(location.pathname);
-    if (routeLevel) return routeLevel;
+  // Explicit user-controlled level state (never mutated passively on route changes)
+  const [activeLevel, setActiveLevelState] = useState(() =>
+    readStoredLevel(location.pathname)
+  );
 
-    try {
-      const saved = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL);
-      if (
-        saved === PIPELINE_LEVELS.WORKSPACE ||
-        saved === PIPELINE_LEVELS.COMPANY ||
-        saved === PIPELINE_LEVELS.BRANCH
-      ) {
-        return saved;
-      }
-    } catch {}
-
-    // Default entry floor is WORKSPACE
-    return PIPELINE_LEVELS.WORKSPACE;
-  });
-
-  const prevPathRef = useRef(location.pathname);
-
-  // Keep activeLevel in sync whenever user navigates directly to a route
-  useEffect(() => {
-    // If an elevator transition is in progress, do not let route sync fight it
-    if (transitionState.isOpen) {
-      prevPathRef.current = location.pathname;
-      return;
-    }
-
-    // Only sync if the URL pathname actually changed
-    if (prevPathRef.current === location.pathname) {
-      return;
-    }
-    prevPathRef.current = location.pathname;
-
-    const routeLevel = getLevelFromPathname(location.pathname, {
-      companyId: currentCompany?._id,
-      branchId: currentBranch?._id,
+  // Derive safe currentLevel once boot hydration completes
+  const currentLevel = useMemo(() => {
+    if (!isSyncComplete) return activeLevel;
+    return reconcilePipelineLevel(activeLevel, {
+      hasActiveCompany: Boolean(currentCompany?._id),
+      hasActiveBranch: Boolean(currentBranch?._id),
     });
+  }, [isSyncComplete, activeLevel, currentCompany?._id, currentBranch?._id]);
 
-    if (routeLevel && routeLevel !== activeLevel) {
-      setActiveLevelState(routeLevel);
-      try {
-        localStorage.setItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, routeLevel);
-      } catch {}
-    }
-  }, [
-    location.pathname,
-    activeLevel,
-    transitionState.isOpen,
-    currentCompany?._id,
-    currentBranch?._id,
-  ]);
+  // Persist currentLevel to localStorage cleanly
+  useEffect(() => {
+    if (!isSyncComplete) return;
+    safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, currentLevel);
+  }, [isSyncComplete, currentLevel]);
 
   // Explicit Level Setter
   const setLevel = useCallback((newLevel) => {
     if (!Object.values(PIPELINE_LEVELS).includes(newLevel)) return;
     setActiveLevelState(newLevel);
-    try {
-      localStorage.setItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, newLevel);
-    } catch {}
+    safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, newLevel);
   }, []);
 
   // Programmatic Transition Trigger helper
   const triggerTransition = useCallback(
-    ({ type = "company", title = "", fromName = "", toName = "", duration = 650 }) => {
+    ({
+      type = "company",
+      title = "",
+      fromName = "",
+      toName = "",
+      duration = 650,
+    }) => {
       setTransitionState({
         isOpen: true,
         type,
@@ -233,7 +157,8 @@ export const NavigationPipelineProvider = ({ children }) => {
 
   // Ascend to Workspace Level (Floor 1)
   const ascendToWorkspace = useCallback(() => {
-    const from = currentCompany?.name || currentBranch?.name || "Company Level";
+    const from =
+      currentCompany?.name || currentBranch?.name || "Company Level";
     const to = currentWorkspace?.name || "Workspace Level";
 
     setTransitionState({
@@ -244,16 +169,12 @@ export const NavigationPipelineProvider = ({ children }) => {
       toName: to,
     });
 
-    // 1. Immediately clear both company & branch context in Redux and reset slice state
     dispatch({ type: "APP/RESET_STATE" });
     clearCurrentBranch();
     clearCurrentCompany();
 
-    // 2. Clear company & branch context in local storage
-    try {
-      localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
-      localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-    } catch {}
+    safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+    safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
 
     setLevel(PIPELINE_LEVELS.WORKSPACE);
     const targetRoute = getPipelineDefaultRoute(
@@ -290,14 +211,10 @@ export const NavigationPipelineProvider = ({ children }) => {
       toName: to,
     });
 
-    // 1. Immediately clear branch context in Redux and reset branch slice state
     dispatch({ type: "APP/RESET_STATE" });
     clearCurrentBranch();
 
-    // 2. Clear branch context in local storage
-    try {
-      localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-    } catch {}
+    safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
 
     setLevel(PIPELINE_LEVELS.COMPANY);
     const targetRoute = getPipelineDefaultRoute(
@@ -336,10 +253,8 @@ export const NavigationPipelineProvider = ({ children }) => {
       if (company?._id) {
         setCurrentCompany(company);
         clearCurrentBranch();
-        try {
-          localStorage.setItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID, company._id);
-          localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-        } catch {}
+        safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID, company._id);
+        safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
         getCompanyBranches(company._id).catch(() => null);
       }
       setLevel(PIPELINE_LEVELS.COMPANY);
@@ -386,9 +301,7 @@ export const NavigationPipelineProvider = ({ children }) => {
 
       if (branch?._id) {
         setCurrentBranch(branch);
-        try {
-          localStorage.setItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID, branch._id);
-        } catch {}
+        safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID, branch._id);
       }
       setLevel(PIPELINE_LEVELS.BRANCH);
       const effectiveMode = targetMode || workMode || WORK_MODES.OPERATION;
@@ -405,21 +318,34 @@ export const NavigationPipelineProvider = ({ children }) => {
         setTransitionState((prev) => ({ ...prev, isOpen: false }));
       }, 650);
     },
-    [currentCompany, currentBranch, setCurrentBranch, setLevel, workMode, setWorkMode, navigate]
+    [
+      currentCompany,
+      currentBranch,
+      setCurrentBranch,
+      setLevel,
+      workMode,
+      setWorkMode,
+      navigate,
+    ]
   );
 
   // Level-aware Mode Switcher: Strictly preserves active level
   const switchLevelMode = useCallback(
     (newMode, targetLevel = null) => {
       const isOp = newMode === WORK_MODES.OPERATION;
-      const prevName = workMode === WORK_MODES.OPERATION ? "Operation Mode" : "View Mode";
+      const prevName =
+        workMode === WORK_MODES.OPERATION ? "Operation Mode" : "View Mode";
       const newName = isOp ? "Operation Mode" : "View Mode";
       const modeType = isOp ? "mode-operation" : "mode-view";
 
-      // Strictly maintain the active level (or targetLevel if explicitly provided)
-      const effectiveLevel = targetLevel || activeLevel || PIPELINE_LEVELS.WORKSPACE;
+      const effectiveLevel = reconcilePipelineLevel(
+        targetLevel || currentLevel || PIPELINE_LEVELS.WORKSPACE,
+        {
+          hasActiveCompany: Boolean(currentCompany?._id),
+          hasActiveBranch: Boolean(currentBranch?._id),
+        }
+      );
 
-      // Lock level explicitly in state & storage
       setLevel(effectiveLevel);
 
       setTransitionState({
@@ -438,22 +364,28 @@ export const NavigationPipelineProvider = ({ children }) => {
         setTransitionState((prev) => ({ ...prev, isOpen: false }));
       }, 700);
     },
-    [activeLevel, workMode, setLevel, setWorkMode, navigate]
+    [
+      currentLevel,
+      workMode,
+      currentCompany?._id,
+      currentBranch?._id,
+      setLevel,
+      setWorkMode,
+      navigate,
+    ]
   );
 
   const value = useMemo(
     () => ({
-      currentLevel: activeLevel,
+      currentLevel,
       setLevel,
-      isWorkspaceLevel: activeLevel === PIPELINE_LEVELS.WORKSPACE,
-      isCompanyLevel: activeLevel === PIPELINE_LEVELS.COMPANY,
-      isBranchLevel: activeLevel === PIPELINE_LEVELS.BRANCH,
+      isWorkspaceLevel: currentLevel === PIPELINE_LEVELS.WORKSPACE,
+      isCompanyLevel: currentLevel === PIPELINE_LEVELS.COMPANY,
+      isBranchLevel: currentLevel === PIPELINE_LEVELS.BRANCH,
 
-      // Capabilities & Guards
       canDescendToCompany: Boolean(currentCompany?._id),
       canDescendToBranch: Boolean(currentBranch?._id),
 
-      // Elevator Navigation Actions
       ascendToWorkspace,
       ascendToCompany,
       enterCompany,
@@ -463,7 +395,7 @@ export const NavigationPipelineProvider = ({ children }) => {
       getPipelineDefaultRoute,
     }),
     [
-      activeLevel,
+      currentLevel,
       setLevel,
       currentCompany,
       currentBranch,

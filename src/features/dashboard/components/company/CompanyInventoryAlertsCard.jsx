@@ -5,16 +5,11 @@ import {
   AlertTriangle,
   Clock,
   CalendarX,
-  ChevronRight,
-  ArrowRight,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import { UICard, UISkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { ROUTES } from "@/constants";
 
 export const CompanyInventoryAlertsCard = ({ alerts, className, isLoading = false }) => {
-  const navigate = useNavigate();
 
   if (isLoading) {
     return (
@@ -48,7 +43,6 @@ export const CompanyInventoryAlertsCard = ({ alerts, className, isLoading = fals
       countColor: outOfStock > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-text-muted",
       icon: PackageX,
       iconBg: "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/50",
-      path: ROUTES.STOCK_METRICS || "/inventory/stock-metrics",
     },
     {
       id: "low-stock",
@@ -57,7 +51,6 @@ export const CompanyInventoryAlertsCard = ({ alerts, className, isLoading = fals
       countColor: lowStock > 0 ? "text-amber-600 dark:text-amber-400 font-bold" : "text-text-muted",
       icon: AlertTriangle,
       iconBg: "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200/50",
-      path: ROUTES.STOCK_METRICS || "/inventory/stock-metrics",
     },
     {
       id: "near-expiry",
@@ -66,7 +59,6 @@ export const CompanyInventoryAlertsCard = ({ alerts, className, isLoading = fals
       countColor: nearExpiry > 0 ? "text-orange-600 dark:text-orange-400 font-bold" : "text-text-muted",
       icon: Clock,
       iconBg: "bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 border border-orange-200/50",
-      path: ROUTES.STOCK_METRICS || "/inventory/stock-metrics",
     },
     {
       id: "expired",
@@ -75,7 +67,6 @@ export const CompanyInventoryAlertsCard = ({ alerts, className, isLoading = fals
       countColor: expired > 0 ? "text-rose-600 dark:text-rose-400 font-bold" : "text-text-muted",
       icon: CalendarX,
       iconBg: "bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200/50",
-      path: ROUTES.STOCK_METRICS || "/inventory/stock-metrics",
     },
   ];
 
@@ -95,18 +86,9 @@ export const CompanyInventoryAlertsCard = ({ alerts, className, isLoading = fals
           </h2>
           <p className="text-[11px] text-text-muted mt-0.5">Aggregated across all branches</p>
         </div>
-
-        <button
-          type="button"
-          onClick={() => navigate(ROUTES.STOCK_METRICS || "/inventory/stock-metrics")}
-          className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
-        >
-          <span>Stock Metrics</span>
-          <ArrowRight className="size-3" />
-        </button>
       </div>
 
-      {/* 4 Interactive Rows */}
+      {/* 4 Summary Rows */}
       <div className="divide-y divide-border/50 py-1 space-y-1 my-auto">
         {alertItems.map((item) => {
           const Icon = item.icon;
@@ -114,8 +96,7 @@ export const CompanyInventoryAlertsCard = ({ alerts, className, isLoading = fals
           return (
             <div
               key={item.id}
-              onClick={() => navigate(item.path)}
-              className="flex items-center justify-between py-2 px-1 hover:bg-surface-alt/50 rounded-lg transition-colors cursor-pointer group"
+              className="flex items-center justify-between py-2 px-1 rounded-lg"
             >
               {/* Icon & Count */}
               <div className="flex items-center gap-3 min-w-0">
@@ -125,13 +106,10 @@ export const CompanyInventoryAlertsCard = ({ alerts, className, isLoading = fals
                 <span className={cn("font-mono text-sm tabular-nums w-8 text-center shrink-0", item.countColor)}>
                   {item.count}
                 </span>
-                <span className="text-xs font-medium text-text group-hover:text-primary transition-colors truncate">
+                <span className="text-xs font-medium text-text truncate">
                   {item.label}
                 </span>
               </div>
-
-              {/* Chevron */}
-              <ChevronRight className="size-3.5 text-text-muted group-hover:text-text transition-colors shrink-0" />
             </div>
           );
         })}

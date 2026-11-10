@@ -1,6 +1,5 @@
 // src/features/dashboard/components/branch/BranchNearExpiryCard.jsx
 
-import React from "react";
 import { ArrowRight, CalendarCheck2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { UICard, UIBadge, UIEmptyState, UISkeleton } from "@/components/ui";
@@ -51,7 +50,7 @@ export const BranchNearExpiryCard = ({ items = [], className, isLoading = false 
 
         <button
           type="button"
-          onClick={() => navigate(ROUTES.WORKSPACE_PRODUCTS || "/workspace-products")}
+          onClick={() => navigate(ROUTES.STOCK_METRICS)}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
           <span>View All</span>

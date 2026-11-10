@@ -1,6 +1,5 @@
 // src/features/dashboard/components/branch/BranchKpiGrid.jsx
 
-import React from "react";
 import {
   ShoppingCart,
   FileText,
@@ -25,7 +24,7 @@ export const BranchKpiGrid = ({ kpis, className, isLoading = false }) => {
       growthLabel: "vs yesterday",
       icon: ShoppingCart,
       color: "success",
-      route: ROUTES.SALES || "/sales",
+      route: ROUTES.REPORTS_SALES,
     },
     {
       id: "total-invoices",
@@ -35,7 +34,7 @@ export const BranchKpiGrid = ({ kpis, className, isLoading = false }) => {
       growthLabel: "vs yesterday",
       icon: FileText,
       color: "blue",
-      route: ROUTES.SALES || "/sales",
+      route: ROUTES.REPORTS_SALES,
     },
     {
       id: "new-customers",
@@ -45,7 +44,7 @@ export const BranchKpiGrid = ({ kpis, className, isLoading = false }) => {
       growthLabel: "vs yesterday",
       icon: Users,
       color: "purple",
-      route: ROUTES.CUSTOMERS || "/parties/customers",
+      route: ROUTES.REPORTS_CUSTOMER,
     },
     {
       id: "avg-bill-value",
@@ -55,7 +54,7 @@ export const BranchKpiGrid = ({ kpis, className, isLoading = false }) => {
       growthLabel: "vs yesterday",
       icon: CreditCard,
       color: "warning",
-      route: ROUTES.SALES || "/sales",
+      route: ROUTES.REPORTS_SALES,
     },
     {
       id: "items-sold",
@@ -65,7 +64,7 @@ export const BranchKpiGrid = ({ kpis, className, isLoading = false }) => {
       growthLabel: "vs yesterday",
       icon: Package,
       color: "error",
-      route: ROUTES.WORKSPACE_PRODUCTS || "/workspace-products",
+      route: ROUTES.REPORTS_PRODUCT,
     },
   ];
 

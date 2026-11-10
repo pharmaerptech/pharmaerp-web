@@ -1,6 +1,7 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import shiftService from "../services/shiftService";
 import { getErrorMessage } from "@/utils";
+import { clearBranchHeldBills } from "@/features/sales/services/holdBillStorage";
 
 export const createShift = createAsyncThunk(
   "shift/createShift",
@@ -43,7 +44,15 @@ export const updateShiftStatus = createAsyncThunk(
   async ({ id, payload }, { rejectWithValue }) => {
     try {
       const response = await shiftService.updateShiftStatus(id, payload);
-      return response.data?.data;
+      const updated = response.data?.data;
+      if (payload?.status === "closed" && updated?.branchId) {
+        clearBranchHeldBills(
+          updated.workspaceId,
+          updated.companyId,
+          updated.branchId
+        );
+      }
+      return updated;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -55,7 +64,15 @@ export const cancelShift = createAsyncThunk(
   async ({ id, payload }, { rejectWithValue }) => {
     try {
       const response = await shiftService.cancelShift(id, payload);
-      return response.data?.data;
+      const updated = response.data?.data;
+      if (updated?.branchId) {
+        clearBranchHeldBills(
+          updated.workspaceId,
+          updated.companyId,
+          updated.branchId
+        );
+      }
+      return updated;
     } catch (error) {
       return rejectWithValue(getErrorMessage(error));
     }

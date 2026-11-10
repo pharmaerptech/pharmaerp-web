@@ -62,8 +62,8 @@ export const CompanyBranchPerformanceCard = ({ branches = [], className, isLoadi
               icon={<Store className="size-8 text-text-muted" />}
               title="No Branches Configured"
               description="Register physical branches under this company to see live sales rankings."
-              actionText="Add Branch"
-              onAction={() => navigate(ROUTES.CREATE_BRANCH || "/branches/create")}
+              actionText="View Branches"
+              onAction={() => navigate(ROUTES.BRANCHES || "/branches")}
             />
           </div>
         ) : (

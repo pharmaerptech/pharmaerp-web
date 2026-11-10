@@ -1,9 +1,8 @@
 // src/features/dashboard/components/company/CompanyRecentPurchasesCard.jsx
 
-import React from "react";
 import { ArrowRight, ShoppingBag } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { UICard, UIBadge, UIButton, UIEmptyState, UISkeleton } from "@/components/ui";
+import { UICard, UIBadge, UIEmptyState, UISkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/constants";
 
@@ -59,10 +58,10 @@ export const CompanyRecentPurchasesCard = ({ purchases = [], className, isLoadin
 
         <button
           type="button"
-          onClick={() => navigate(ROUTES.PURCHASES || "/purchases")}
+          onClick={() => navigate(ROUTES.GSTR2)}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
-          <span>View All</span>
+          <span>View GSTR-2</span>
           <ArrowRight className="size-3" />
         </button>
       </div>
@@ -75,16 +74,6 @@ export const CompanyRecentPurchasesCard = ({ purchases = [], className, isLoadin
               icon={<ShoppingBag className="size-8 text-text-muted" />}
               title="No Recent Purchases"
               description="Procurement bills entered for this company will be listed here."
-              action={
-                <UIButton
-                  size="xs"
-                  variant="outline"
-                  onClick={() => navigate(ROUTES.CREATE_PURCHASE_BILL || "/purchases/bills/create")}
-                  className="mt-2"
-                >
-                  New Purchase Bill
-                </UIButton>
-              }
             />
           </div>
         ) : (

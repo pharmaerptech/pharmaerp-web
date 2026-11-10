@@ -97,8 +97,8 @@ export const InitializeBranchCashModal = ({ isOpen, onClose }) => {
       setValidationError("No active branch selected.");
       return;
     }
-    if (totalAmount <= 0) {
-      setValidationError("Opening cash amount must be greater than zero.");
+    if (totalAmount < 0 || Number.isNaN(totalAmount)) {
+      setValidationError("Opening cash amount cannot be negative.");
       return;
     }
 
@@ -178,7 +178,7 @@ export const InitializeBranchCashModal = ({ isOpen, onClose }) => {
               Note: Initializing branch cash will set the opening balance in the RUNNING partition.
             </div>
             <p className="text-amber-800/90 dark:text-amber-300/80">
-              Ensure the physical cash matches this amount. This will be recorded as the initial amount for the branch.
+              Ensure the physical cash matches this amount (leave at ₹ 0.00 if starting with an empty drawer). This will be recorded as the initial amount for the branch.
             </p>
           </div>
         </div>
@@ -239,7 +239,7 @@ export const InitializeBranchCashModal = ({ isOpen, onClose }) => {
                   Information
                 </div>
                 <p className="text-[11.5px] leading-relaxed text-sky-900/90 dark:text-sky-300/80">
-                  You can enter the count of each denomination below. Only non-zero denominations will be saved.
+                  Enter the count of each denomination below, or leave all counts at 0 to initialize with ₹ 0.00. Only non-zero denominations will be saved.
                 </p>
               </div>
             </div>
@@ -356,7 +356,7 @@ export const InitializeBranchCashModal = ({ isOpen, onClose }) => {
         <UIButton
           type="button"
           onClick={handleSubmit}
-          disabled={isSubmitting || totalAmount <= 0}
+          disabled={isSubmitting || totalAmount < 0}
           isLoading={isSubmitting}
           startIcon={<Save className="size-4" />}
           className="px-6 py-2 rounded-xl bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold shadow-xs cursor-pointer"

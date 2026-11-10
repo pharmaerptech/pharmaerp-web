@@ -31,6 +31,7 @@ import {
   UIInput,
 } from "@/components";
 import { cn } from "@/lib/utils";
+import { HOLD_TYPE, getBillHoldType } from "../services/holdBillStorage";
 
 /**
  * Format relative elapsed time from an ISO timestamp
@@ -76,6 +77,8 @@ export const HeldBillsModal = ({
     const q = (searchQuery || "").trim().toLowerCase();
     if (!q) return heldBills;
     return heldBills.filter((bill) => {
+      const isAuto = getBillHoldType(bill) === HOLD_TYPE.AUTO;
+      const matchType = (isAuto ? "auto hold priority" : "manual hold").includes(q);
       const matchToken = (bill.holdNumber || "").toLowerCase().includes(q);
       const matchCust = (bill.customerName || "").toLowerCase().includes(q);
       const matchPhone = (bill.customerPhone || "").toLowerCase().includes(q);
@@ -85,6 +88,7 @@ export const HeldBillsModal = ({
         (item.name || "").toLowerCase().includes(q)
       );
       return (
+        matchType ||
         matchToken ||
         matchCust ||
         matchPhone ||
@@ -178,7 +182,7 @@ export const HeldBillsModal = ({
                 <p className="text-xs text-text-muted max-w-sm">
                   {searchQuery
                     ? "Try searching with a different customer name, phone, or token."
-                    : "While billing at the counter, click 'Hold Bill' or press F6 to temporarily pause a bill."}
+                    : "In-progress POS bills are automatically held when you leave the Sales page, or press F6 to hold manually."}
                 </p>
               </div>
             </div>
@@ -186,6 +190,7 @@ export const HeldBillsModal = ({
             filteredBills.map((bill) => {
               const isExpanded = expandedBillId === bill.id;
               const isDeleting = deletingId === bill.id;
+              const isAutoHold = getBillHoldType(bill) === HOLD_TYPE.AUTO;
               const displayName = bill.customerName || "Walk-in Customer";
               const itemCount = bill.itemCount || bill.cart?.length || 0;
               const grandTotal = bill.grandTotal || 0;
@@ -193,7 +198,12 @@ export const HeldBillsModal = ({
               return (
                 <div
                   key={bill.id}
-                  className="rounded-xl border border-border bg-surface hover:border-border-strong transition-all shadow-2xs overflow-hidden"
+                  className={cn(
+                    "rounded-xl border transition-all shadow-2xs overflow-hidden",
+                    isAutoHold
+                      ? "border-primary/40 bg-primary/5 hover:border-primary/60"
+                      : "border-border bg-surface hover:border-border-strong"
+                  )}
                 >
                   {/* Card Main Row */}
                   <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -201,9 +211,25 @@ export const HeldBillsModal = ({
                     <div className="space-y-1.5 min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         {/* Hold Token Badge */}
-                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                        <span
+                          className={cn(
+                            "font-mono text-xs font-bold px-2 py-0.5 rounded-md border",
+                            isAutoHold
+                              ? "bg-primary/15 text-primary border-primary/30"
+                              : "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30"
+                          )}
+                        >
                           {bill.holdNumber}
                         </span>
+
+                        {/* Hold Type Badge (Auto vs Manual) */}
+                        <UIBadge
+                          variant="soft"
+                          color={isAutoHold ? "primary" : "warning"}
+                          className="text-[10px] uppercase font-bold"
+                        >
+                          {isAutoHold ? "Auto Hold · Priority" : "Manual"}
+                        </UIBadge>
 
                         {/* Mode badge */}
                         <UIBadge

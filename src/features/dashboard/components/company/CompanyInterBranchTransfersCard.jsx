@@ -1,14 +1,10 @@
 // src/features/dashboard/components/company/CompanyInterBranchTransfersCard.jsx
 
-import React from "react";
-import { ArrowRight, ArrowLeftRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { ArrowLeftRight } from "lucide-react";
 import { UICard, UIBadge, UIEmptyState, UISkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
-import { ROUTES } from "@/constants";
 
 export const CompanyInterBranchTransfersCard = ({ transfers = [], className, isLoading = false }) => {
-  const navigate = useNavigate();
 
   if (isLoading) {
     return (
@@ -58,15 +54,6 @@ export const CompanyInterBranchTransfersCard = ({ transfers = [], className, isL
         <h2 className="text-sm sm:text-base font-bold text-text tracking-tight">
           Inter-Branch Transfers
         </h2>
-
-        <button
-          type="button"
-          onClick={() => navigate(ROUTES.TRANSFER_ORDERS || "/inventory/transfer-orders")}
-          className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
-        >
-          <span>View All</span>
-          <ArrowRight className="size-3" />
-        </button>
       </div>
 
       {/* Content */}

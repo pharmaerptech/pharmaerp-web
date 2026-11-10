@@ -17,7 +17,9 @@ import {
   CompanyRequiredGuard,
   ActiveCompanyGuard,
   ActiveBranchGuard,
+  PipelineLevelGuard,
 } from "@/guards";
+import { PIPELINE_LEVELS, WORK_MODES } from "@/contexts/routePipelinePolicy";
 
 import authRoutes from "@/features/auth/routes/authRoutes";
 import userRoutes from "@/features/user/routes/userRoutes";
@@ -227,14 +229,41 @@ export const router = createBrowserRouter([
       ...userRoutes,
       ...settingsRoutes,
       ...helpCenterRoutes,
-      ...guardRouteList(createCompanyRoutes, "company"),
+      ...guardRouteList(createCompanyRoutes, "company").map((route) => ({
+        ...route,
+        element: (
+          <PipelineLevelGuard
+            allowedLevels={[PIPELINE_LEVELS.WORKSPACE]}
+            allowedModes={[WORK_MODES.OPERATION]}
+            allowDuringOnboarding
+          >
+            {route.element}
+          </PipelineLevelGuard>
+        ),
+      })),
 
       // ── Guarded by CompanyRequiredGuard (Requires Step 1 Company to be created) ──
       {
         element: <CompanyRequiredGuard />,
         children: [
-          ...guardRouteList(existingCompanyRoutes, "company"),
-          ...guardRouteList(branchRoutes, "branch"),
+          {
+            element: (
+              <PipelineLevelGuard
+                allowedLevels={[PIPELINE_LEVELS.WORKSPACE]}
+                allowDuringOnboarding
+              />
+            ),
+            children: guardRouteList(existingCompanyRoutes, "company"),
+          },
+          {
+            element: (
+              <PipelineLevelGuard
+                allowedLevels={[PIPELINE_LEVELS.COMPANY]}
+                allowDuringOnboarding
+              />
+            ),
+            children: guardRouteList(branchRoutes, "branch"),
+          },
         ],
       },
 
@@ -242,235 +271,323 @@ export const router = createBrowserRouter([
       {
         element: <SetupCenterGuard />,
         children: [
-          ...dashboardRoutes,
-
-          // Organization & Members
-          ...guardRouteList(workspaceRoutes, "workspace", {
-            [ROUTES.WORKSPACE_MEMBERS]: "workspace-member:view",
-            "/members/:memberId": "workspace-member:view",
-            [ROUTES.WORKSPACE_INVITATIONS]: "workspace-member:view",
-            [ROUTES.INVITE_WORKSPACE_MEMBER]: "workspace-member:create",
+          ...dashboardRoutes.map((route) => {
+            if (route.path === ROUTES.WORKSPACE_DASHBOARD) {
+              return {
+                ...route,
+                element: (
+                  <PipelineLevelGuard
+                    allowedLevels={[PIPELINE_LEVELS.WORKSPACE]}
+                    allowedModes={[WORK_MODES.VIEW]}
+                  >
+                    {route.element}
+                  </PipelineLevelGuard>
+                ),
+              };
+            }
+            if (route.path === ROUTES.COMPANY_DASHBOARD) {
+              return {
+                ...route,
+                element: (
+                  <ActiveCompanyGuard>
+                    <PipelineLevelGuard
+                      allowedLevels={[PIPELINE_LEVELS.COMPANY]}
+                      allowedModes={[WORK_MODES.VIEW]}
+                    >
+                      {route.element}
+                    </PipelineLevelGuard>
+                  </ActiveCompanyGuard>
+                ),
+              };
+            }
+            if (route.path === ROUTES.BRANCH_DASHBOARD) {
+              return {
+                ...route,
+                element: (
+                  <ActiveCompanyGuard>
+                    <ActiveBranchGuard>
+                      <PipelineLevelGuard
+                        allowedLevels={[PIPELINE_LEVELS.BRANCH]}
+                        allowedModes={[WORK_MODES.VIEW]}
+                      >
+                        {route.element}
+                      </PipelineLevelGuard>
+                    </ActiveBranchGuard>
+                  </ActiveCompanyGuard>
+                ),
+              };
+            }
+            return route;
           }),
 
-          // Roles & Permissions
-          ...guardRouteList(accessControlRoutes, "role"),
-
-          // Subscriptions
-          ...subscriptionRoutes.map((route) => ({
-            ...route,
+          // ── Workspace Level Routes (Floor 1) ──
+          {
             element: (
-              <PermissionGuard permission="subscription:view">
-                {route.element}
-              </PermissionGuard>
+              <PipelineLevelGuard allowedLevels={[PIPELINE_LEVELS.WORKSPACE]} />
             ),
-          })),
+            children: [
+              // Organization & Members
+              ...guardRouteList(workspaceRoutes, "workspace", {
+                [ROUTES.WORKSPACE_MEMBERS]: "workspace-member:view",
+                "/members/:memberId": "workspace-member:view",
+                [ROUTES.WORKSPACE_INVITATIONS]: "workspace-member:view",
+                [ROUTES.INVITE_WORKSPACE_MEMBER]: "workspace-member:create",
+              }),
+
+              // Roles & Permissions
+              ...guardRouteList(accessControlRoutes, "role"),
+
+              // Subscriptions
+              ...subscriptionRoutes.map((route) => ({
+                ...route,
+                element: (
+                  <PermissionGuard permission="subscription:view">
+                    {route.element}
+                  </PermissionGuard>
+                ),
+              })),
+            ],
+          },
 
           // ── Guarded by ActiveCompanyGuard (Requires active company selection) ──
           {
             element: <ActiveCompanyGuard />,
             children: [
-              // Parties
-          ...guardRouteList(customerRoutes, "customer"),
-          ...guardRouteList(supplierRoutes, "supplier"),
+              // ── Company Level Routes (Floor 2) ──
+              {
+                element: (
+                  <PipelineLevelGuard allowedLevels={[PIPELINE_LEVELS.COMPANY]} />
+                ),
+                children: [
+                  // Parties
+                  ...guardRouteList(customerRoutes, "customer"),
+                  ...guardRouteList(supplierRoutes, "supplier"),
 
-              // Clinical References
-          ...guardRouteList(doctorRoutes, "doctor"),
+                  // Clinical References
+                  ...guardRouteList(doctorRoutes, "doctor"),
 
-              // Finance & Chart of Accounts
-          ...financeRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard
-                permissions={[
-                  "account:view",
-                  "journal-voucher:view",
-                  "ledger:view",
-                  "report:view",
-                ]}
-              >
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...guardRouteList(accountRoutes, "account"),
-          ...guardRouteList(accountGroupRoutes, "account-group"),
-          ...accountBalanceRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard permission="account-balance:view">
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...guardRouteList(financialPeriodRoutes, "financial-period"),
-          ...guardRouteList(journalVoucherRoutes, "journal-voucher"),
-          ...ledgerRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard permission="ledger:view">
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...gstLedgerRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard permission="ledger:view">
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...reportsRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard permission="report:view">
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          {
-            path: ROUTES.REPORTS_HUB,
-            element: (
-              <PermissionGuard permission="report:view">
-                <ReportsHubPage />
-              </PermissionGuard>
-            ),
-          },
-          {
-            path: "/reports/:category/:subReport",
-            element: (
-              <PermissionGuard permission="report:view">
-                <ReportsHubPage />
-              </PermissionGuard>
-            ),
-          },
-          {
-            path: "/reports/:reportKey",
-            element: (
-              <PermissionGuard permission="report:view">
-                <ReportsHubPage />
-              </PermissionGuard>
-            ),
-          },
+                  // Finance & Chart of Accounts
+                  ...financeRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard
+                        permissions={[
+                          "account:view",
+                          "journal-voucher:view",
+                          "ledger:view",
+                          "report:view",
+                        ]}
+                      >
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+                  ...guardRouteList(accountRoutes, "account"),
+                  ...guardRouteList(accountGroupRoutes, "account-group"),
+                  ...accountBalanceRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard permission="account-balance:view">
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+                  ...guardRouteList(financialPeriodRoutes, "financial-period"),
+                  ...guardRouteList(journalVoucherRoutes, "journal-voucher"),
+                  ...ledgerRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard permission="ledger:view">
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+                  ...gstLedgerRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard permission="ledger:view">
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+                  ...reportsRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard permission="report:view">
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
 
-              // ── Guarded by ActiveBranchGuard (Requires active branch selection) ──
+                  // Corporate Treasury & Bank Management
+                  ...treasuryRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard
+                        permissions={[
+                          "bank-account:view",
+                          "fund-transfer:view",
+                          "cheque:view",
+                          "bank-deposit-slip:view",
+                        ]}
+                      >
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+                  ...guardRouteList(bankAccountRoutes, "bank-account"),
+                  ...guardRouteList(fundTransferRoutes, "fund-transfer"),
+                  ...guardRouteList(chequeRoutes, "cheque"),
+                  ...guardRouteList(bankDepositSlipRoutes, "bank-deposit-slip"),
+                  ...bankTransactionRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard permission="bank-transaction:view">
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+                ],
+              },
+
+              // ── Shared Company & Branch Global Catalog Masters ──
+              {
+                element: (
+                  <PipelineLevelGuard
+                    allowedLevels={[
+                      PIPELINE_LEVELS.COMPANY,
+                      PIPELINE_LEVELS.BRANCH,
+                    ]}
+                  />
+                ),
+                children: [
+                  ...catalogRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard
+                        permissions={[
+                          "product:view",
+                          "global-product:view",
+                          "category:view",
+                          "hsn:view",
+                          "manufacturer:view",
+                          "salt:view",
+                          "uom:view",
+                          "product-form:view",
+                          "bank-master:view",
+                        ]}
+                      >
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+                  ...globalProductRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard permission="global-product:view">
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+                  ...guardRouteList(hsnMasterRoutes, "hsn"),
+                  ...guardRouteList(manufacturerMasterRoutes, "manufacturer"),
+                  ...guardRouteList(uomMasterRoutes, "uom"),
+                  ...guardRouteList(categoryMasterRoutes, "category"),
+                  ...guardRouteList(productFormMasterRoutes, "product-form"),
+                  ...guardRouteList(saltMasterRoutes, "salt"),
+                  ...guardRouteList(bankMasterRoutes, "bank-master"),
+                ],
+              },
+
+              // ── Branch Level Routes (Floor 3 — Requires active branch selection) ──
               {
                 element: <ActiveBranchGuard />,
                 children: [
-                  // Treasury
-          ...treasuryRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard
-                permissions={[
-                  "bank-account:view",
-                  "branch-cash:view",
-                  "fund-transfer:view",
-                  "cheque:view",
-                  "payment-qr:view",
-                  "bank-deposit-slip:view",
-                ]}
-              >
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...guardRouteList(bankAccountRoutes, "bank-account"),
-          ...guardRouteList(branchCashRoutes, "cash-account"),
+                  {
+                    element: (
+                      <PipelineLevelGuard
+                        allowedLevels={[PIPELINE_LEVELS.BRANCH]}
+                      />
+                    ),
+                    children: [
+                      // Reports Hub (Branch View)
+                      {
+                        path: ROUTES.REPORTS_HUB,
+                        element: (
+                          <PermissionGuard permission="report:view">
+                            <ReportsHubPage />
+                          </PermissionGuard>
+                        ),
+                      },
+                      {
+                        path: "/reports/:category/:subReport",
+                        element: (
+                          <PermissionGuard permission="report:view">
+                            <ReportsHubPage />
+                          </PermissionGuard>
+                        ),
+                      },
+                      {
+                        path: "/reports/:reportKey",
+                        element: (
+                          <PermissionGuard permission="report:view">
+                            <ReportsHubPage />
+                          </PermissionGuard>
+                        ),
+                      },
 
-          ...guardRouteList(fundTransferRoutes, "fund-transfer"),
-          ...guardRouteList(cashExchangeRoutes, "cash-exchange"),
-          ...guardRouteList(chequeRoutes, "cheque"),
-          ...guardRouteList(bankDepositSlipRoutes, "bank-deposit-slip"),
-          ...guardRouteList(paymentQrRoutes, "payment-qr"),
-          ...bankTransactionRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard permission="bank-transaction:view">
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...cashTransactionRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard permission="cash-transaction:view">
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-        ],
-      },
+                      // Branch Cash & Counter Payments
+                      ...guardRouteList(branchCashRoutes, "cash-account"),
+                      ...guardRouteList(cashExchangeRoutes, "cash-exchange"),
+                      ...guardRouteList(paymentQrRoutes, "payment-qr"),
+                      ...cashTransactionRoutes.map((route) => ({
+                        ...route,
+                        element: (
+                          <PermissionGuard permission="cash-transaction:view">
+                            {route.element}
+                          </PermissionGuard>
+                        ),
+                      })),
 
-              // Inventory & Catalog
-          {
-            path: "/inventory",
-            element: <Navigate to={ROUTES.STOCK_METRICS} replace />,
-          },
-          {
-            path: "/inventory/transfer-orders",
-            element: <TransferOrdersPage />,
-          },
-          {
-            path: "/inventory/transfer-orders/create",
-            element: <CreateTransferOrderPage />,
-          },
-          {
-            path: "/inventory/transfer-orders/:id/edit",
-            element: <CreateTransferOrderPage />,
-          },
-          ...catalogRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard
-                permissions={[
-                  "product:view",
-                  "global-product:view",
-                  "category:view",
-                  "hsn:view",
-                  "manufacturer:view",
-                  "salt:view",
-                  "uom:view",
-                  "product-form:view",
-                  "bank-master:view",
-                ]}
-              >
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...guardRouteList(workspaceProductRoutes, "product"),
-          ...globalProductRoutes.map((route) => ({
-            ...route,
-            element: (
-              <PermissionGuard permission="global-product:view">
-                {route.element}
-              </PermissionGuard>
-            ),
-          })),
-          ...guardRouteList(hsnMasterRoutes, "hsn"),
-          ...guardRouteList(manufacturerMasterRoutes, "manufacturer"),
-          ...guardRouteList(uomMasterRoutes, "uom"),
-          ...guardRouteList(categoryMasterRoutes, "category"),
-          ...guardRouteList(productFormMasterRoutes, "product-form"),
-          ...guardRouteList(saltMasterRoutes, "salt"),
-          ...guardRouteList(bankMasterRoutes, "bank-master"),
+                      // Branch Inventory & Stock
+                      {
+                        path: "/inventory",
+                        element: <Navigate to={ROUTES.STOCK_METRICS} replace />,
+                      },
+                      {
+                        path: "/inventory/transfer-orders",
+                        element: <TransferOrdersPage />,
+                      },
+                      {
+                        path: "/inventory/transfer-orders/create",
+                        element: <CreateTransferOrderPage />,
+                      },
+                      {
+                        path: "/inventory/transfer-orders/:id/edit",
+                        element: <CreateTransferOrderPage />,
+                      },
+                      ...guardRouteList(workspaceProductRoutes, "product"),
 
-              // Marketplace
-              ...guardRouteList(marketplaceStoreRoutes, "marketplace-store"),
-              ...guardRouteList(marketplaceProductRoutes, "marketplace-product"),
+                      // Marketplace
+                      ...guardRouteList(
+                        marketplaceStoreRoutes,
+                        "marketplace-store"
+                      ),
+                      ...guardRouteList(
+                        marketplaceProductRoutes,
+                        "marketplace-product"
+                      ),
 
-              {
-                element: <ActiveBranchGuard />,
-                children: [
-                  // Sales & POS, Invoicing & Purchases
-                  ...guardRouteList(salesRoutes, "pos"),
-                  ...guardRouteList(billingRoutes, "bill"),
-                  ...guardRouteList(salesReturnRoutes, "bill"),
-                  ...guardRouteList(purchasesRoutes, "purchase"),
+                      // Sales & POS, Invoicing & Purchases
+                      ...guardRouteList(salesRoutes, "pos"),
+                      ...guardRouteList(billingRoutes, "bill"),
+                      ...guardRouteList(salesReturnRoutes, "bill"),
+                      ...guardRouteList(purchasesRoutes, "purchase"),
 
-                  // Shifts & Closings
-                  ...operationsRoutes,
+                      // Shifts & Closings
+                      ...operationsRoutes,
+                    ],
+                  },
                 ],
               },
             ],

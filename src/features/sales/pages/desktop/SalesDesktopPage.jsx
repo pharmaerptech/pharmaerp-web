@@ -71,6 +71,12 @@ import {
   ResumeConflictDialog,
 } from "../../components";
 import { useHoldBills } from "../../hooks/useHoldBills";
+import {
+  saveAutoHeldBill,
+  hasMeaningfulSalesDraft,
+} from "../../services/holdBillStorage";
+import { TOKEN_KEY } from "@/constants";
+import { storage } from "@/utils";
 import OpenBusinessDayDialog from "@/features/operations/business-days/components/OpenBusinessDayDialog";
 import { getOpenBusinessDay } from "@/features/operations/business-days/store/businessDayThunk";
 import { CreateShiftDialog } from "@/features/operations/shifts/components/CreateShiftDialog";
@@ -288,7 +294,9 @@ export const SalesDesktopPage = () => {
   const [billingMode, setBillingMode] = useState(
     initialResumeHeldBill?.billingMode || initialInvoice?.billingMode || "B2C"
   ); // "B2C" | "B2B"
-  const [b2bPartyType, setB2bPartyType] = useState("all"); // "all" | "wholesaler" | "retailer"
+  const [b2bPartyType, setB2bPartyType] = useState(
+    initialResumeHeldBill?.b2bPartyType || "all"
+  ); // "all" | "wholesaler" | "retailer"
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -545,25 +553,23 @@ export const SalesDesktopPage = () => {
     heldBills,
     count: heldBillsCount,
     holdBill,
+    getAutoHold,
+    consumeAutoHold,
+    removeAutoHold,
     resumeBill,
     discardBill,
     clearAll: clearAllHeldBills,
+    workspaceId: holdWorkspaceId,
+    companyId: holdCompanyId,
   } = useHoldBills();
-
-  useEffect(() => {
-    if (initialResumeHeldBill?.id) {
-      resumeBill(initialResumeHeldBill.id);
-      setToastMessage(`▶️ Resumed held bill ${initialResumeHeldBill.holdNumber || ""}.`);
-      setTimeout(() => setToastMessage(null), 3500);
-      window.history.replaceState({}, document.title);
-    }
-  }, []);
 
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
   const [isHeldBillsModalOpen, setIsHeldBillsModalOpen] = useState(false);
   const [pendingResumeBill, setPendingResumeBill] = useState(null);
   const [isResumeConflictOpen, setIsResumeConflictOpen] = useState(false);
-  const [isReturnInvoice, setIsReturnInvoice] = useState(false);
+  const [isReturnInvoice, setIsReturnInvoice] = useState(
+    Boolean(initialResumeHeldBill?.isReturnInvoice)
+  );
 
   const { openBusinessDay, getOpenBusinessDayStatus } = useSelector((state) => state.businessDay);
   const [isBusinessDayModalOpen, setIsBusinessDayModalOpen] = useState(false);
@@ -620,6 +626,216 @@ export const SalesDesktopPage = () => {
   const searchBarRef = useRef(null);
   const customerSearchBarRef = useRef(null);
   const b2bCustomerSearchBarRef = useRef(null);
+
+  const hasInitializedAutoHoldRef = useRef(false);
+  const pendingExplicitResumeRef = useRef(initialResumeHeldBill || null);
+
+  const currentDraftSnapshot = {
+    workspaceId: holdWorkspaceId,
+    companyId: holdCompanyId,
+    branchId,
+    activeShift,
+    isEditMode,
+    billingMode,
+    b2bPartyType,
+    selectedB2cCustomer,
+    selectedB2bParty,
+    customerName,
+    customerPhone,
+    doctorName,
+    selectedDoctor,
+    saleDate,
+    isReturnInvoice,
+    cart,
+  };
+
+  const latestDraftRef = useRef(currentDraftSnapshot);
+  useEffect(() => {
+    latestDraftRef.current = currentDraftSnapshot;
+  });
+
+  const hydrateFormFromHeldBill = (targetBill) => {
+    if (!targetBill) return;
+    const mode = targetBill.billingMode === "B2B" ? "B2B" : "B2C";
+    const resolvedB2c = mode === "B2B" ? null : targetBill.customer || null;
+    const resolvedB2b = mode === "B2B" ? targetBill.customer || null : null;
+    const resolvedName =
+      mode === "B2B"
+        ? ""
+        : targetBill.customerName || targetBill.customer?.name || "";
+    const resolvedPhone =
+      mode === "B2B"
+        ? ""
+        : targetBill.customerPhone ||
+          targetBill.customer?.mobile ||
+          targetBill.customer?.phone ||
+          "";
+    const resolvedDoctorName = targetBill.doctorName || "";
+    const resolvedDoctor = targetBill.doctorId
+      ? {
+          id: targetBill.doctorId,
+          _id: targetBill.doctorId,
+          name: resolvedDoctorName,
+        }
+      : resolvedDoctorName
+      ? { name: resolvedDoctorName }
+      : null;
+    const resolvedSaleDate = targetBill.saleDate
+      ? String(targetBill.saleDate).split("T")[0]
+      : latestDraftRef.current.saleDate;
+    const resolvedReturn = Boolean(targetBill.isReturnInvoice);
+    const resolvedCart = Array.isArray(targetBill.cart) ? targetBill.cart : [];
+    const resolvedPartyType =
+      targetBill.b2bPartyType || latestDraftRef.current.b2bPartyType || "all";
+
+    setBillingMode(mode);
+    setB2bPartyType(resolvedPartyType);
+    setSelectedB2bParty(resolvedB2b);
+    setSelectedB2cCustomer(resolvedB2c);
+    setCustomerName(resolvedName);
+    setCustomerPhone(resolvedPhone);
+    setDoctorName(resolvedDoctorName);
+    setSelectedDoctor(resolvedDoctor);
+    setSaleDate(resolvedSaleDate);
+    setIsReturnInvoice(resolvedReturn);
+    setCart(resolvedCart);
+
+    // Keep ref synchronously aligned for StrictMode / immediate unmount
+    latestDraftRef.current = {
+      ...latestDraftRef.current,
+      billingMode: mode,
+      b2bPartyType: resolvedPartyType,
+      selectedB2cCustomer: resolvedB2c,
+      selectedB2bParty: resolvedB2b,
+      customerName: resolvedName,
+      customerPhone: resolvedPhone,
+      doctorName: resolvedDoctorName,
+      selectedDoctor: resolvedDoctor,
+      saleDate: resolvedSaleDate,
+      isReturnInvoice: resolvedReturn,
+      cart: resolvedCart,
+    };
+  };
+
+  const clearFormDraftState = () => {
+    setCart([]);
+    setSelectedB2cCustomer(null);
+    setSelectedB2bParty(null);
+    setCustomerName("");
+    setCustomerPhone("");
+    setDoctorName("");
+    setSelectedDoctor(null);
+    setShowCustomerHistory(false);
+    setIsReturnInvoice(false);
+    customerSearchBarRef.current?.clear?.();
+    b2bCustomerSearchBarRef.current?.clear?.();
+
+    latestDraftRef.current = {
+      ...latestDraftRef.current,
+      selectedB2cCustomer: null,
+      selectedB2bParty: null,
+      customerName: "",
+      customerPhone: "",
+      doctorName: "",
+      selectedDoctor: null,
+      isReturnInvoice: false,
+      cart: [],
+    };
+  };
+
+  // Auto-load priority automatic hold on return / refresh (or resolve explicit resume from Billing)
+  useEffect(() => {
+    if (isEditMode || !branchId || !activeShift || hasInitializedAutoHoldRef.current) {
+      return;
+    }
+    hasInitializedAutoHoldRef.current = true;
+
+    const pendingResume = pendingExplicitResumeRef.current;
+    pendingExplicitResumeRef.current = null;
+    const existingAuto = getAutoHold();
+
+    if (pendingResume?.id) {
+      window.history.replaceState({}, document.title);
+
+      if (
+        existingAuto &&
+        existingAuto.id !== pendingResume.id &&
+        Array.isArray(existingAuto.cart) &&
+        existingAuto.cart.length > 0
+      ) {
+        const restoredAuto = consumeAutoHold();
+        if (restoredAuto) {
+          hydrateFormFromHeldBill(restoredAuto);
+        }
+        setPendingResumeBill(pendingResume);
+        setIsResumeConflictOpen(true);
+        return;
+      }
+
+      if (existingAuto && existingAuto.id === pendingResume.id) {
+        consumeAutoHold();
+      } else {
+        resumeBill(pendingResume.id);
+      }
+      hydrateFormFromHeldBill(pendingResume);
+      setToastMessage(`▶️ Resumed held bill ${pendingResume.holdNumber || ""}.`);
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+
+    if (existingAuto) {
+      const restoredAuto = consumeAutoHold();
+      if (restoredAuto) {
+        hydrateFormFromHeldBill(restoredAuto);
+        setToastMessage("🔄 Auto-held bill restored.");
+        setTimeout(() => setToastMessage(null), 3000);
+      }
+    }
+  }, [branchId, activeShift, isEditMode, getAutoHold, consumeAutoHold, resumeBill]);
+
+  // Persist current POS work as an automatic hold on route leave or browser refresh/unload
+  useEffect(() => {
+    const persistAutoHoldIfEligible = () => {
+      const draft = latestDraftRef.current;
+      if (!draft || draft.isEditMode) return;
+      if (!draft.branchId || !draft.activeShift) return;
+      if (!storage.get(TOKEN_KEY)) return;
+      if (!hasMeaningfulSalesDraft(draft)) return;
+
+      const draftCustomer =
+        draft.billingMode === "B2C" ? draft.selectedB2cCustomer : draft.selectedB2bParty;
+
+      saveAutoHeldBill({
+        workspaceId: draft.workspaceId,
+        companyId: draft.companyId,
+        branchId: draft.branchId,
+        billingMode: draft.billingMode,
+        b2bPartyType: draft.b2bPartyType,
+        customer: draftCustomer,
+        customerName:
+          draft.billingMode === "B2C"
+            ? draftCustomer?.name || draft.customerName
+            : draftCustomer?.name || "",
+        customerPhone:
+          draft.billingMode === "B2C"
+            ? draftCustomer?.mobile || draftCustomer?.phone || draft.customerPhone
+            : draftCustomer?.mobile || draftCustomer?.phone || "",
+        doctorName: draft.doctorName,
+        doctorId: draft.selectedDoctor?._id || draft.selectedDoctor?.id || null,
+        saleDate: draft.saleDate,
+        isReturnInvoice: draft.isReturnInvoice,
+        cart: draft.cart,
+      });
+    };
+
+    window.addEventListener("beforeunload", persistAutoHoldIfEligible);
+    window.addEventListener("pagehide", persistAutoHoldIfEligible);
+    return () => {
+      window.removeEventListener("beforeunload", persistAutoHoldIfEligible);
+      window.removeEventListener("pagehide", persistAutoHoldIfEligible);
+      persistAutoHoldIfEligible();
+    };
+  }, []);
 
   // Auto-focus handler: focuses Customer Search Bar first if customer not selected, else Product Search Bar
   useEffect(() => {
@@ -741,6 +957,7 @@ export const SalesDesktopPage = () => {
   const handleConfirmHoldBill = (note) => {
     const held = holdBill({
       billingMode,
+      b2bPartyType,
       customer: activeCustomer,
       customerName:
         billingMode === "B2C"
@@ -751,21 +968,15 @@ export const SalesDesktopPage = () => {
           ? activeCustomer?.mobile || activeCustomer?.phone || customerPhone
           : activeCustomer?.mobile || "",
       doctorName,
+      doctorId: selectedDoctor?._id || selectedDoctor?.id || null,
       saleDate,
+      isReturnInvoice,
       cart,
       note,
     });
 
-    setCart([]);
-    setSelectedB2cCustomer(null);
-    setSelectedB2bParty(null);
-    setCustomerName("");
-    setCustomerPhone("");
-    setDoctorName("");
-    setSelectedDoctor(null);
-    setShowCustomerHistory(false);
-    customerSearchBarRef.current?.clear?.();
-    b2bCustomerSearchBarRef.current?.clear?.();
+    removeAutoHold();
+    clearFormDraftState();
     setIsHoldModalOpen(false);
 
     setToastMessage(`⏸️ Bill ${held?.holdNumber || ""} held successfully.`);
@@ -775,37 +986,7 @@ export const SalesDesktopPage = () => {
   const executeResumeBill = (targetBill) => {
     if (!targetBill) return;
 
-    setBillingMode(targetBill.billingMode || "B2C");
-
-    if (targetBill.billingMode === "B2B") {
-      setSelectedB2bParty(targetBill.customer || null);
-      setSelectedB2cCustomer(null);
-      setCustomerName("");
-      setCustomerPhone("");
-    } else {
-      setSelectedB2cCustomer(targetBill.customer || null);
-      setSelectedB2bParty(null);
-      setCustomerName(targetBill.customerName || "");
-      setCustomerPhone(targetBill.customerPhone || "");
-    }
-
-    setDoctorName(targetBill.doctorName || "");
-    setSelectedDoctor(
-      targetBill.doctorId
-        ? {
-            id: targetBill.doctorId,
-            _id: targetBill.doctorId,
-            name: targetBill.doctorName,
-          }
-        : targetBill.doctorName
-        ? { name: targetBill.doctorName }
-        : null
-    );
-    if (targetBill.saleDate) {
-      setSaleDate(targetBill.saleDate.split("T")[0]);
-    }
-
-    setCart(Array.isArray(targetBill.cart) ? targetBill.cart : []);
+    hydrateFormFromHeldBill(targetBill);
     resumeBill(targetBill.id);
 
     setIsResumeConflictOpen(false);
@@ -830,6 +1011,7 @@ export const SalesDesktopPage = () => {
 
     holdBill({
       billingMode,
+      b2bPartyType,
       customer: activeCustomer,
       customerName:
         billingMode === "B2C"
@@ -842,6 +1024,7 @@ export const SalesDesktopPage = () => {
       doctorName,
       doctorId: selectedDoctor?._id || selectedDoctor?.id || null,
       saleDate,
+      isReturnInvoice,
       cart,
       note: `Swapped while resuming ${pendingResumeBill.holdNumber}`,
     });
@@ -1252,13 +1435,8 @@ export const SalesDesktopPage = () => {
   };
 
   const handleClearCart = () => {
-    setCart([]);
-    if (billingMode === "B2C") {
-      setSelectedB2cCustomer(null);
-      setCustomerName("");
-      setCustomerPhone("");
-      customerSearchBarRef.current?.clear?.();
-    }
+    removeAutoHold();
+    clearFormDraftState();
   };
 
   // Line item amount calculation
@@ -1404,17 +1582,8 @@ export const SalesDesktopPage = () => {
       partyType: billingMode === "B2B" ? selectedB2bParty?.partyType || "wholesaler" : "retail",
     });
     setIsReceiptOpen(true);
-    setCart([]);
-    setSelectedB2cCustomer(null);
-    setCustomerName("");
-    setCustomerPhone("");
-    setSelectedB2bParty(null);
-    setDoctorName("");
-    setSelectedDoctor(null);
-    setShowCustomerHistory(false);
-    setIsReturnInvoice(false);
-    customerSearchBarRef.current?.clear?.();
-    b2bCustomerSearchBarRef.current?.clear?.();
+    removeAutoHold();
+    clearFormDraftState();
   };
 
   if (isLoadingInvoice) {
