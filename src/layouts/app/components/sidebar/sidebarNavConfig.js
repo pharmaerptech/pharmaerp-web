@@ -29,6 +29,7 @@ import {
   FolderTree,
   RotateCcw,
   Trash2,
+  Undo2,
 } from "lucide-react";
 
 import { ROUTES } from "@/constants";
@@ -82,6 +83,14 @@ export const SIDEBAR_NAV_GROUPS = [
         shortcut: "Alt + P",
         permission: "purchase:view",
         keywords: ["purchases", "vendor bills", "purchase order"],
+      },
+      {
+        id: "purchase-returns",
+        label: "Purchase Returns",
+        path: ROUTES.PURCHASE_RETURNS,
+        icon: Undo2,
+        permission: "purchase:view",
+        keywords: ["purchase returns", "debit notes", "supplier returns", "vendor returns", "claim memo"],
       },
       {
         id: "pharmacy-stock",

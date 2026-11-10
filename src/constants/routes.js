@@ -299,6 +299,11 @@ export const ROUTES = {
   CREATE_PURCHASE_BILL: "/purchases/bills/create",
   EDIT_PURCHASE_BILL: (billId = ":billId") => `/purchases/bills/${billId}/edit`,
 
+  // Purchase Returns & Supplier Debit Notes
+  PURCHASE_RETURNS: "/purchase-returns",
+  CREATE_PURCHASE_RETURN: "/purchase-returns/create",
+  PURCHASE_RETURN_DETAILS: (returnId = ":returnId") => `/purchase-returns/${returnId}`,
+
   // Help & Support
   HELP_CENTER: "/help-center",
 

@@ -17,6 +17,7 @@ import {
   Truck,
   Archive,
   Plus,
+  Undo2,
 } from "lucide-react";
 
 import {
@@ -643,6 +644,82 @@ export const ExpiredScrapItemsMobilePage = () => {
     });
   };
 
+  // Jump to Purchase Return creation with selected quarantined items prefilled
+  const handleReturnToSupplier = () => {
+    if (!isCurrentBranchSelected) {
+      setToastMessage(
+        `Select current branch (${currentBranch?.name || "Active Facility"}) only to create purchase return.`
+      );
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+
+    const listToReturn = selectedScrapItems.length > 0 ? selectedScrapItems : selectedItems.filter((i) => i.category !== "shelf_expired");
+    if (listToReturn.length === 0) {
+      if (selectedShelfItems.length > 0) {
+        setToastMessage("Shelf-expired items are on shelves and must first be moved to the scrap bin before returning.");
+      } else {
+        setToastMessage("Please select at least one scrap bin batch to return.");
+      }
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+
+    const foreignBranchItem = listToReturn.find((i) => {
+      const itemBranchId = i.branch_id?._id || i.branch_id || i.branchId;
+      return itemBranchId && String(itemBranchId) !== String(activeBranchId);
+    });
+    if (foreignBranchItem) {
+      setToastMessage(
+        `Cannot return stock from "${foreignBranchItem.branchName || "another branch"}". Select current branch only.`
+      );
+      setTimeout(() => setToastMessage(null), 4000);
+      return;
+    }
+
+    const sourceBranch = activeBranchId;
+
+    const prefilledItems = listToReturn.map((item) => ({
+      productId:
+        item.productId ||
+        item.product_id ||
+        item.product?._id ||
+        item.product ||
+        item._id,
+      productName: item.productName || item.name || "Product",
+      pack: item.pack || "",
+      batchId: item._id || item.batchId || item.batch,
+      batchNo: item.rawBatchNo || item.batchNo,
+      expiry: item.expiryDate || "",
+      availableQty: Number(
+        item.affectedQty || item.scrapStock || item.shelfStock || 1
+      ),
+      returnQty: Number(
+        item.affectedQty || item.scrapStock || item.shelfStock || 1
+      ),
+      sourceBin:
+        item.category === "broken"
+          ? "SCRAP_BROKEN"
+          : "SCRAP_EXPIRED",
+      rate: Number(item.pts || item.rate || 0),
+      mrp: item.mrp || 0,
+      gstPct: item.hsnTaxpercent || 12,
+      supplierId: item.supplierId || item.supplier?._id || null,
+      supplierName: item.supplierName || item.supplier?.businessName || "",
+      purchaseBillId: item.purchaseBillId || null,
+      purchaseBillNo: item.purchaseBillNo || "",
+    }));
+
+    navigate(ROUTES.CREATE_PURCHASE_RETURN, {
+      state: {
+        returnMotive: listToReturn.some((i) => i.category === "broken") ? "BROKEN" : "EXPIRED",
+        sourceBranchId: sourceBranch,
+        prefilledItems,
+        remarks: `Return to supplier from scrap bin (${listToReturn.length} batches)`,
+      },
+    });
+  };
+
   // Handle moving selected shelf-expired items to branch scrap bin
   const handleConfirmMoveToScrapBin = async () => {
     if (!isCurrentBranchSelected) {
@@ -1097,6 +1174,29 @@ export const ExpiredScrapItemsMobilePage = () => {
                 }
               >
                 Transfer {hasScrapSelected ? `(${selectedScrapItems.length})` : ""}
+              </UIButton>
+            )}
+
+            {(!hasShelfSelected || hasScrapSelected) && (
+              <UIButton
+                variant="outline"
+                size="sm"
+                onClick={handleReturnToSupplier}
+                disabled={!isCurrentBranchSelected || !hasScrapSelected}
+                startIcon={<Undo2 className="size-3.5" />}
+                className={cn(
+                  "h-8.5 text-xs font-bold",
+                  (!isCurrentBranchSelected || !hasScrapSelected) && "opacity-50 cursor-not-allowed"
+                )}
+                title={
+                  !isCurrentBranchSelected
+                    ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to return`
+                    : !hasScrapSelected
+                    ? "Shelf-expired items must first be moved to scrap bin before returning"
+                    : "Return selected scrap items to supplier (Debit Note)"
+                }
+              >
+                Return {hasScrapSelected ? `(${selectedScrapItems.length})` : ""}
               </UIButton>
             )}
 

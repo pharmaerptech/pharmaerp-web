@@ -559,6 +559,14 @@ export const ENDPOINTS = {
     BY_ID: (billId) => `/catalog/purchase-bills/${billId}`,
   },
 
+  PURCHASE_RETURN: {
+    CREATE: "/catalog/purchase-returns",
+    LIST: "/catalog/purchase-returns",
+    ELIGIBLE_BATCHES: "/catalog/purchase-returns/eligible-batches",
+    BY_ID: (returnId) => `/catalog/purchase-returns/${returnId}`,
+    CANCEL: (returnId) => `/catalog/purchase-returns/${returnId}/cancel`,
+  },
+
   DASHBOARD: {
     OVERVIEW: "/dashboard/overview",
     BRANCH: "/dashboard/branch",
