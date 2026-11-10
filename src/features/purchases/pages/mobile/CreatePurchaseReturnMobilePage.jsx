@@ -22,6 +22,7 @@ import {
   uiToast,
 } from "@/components/ui";
 import { SupplierSearchBar } from "@/features/parties/suppliers/components/SupplierSearchBar";
+import { ReturnBoxLabelModal } from "../../components/ReturnBoxLabelModal";
 import purchaseReturnService from "../../services/purchaseReturnService";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { ROUTES } from "@/constants";
@@ -58,6 +59,7 @@ export const CreatePurchaseReturnMobilePage = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showBoxLabelModal, setShowBoxLabelModal] = useState(false);
 
   useEffect(() => {
     if (prefilledItems.length > 0) {
@@ -539,27 +541,56 @@ export const CreatePurchaseReturnMobilePage = () => {
       </div>
 
       {/* Floating Bottom Summary & Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-card border-t p-4 z-40 shadow-xl space-y-2">
+      <div className="fixed bottom-0 left-0 right-0 bg-card border-t p-4 z-40 shadow-xl space-y-2.5">
         <div className="flex items-baseline justify-between text-xs">
           <span className="text-text-muted">Total Debit Note Amount:</span>
           <span className="text-lg font-black text-primary font-mono">
             {formatCurrency(calculatedTotals.grandTotal)}
           </span>
         </div>
-        <UIButton
-          variant="primary"
-          size="lg"
-          onClick={handleSubmitReturn}
-          disabled={isSubmitting || items.length === 0}
-          className="w-full font-bold shadow-md"
-        >
-          {isSubmitting
-            ? "Issuing Debit Notes..."
-            : isMultiSupplier
-            ? `Confirm & Issue ${supplierList.length} Debit Notes`
-            : "Confirm & Issue Debit Note"}
-        </UIButton>
+        <div className="flex items-center gap-2">
+          <UIButton
+            variant="outline"
+            size="md"
+            onClick={() => setShowBoxLabelModal(true)}
+            disabled={items.length === 0}
+            startIcon={<Package className="size-4" />}
+            className="flex-1 font-semibold"
+          >
+            Box Label
+          </UIButton>
+          <UIButton
+            variant="primary"
+            size="md"
+            onClick={handleSubmitReturn}
+            disabled={isSubmitting || items.length === 0}
+            className="flex-2 font-bold shadow-md"
+          >
+            {isSubmitting
+              ? "Issuing..."
+              : isMultiSupplier
+              ? `Issue ${supplierList.length} Notes`
+              : "Confirm Return"}
+          </UIButton>
+        </div>
       </div>
+
+      {/* Transport Box Labels Generator Modal */}
+      {showBoxLabelModal && (
+        <ReturnBoxLabelModal
+          isOpen={showBoxLabelModal}
+          onClose={() => setShowBoxLabelModal(false)}
+          returnRecord={{
+            debitNoteNo: isMultiSupplier ? `DN-MULTI (${supplierList.length} Notes)` : "DN-STAGED",
+            returnNo: "PR-PENDING",
+            returnDate,
+            returnMotive,
+            supplier: selectedSupplier || (supplierList[0] ? { businessName: supplierList[0].supplierName, gstNumber: supplierList[0].supplierGst } : null),
+            branch: currentBranch,
+            items,
+          }}
+        />
+      )}
     </div>
   );
 };

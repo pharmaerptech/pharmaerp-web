@@ -47,6 +47,7 @@ import {
   uiToast,
 } from "@/components/ui";
 import { SupplierSearchBar } from "@/features/parties/suppliers/components/SupplierSearchBar";
+import { ReturnBoxLabelModal } from "../../components/ReturnBoxLabelModal";
 import purchaseReturnService from "../../services/purchaseReturnService";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { ROUTES } from "@/constants";
@@ -92,6 +93,7 @@ export const CreatePurchaseReturnDesktopPage = () => {
 
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showBoxLabelModal, setShowBoxLabelModal] = useState(false);
 
   // Initialize from Prefilled State
   useEffect(() => {
@@ -570,6 +572,17 @@ export const CreatePurchaseReturnDesktopPage = () => {
         }
         actions={
           <div className="flex items-center gap-2">
+            <UIButton
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBoxLabelModal(true)}
+              disabled={items.length === 0}
+              startIcon={<Package className="size-3.5" />}
+              className="font-medium"
+            >
+              Transport Label
+            </UIButton>
+
             <UIButton
               variant="outline"
               size="sm"
@@ -1076,32 +1089,63 @@ export const CreatePurchaseReturnDesktopPage = () => {
               }}
               variant="card"
               footer={
-                <UIButton
-                  variant="primary"
-                  size="md"
-                  fullWidth
-                  onClick={handleSubmitReturn}
-                  disabled={isSubmitting || items.length === 0}
-                  startIcon={
-                    isSubmitting ? (
-                      <Loader2 className="size-4 animate-spin" />
-                    ) : (
-                      <ShieldCheck className="size-4" />
-                    )
-                  }
-                  className="font-bold shadow-xs mt-2"
-                >
-                  {isSubmitting
-                    ? "Processing..."
-                    : isMultiSupplier
-                    ? `Confirm & Issue ${supplierList.length} Debit Notes`
-                    : "Confirm & Issue Debit Note"}
-                </UIButton>
+                <div className="space-y-2 mt-2">
+                  <UIButton
+                    variant="primary"
+                    size="md"
+                    fullWidth
+                    onClick={handleSubmitReturn}
+                    disabled={isSubmitting || items.length === 0}
+                    startIcon={
+                      isSubmitting ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <ShieldCheck className="size-4" />
+                      )
+                    }
+                    className="font-bold shadow-xs"
+                  >
+                    {isSubmitting
+                      ? "Processing..."
+                      : isMultiSupplier
+                      ? `Confirm & Issue ${supplierList.length} Debit Notes`
+                      : "Confirm & Issue Debit Note"}
+                  </UIButton>
+
+                  <UIButton
+                    variant="outline"
+                    size="sm"
+                    fullWidth
+                    onClick={() => setShowBoxLabelModal(true)}
+                    disabled={items.length === 0}
+                    startIcon={<Package className="size-3.5" />}
+                    className="font-medium"
+                  >
+                    Create Transport Box Label
+                  </UIButton>
+                </div>
               }
             />
           </div>
         </div>
       </div>
+
+      {/* Transport Box Labels Generator Modal */}
+      {showBoxLabelModal && (
+        <ReturnBoxLabelModal
+          isOpen={showBoxLabelModal}
+          onClose={() => setShowBoxLabelModal(false)}
+          returnRecord={{
+            debitNoteNo: isMultiSupplier ? `DN-MULTI (${supplierList.length} Notes)` : "DN-STAGED",
+            returnNo: "PR-PENDING",
+            returnDate,
+            returnMotive,
+            supplier: selectedSupplier || (supplierList[0] ? { businessName: supplierList[0].supplierName, gstNumber: supplierList[0].supplierGst } : null),
+            branch: currentBranch,
+            items,
+          }}
+        />
+      )}
     </div>
   );
 };
