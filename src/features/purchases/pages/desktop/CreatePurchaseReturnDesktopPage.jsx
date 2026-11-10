@@ -386,52 +386,154 @@ export const CreatePurchaseReturnDesktopPage = () => {
     };
   }, [items]);
 
-  // Submit Purchase Return
-  const handleSubmitReturn = async () => {
-    if (!selectedSupplier?._id) {
-      uiToast.error("Please select a supplier to return goods to.");
-      return;
-    }
+  // Multi-Supplier Grouping & Partitioning
+  const [activeSupplierFilter, setActiveSupplierFilter] = useState("all");
 
+  const supplierGroups = useMemo(() => {
+    const groups = {};
+    items.forEach((item) => {
+      const supId =
+        item.supplierId ||
+        item.supplier?._id ||
+        (selectedSupplier?._id ? selectedSupplier._id : "unknown");
+      const supName =
+        item.supplierName ||
+        item.supplier?.businessName ||
+        item.supplier?.name ||
+        (supId === selectedSupplier?._id
+          ? selectedSupplier?.businessName || selectedSupplier?.name
+          : "Unassigned Supplier");
+      const supGst =
+        item.supplierGst ||
+        item.supplier?.gstNumber ||
+        (supId === selectedSupplier?._id ? selectedSupplier?.gstNumber : "");
+
+      if (!groups[supId]) {
+        groups[supId] = {
+          supplierId: supId,
+          supplier:
+            item.supplier ||
+            (supId === selectedSupplier?._id
+              ? selectedSupplier
+              : { _id: supId, businessName: supName, gstNumber: supGst }),
+          supplierName: supName,
+          supplierGst: supGst,
+          items: [],
+          taxableSubtotal: 0,
+          totalGst: 0,
+          grandTotal: 0,
+        };
+      }
+      groups[supId].items.push(item);
+
+      const qty = Number(item.returnQty) || 0;
+      const rate = Number(item.rate) || 0;
+      const disc = Number(item.discountPct) || 0;
+      const lineGross = qty * rate;
+      const lineTaxable = lineGross - lineGross * (disc / 100);
+      const lineTax = (lineTaxable * (Number(item.gstPct) || 0)) / 100;
+
+      groups[supId].taxableSubtotal += lineTaxable;
+      groups[supId].totalGst += lineTax;
+    });
+
+    Object.values(groups).forEach((g) => {
+      g.taxableSubtotal = Number(g.taxableSubtotal.toFixed(2));
+      g.totalGst = Number(g.totalGst.toFixed(2));
+      g.grandTotal = Math.round(g.taxableSubtotal + g.totalGst);
+    });
+
+    return groups;
+  }, [items, selectedSupplier]);
+
+  const supplierList = useMemo(() => Object.values(supplierGroups), [supplierGroups]);
+  const isMultiSupplier = supplierList.length > 1;
+
+  // Items to display based on supplier filter tab
+  const displayedItems = useMemo(() => {
+    if (activeSupplierFilter === "all") return items;
+    return items.filter((item) => {
+      const itemSupId =
+        item.supplierId ||
+        item.supplier?._id ||
+        (selectedSupplier?._id ? selectedSupplier._id : "unknown");
+      return itemSupId === activeSupplierFilter;
+    });
+  }, [items, activeSupplierFilter, selectedSupplier]);
+
+  // Submit Purchase Return (Single or Multi-Debit Notes)
+  const handleSubmitReturn = async () => {
     if (items.length === 0) {
       uiToast.error("Please add at least one item to return.");
       return;
     }
 
+    // Verify all items have an identified supplier
+    const unassignedItem = items.find(
+      (i) => !i.supplierId && !i.supplier?._id && !selectedSupplier?._id
+    );
+    if (unassignedItem) {
+      uiToast.error(`Please select a supplier for "${unassignedItem.productName}".`);
+      return;
+    }
+
+    // Determine target groups (either all suppliers or selected supplier tab)
+    const targetsToSubmit =
+      activeSupplierFilter === "all"
+        ? supplierList
+        : supplierList.filter((g) => g.supplierId === activeSupplierFilter);
+
     setIsSubmitting(true);
     try {
-      const payload = {
-        branchId: activeBranchId,
-        supplierId: selectedSupplier._id,
-        returnDate,
-        returnMotive,
-        settlementType,
-        items: items.map((i) => ({
-          productId: i.productId,
-          productName: i.productName,
-          pack: i.pack,
-          batchId: i.batchId,
-          batchNo: i.batchNo,
-          expiry: i.expiry,
-          purchaseBillId: i.purchaseBillId || undefined,
-          purchaseBillNo: i.purchaseBillNo || undefined,
-          sourceBin: i.sourceBin,
-          returnQty: i.returnQty,
-          rate: i.rate,
-          discountPct: i.discountPct,
-          gstPct: i.gstPct,
-        })),
-        reason,
-        remarks,
-      };
+      const createdNotes = [];
+      const failedSuppliers = [];
 
-      const res = await purchaseReturnService.createPurchaseReturn(payload);
-      const created = res.data?.data || res.data;
+      for (const group of targetsToSubmit) {
+        const payload = {
+          branchId: activeBranchId,
+          supplierId: group.supplierId !== "unknown" ? group.supplierId : selectedSupplier._id,
+          returnDate,
+          returnMotive,
+          settlementType,
+          items: group.items.map((i) => ({
+            productId: i.productId,
+            productName: i.productName,
+            pack: i.pack,
+            batchId: i.batchId,
+            batchNo: i.batchNo,
+            expiry: i.expiry,
+            purchaseBillId: i.purchaseBillId || undefined,
+            purchaseBillNo: i.purchaseBillNo || undefined,
+            sourceBin: i.sourceBin,
+            returnQty: i.returnQty,
+            rate: i.rate,
+            discountPct: i.discountPct,
+            gstPct: i.gstPct,
+          })),
+          reason,
+          remarks,
+        };
 
-      uiToast.success(
-        `Debit Note #${created?.debitNoteNo || created?.returnNo} issued successfully!`
-      );
-      navigate(ROUTES.PURCHASE_RETURNS);
+        try {
+          const res = await purchaseReturnService.createPurchaseReturn(payload);
+          const created = res.data?.data || res.data;
+          createdNotes.push(
+            `#${created?.debitNoteNo || created?.returnNo} (${group.supplierName})`
+          );
+        } catch (subErr) {
+          console.error(`Failed to create return for ${group.supplierName}:`, subErr);
+          failedSuppliers.push(group.supplierName);
+        }
+      }
+
+      if (createdNotes.length > 0) {
+        uiToast.success(
+          `Successfully issued ${createdNotes.length} Debit Note${createdNotes.length > 1 ? "s" : ""}: ${createdNotes.join(", ")}`
+        );
+        navigate(ROUTES.PURCHASE_RETURNS);
+      } else {
+        uiToast.error(`Failed to issue Debit Notes for: ${failedSuppliers.join(", ")}`);
+      }
     } catch (err) {
       console.error("Failed to create purchase return:", err);
       uiToast.error(
@@ -485,13 +587,27 @@ export const CreatePurchaseReturnDesktopPage = () => {
               }
               className="font-bold shadow-xs"
             >
-              {isSubmitting ? "Processing..." : "Confirm & Issue Debit Note"}
+              {isSubmitting
+                ? "Processing..."
+                : isMultiSupplier
+                ? `Confirm & Issue ${supplierList.length} Debit Notes`
+                : "Confirm & Issue Debit Note"}
             </UIButton>
           </div>
         }
       />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Multi-Supplier Alert Banner */}
+        {isMultiSupplier && (
+          <UIAlert
+            variant="warning"
+            title={`Multi-Supplier Consignment: ${supplierList.length} Different Suppliers Detected`}
+            description="Under GST Section 34, a separate Debit Note must be issued to each registered supplier. When you confirm, the system will automatically generate a dedicated Debit Note for each supplier."
+            icon={<Building2 className="size-4.5" />}
+          />
+        )}
+
         {/* 2. Top Context Grid (Supplier InfoCard, Motive Tabs, Facility Meta) */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
           {/* Supplier InfoCard (Component #30) */}
@@ -671,22 +787,59 @@ export const CreatePurchaseReturnDesktopPage = () => {
 
         {/* 4. Staged Line Items Table (Component #11) */}
         <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <UISectionHeader
               title={`Return Line Items (${items.length})`}
               description="Review quantities, purchase rates, tax slabs, and bin origins"
               icon={<Boxes className="size-4" />}
             />
-            {items.length > 0 && (
-              <UIButton
-                variant="ghost"
-                size="xs"
-                onClick={() => setItems([])}
-                className="text-text-muted hover:text-error"
-              >
-                Clear All
-              </UIButton>
-            )}
+            <div className="flex items-center gap-2">
+              {isMultiSupplier && (
+                <div className="flex items-center gap-1.5 bg-surface-alt px-2.5 py-1 rounded-xl border border-border">
+                  <span className="text-[11px] font-semibold text-text-muted">Supplier:</span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setActiveSupplierFilter("all")}
+                      className={cn(
+                        "px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors",
+                        activeSupplierFilter === "all"
+                          ? "bg-primary text-primary-contrast"
+                          : "text-text-muted hover:text-text"
+                      )}
+                    >
+                      All ({supplierList.length} Notes)
+                    </button>
+                    {supplierList.map((g) => (
+                      <button
+                        key={g.supplierId}
+                        type="button"
+                        onClick={() => setActiveSupplierFilter(g.supplierId)}
+                        className={cn(
+                          "px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors",
+                          activeSupplierFilter === g.supplierId
+                            ? "bg-primary text-primary-contrast"
+                            : "text-text-muted hover:text-text"
+                        )}
+                      >
+                        {g.supplierName} ({g.items.length})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {items.length > 0 && (
+                <UIButton
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setItems([])}
+                  className="text-text-muted hover:text-error"
+                >
+                  Clear All
+                </UIButton>
+              )}
+            </div>
           </div>
 
           {items.length === 0 ? (
@@ -714,6 +867,9 @@ export const CreatePurchaseReturnDesktopPage = () => {
                       Batch & Expiry
                     </UITableHead>
                     <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
+                      Supplier / Creditor
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
                       Stock Bin
                     </UITableHead>
                     <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-center">
@@ -738,7 +894,7 @@ export const CreatePurchaseReturnDesktopPage = () => {
                 </UITableHeader>
 
                 <UITableBody>
-                  {items.map((item, idx) => {
+                  {displayedItems.map((item, idx) => {
                     const qty = Number(item.returnQty) || 0;
                     const rate = Number(item.rate) || 0;
                     const disc = Number(item.discountPct) || 0;
@@ -765,6 +921,16 @@ export const CreatePurchaseReturnDesktopPage = () => {
                           {item.expiry && (
                             <span className="block text-[11px] font-sans text-text-muted">
                               Exp: {item.expiry}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="font-semibold text-xs text-text block">
+                            {item.supplierName || item.supplier?.businessName || selectedSupplier?.businessName || "Supplier"}
+                          </span>
+                          {(item.supplierGst || item.supplier?.gstNumber) && (
+                            <span className="font-mono text-[10px] text-text-muted block">
+                              GST: {item.supplierGst || item.supplier?.gstNumber}
                             </span>
                           )}
                         </td>
@@ -866,11 +1032,26 @@ export const CreatePurchaseReturnDesktopPage = () => {
 
           <div>
             <UISummaryCard
-              title="Debit Note Financial Summary"
-              subtitle="Direct Vendor AP Adjustment"
+              title={
+                isMultiSupplier
+                  ? `Summary: ${supplierList.length} Debit Notes`
+                  : "Debit Note Financial Summary"
+              }
+              subtitle={
+                isMultiSupplier
+                  ? "Multi-Vendor Auto-Partitioned"
+                  : "Direct Vendor AP Adjustment"
+              }
               items={[
+                ...(isMultiSupplier
+                  ? supplierList.map((g, idx) => ({
+                      label: `Note ${idx + 1}: ${g.supplierName}`,
+                      value: `₹${formatCurrency(g.grandTotal)}`,
+                      isHighlight: true,
+                    }))
+                  : []),
                 {
-                  label: "Taxable Subtotal",
+                  label: isMultiSupplier ? "Combined Taxable Subtotal" : "Taxable Subtotal",
                   value: formatCurrency(calculatedTotals.taxableSubtotal),
                 },
                 {
@@ -888,9 +1069,11 @@ export const CreatePurchaseReturnDesktopPage = () => {
                   : []),
               ]}
               total={{
-                label: "Net Debit Amount",
+                label: isMultiSupplier ? "Total Combined Debit" : "Net Debit Amount",
                 value: formatCurrency(calculatedTotals.grandTotal),
-                subtext: "Credited to Supplier Balance",
+                subtext: isMultiSupplier
+                  ? `Will generate ${supplierList.length} GST Debit Notes`
+                  : "Credited to Supplier Balance",
               }}
               variant="card"
               footer={
@@ -909,7 +1092,11 @@ export const CreatePurchaseReturnDesktopPage = () => {
                   }
                   className="font-bold shadow-xs mt-2"
                 >
-                  {isSubmitting ? "Processing..." : "Confirm & Issue Debit Note"}
+                  {isSubmitting
+                    ? "Processing..."
+                    : isMultiSupplier
+                    ? `Confirm & Issue ${supplierList.length} Debit Notes`
+                    : "Confirm & Issue Debit Note"}
                 </UIButton>
               }
             />

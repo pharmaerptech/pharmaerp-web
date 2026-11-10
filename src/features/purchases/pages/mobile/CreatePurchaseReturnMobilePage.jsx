@@ -260,11 +260,38 @@ export const CreatePurchaseReturnMobilePage = () => {
     };
   }, [items]);
 
+  const supplierGroups = useMemo(() => {
+    const groups = {};
+    items.forEach((item) => {
+      const supId =
+        item.supplierId ||
+        item.supplier?._id ||
+        (selectedSupplier?._id ? selectedSupplier._id : "unknown");
+      const supName =
+        item.supplierName ||
+        item.supplier?.businessName ||
+        item.supplier?.name ||
+        (supId === selectedSupplier?._id
+          ? selectedSupplier?.businessName || selectedSupplier?.name
+          : "Supplier");
+
+      if (!groups[supId]) {
+        groups[supId] = {
+          supplierId: supId,
+          supplierName: supName,
+          items: [],
+          grandTotal: 0,
+        };
+      }
+      groups[supId].items.push(item);
+    });
+    return groups;
+  }, [items, selectedSupplier]);
+
+  const supplierList = useMemo(() => Object.values(supplierGroups), [supplierGroups]);
+  const isMultiSupplier = supplierList.length > 1;
+
   const handleSubmitReturn = async () => {
-    if (!selectedSupplier?._id) {
-      uiToast.error("Select a supplier to return goods to.");
-      return;
-    }
     if (items.length === 0) {
       uiToast.error("Add at least one item to return.");
       return;
@@ -272,33 +299,51 @@ export const CreatePurchaseReturnMobilePage = () => {
 
     setIsSubmitting(true);
     try {
-      const payload = {
-        branchId: activeBranchId,
-        supplierId: selectedSupplier._id,
-        returnDate,
-        returnMotive,
-        settlementType,
-        items: items.map((i) => ({
-          productId: i.productId,
-          productName: i.productName,
-          pack: i.pack,
-          batchId: i.batchId,
-          batchNo: i.batchNo,
-          expiry: i.expiry,
-          purchaseBillId: i.purchaseBillId || undefined,
-          purchaseBillNo: i.purchaseBillNo || undefined,
-          sourceBin: i.sourceBin,
-          returnQty: i.returnQty,
-          rate: i.rate,
-          discountPct: i.discountPct,
-          gstPct: i.gstPct,
-        })),
-        remarks,
-      };
+      const createdNotes = [];
+      const failedSuppliers = [];
 
-      const res = await purchaseReturnService.createPurchaseReturn(payload);
-      uiToast.success("Purchase return debit note issued successfully!");
-      navigate(ROUTES.PURCHASE_RETURNS);
+      for (const group of supplierList) {
+        const payload = {
+          branchId: activeBranchId,
+          supplierId: group.supplierId !== "unknown" ? group.supplierId : selectedSupplier?._id,
+          returnDate,
+          returnMotive,
+          settlementType,
+          items: group.items.map((i) => ({
+            productId: i.productId,
+            productName: i.productName,
+            pack: i.pack,
+            batchId: i.batchId,
+            batchNo: i.batchNo,
+            expiry: i.expiry,
+            purchaseBillId: i.purchaseBillId || undefined,
+            purchaseBillNo: i.purchaseBillNo || undefined,
+            sourceBin: i.sourceBin,
+            returnQty: i.returnQty,
+            rate: i.rate,
+            discountPct: i.discountPct,
+            gstPct: i.gstPct,
+          })),
+          remarks,
+        };
+
+        try {
+          const res = await purchaseReturnService.createPurchaseReturn(payload);
+          const created = res.data?.data || res.data;
+          createdNotes.push(
+            `#${created?.debitNoteNo || created?.returnNo} (${group.supplierName})`
+          );
+        } catch (subErr) {
+          failedSuppliers.push(group.supplierName);
+        }
+      }
+
+      if (createdNotes.length > 0) {
+        uiToast.success(`Issued ${createdNotes.length} Debit Notes: ${createdNotes.join(", ")}`);
+        navigate(ROUTES.PURCHASE_RETURNS);
+      } else {
+        uiToast.error(`Failed to issue notes for: ${failedSuppliers.join(", ")}`);
+      }
     } catch (err) {
       console.error(err);
       uiToast.error(err.response?.data?.message || err.message || "Failed to create return");
@@ -508,7 +553,11 @@ export const CreatePurchaseReturnMobilePage = () => {
           disabled={isSubmitting || items.length === 0}
           className="w-full font-bold shadow-md"
         >
-          {isSubmitting ? "Issuing Debit Note..." : "Confirm & Issue Debit Note"}
+          {isSubmitting
+            ? "Issuing Debit Notes..."
+            : isMultiSupplier
+            ? `Confirm & Issue ${supplierList.length} Debit Notes`
+            : "Confirm & Issue Debit Note"}
         </UIButton>
       </div>
     </div>
