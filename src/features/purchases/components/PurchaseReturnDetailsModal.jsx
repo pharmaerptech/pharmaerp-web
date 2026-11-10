@@ -1,6 +1,7 @@
 // src/features/purchases/components/PurchaseReturnDetailsModal.jsx
 
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Printer,
   X,
@@ -12,6 +13,7 @@ import {
   Package,
   Boxes,
   FileText,
+  ArrowRight,
 } from "lucide-react";
 import {
   UIModal,
@@ -33,6 +35,9 @@ import {
   UITableHead,
   UITableCell,
 } from "@/components/ui";
+import { ReturnBoxLabelModal } from "./ReturnBoxLabelModal";
+import useBranch from "@/features/branch/hooks/useBranch";
+import { ROUTES } from "@/constants";
 
 const formatCurrency = (val) => {
   const num = Number(val) || 0;
@@ -58,7 +63,37 @@ export const PurchaseReturnDetailsModal = ({
   onClose,
   purchaseReturn,
 }) => {
+  const navigate = useNavigate();
+  const { currentBranch } = useBranch();
+  const [showBoxLabelModal, setShowBoxLabelModal] = useState(false);
+
   if (!isOpen || !purchaseReturn) return null;
+
+  const handleTransferToBranch = () => {
+    if (!purchaseReturn) return;
+    const items = purchaseReturn.items || [];
+    const supplier = purchaseReturn.supplierId || {};
+
+    navigate(ROUTES.CREATE_TRANSFER_ORDER, {
+      state: {
+        transferType: purchaseReturn.returnMotive === "SELLABLE" ? "STANDARD" : "SCRAP",
+        sourceBranchId: purchaseReturn.branchId?._id || currentBranch?._id,
+        prefilledItems: items.map((item) => ({
+          product: item.productId?._id || item.productId,
+          productName: item.productName,
+          batch: item.batchId?._id || item.batchId,
+          batchNo: item.batchNo,
+          originalBatchNo: item.batchNo,
+          transferQty: item.returnQty,
+          availableQty: item.returnQty,
+          scrapType: item.sourceBin?.includes("BROKEN") ? "BROKEN" : "EXPIRED",
+          isScrap: item.sourceBin !== "SELLABLE",
+        })),
+        remarks: `Inter-branch transfer of Debit Note #${purchaseReturn.debitNoteNo || purchaseReturn.returnNo} for supplier ${supplier.businessName || ""}`,
+      },
+    });
+    onClose();
+  };
 
   const handlePrint = () => {
     const printWin = window.open("", "_blank", "width=900,height=700");
@@ -198,7 +233,8 @@ export const PurchaseReturnDetailsModal = ({
   const branch = purchaseReturn.branchId || {};
 
   return (
-    <UIModal isOpen={isOpen} onClose={onClose} size="xl">
+    <>
+      <UIModal isOpen={isOpen} onClose={onClose} size="xl">
       <UIModalHeader className="border-b border-border pb-4">
         <div className="flex items-center justify-between w-full pr-8">
           <div className="space-y-1">
@@ -370,22 +406,56 @@ export const PurchaseReturnDetailsModal = ({
       </UIModalBody>
 
       <UIModalFooter className="border-t border-border pt-4">
-        <div className="flex items-center justify-end gap-2.5 w-full">
-          <UIButton variant="outline" size="sm" onClick={onClose}>
-            Close
-          </UIButton>
-          <UIButton
-            variant="primary"
-            size="sm"
-            onClick={handlePrint}
-            startIcon={<Printer className="size-4" />}
-            className="font-bold shadow-xs"
-          >
-            Print Debit Note Voucher
-          </UIButton>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+          <div className="flex items-center gap-2">
+            <UIButton
+              variant="outline"
+              size="sm"
+              onClick={handleTransferToBranch}
+              startIcon={<Truck className="size-4 text-primary" />}
+              className="font-medium"
+            >
+              Transfer to Other Branch
+            </UIButton>
+
+            <UIButton
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBoxLabelModal(true)}
+              startIcon={<Package className="size-4 text-primary" />}
+              className="font-medium"
+            >
+              Transport Label
+            </UIButton>
+          </div>
+
+          <div className="flex items-center gap-2 justify-end">
+            <UIButton variant="outline" size="sm" onClick={onClose}>
+              Close
+            </UIButton>
+            <UIButton
+              variant="primary"
+              size="sm"
+              onClick={handlePrint}
+              startIcon={<Printer className="size-4" />}
+              className="font-bold shadow-xs"
+            >
+              Print Debit Note Voucher
+            </UIButton>
+          </div>
         </div>
       </UIModalFooter>
     </UIModal>
+
+    {/* Transport Box Labels Generator Modal */}
+    {showBoxLabelModal && (
+      <ReturnBoxLabelModal
+        isOpen={showBoxLabelModal}
+        onClose={() => setShowBoxLabelModal(false)}
+        returnRecord={purchaseReturn}
+      />
+    )}
+  </>
   );
 };
 
