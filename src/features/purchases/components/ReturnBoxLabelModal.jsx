@@ -31,6 +31,7 @@ import {
 } from "@/components/ui";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useCompany from "@/features/company/hooks/useCompany";
+import branchService from "@/features/branch/services/branchService";
 import purchaseReturnService from "../services/purchaseReturnService";
 import { cn } from "@/lib/utils";
 
@@ -92,15 +93,37 @@ export const ReturnBoxLabelModal = ({
   const { currentBranch, branches = [], workspaceBranches = [], getWorkspaceBranches } = useBranch();
   const { companies = [], currentCompany, getWorkspaceCompanies } = useCompany();
 
-  // Load workspace branches & companies if not present
+  // Local state for fetched workspace branches & loading indicator
+  const [availableBranches, setAvailableBranches] = useState(workspaceBranches || []);
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false);
+
+  // Directly fetch all workspace branches (including all companies) on modal mount
   useEffect(() => {
-    if (!workspaceBranches || workspaceBranches.length === 0) {
-      getWorkspaceBranches?.()?.catch?.(() => {});
+    if (!isOpen) return;
+
+    let isMounted = true;
+    setIsLoadingBranches(true);
+
+    branchService
+      .getWorkspaceBranches({ includeAll: true, forShipping: true })
+      .then((res) => {
+        if (!isMounted) return;
+        const list = res.data?.data || res.data || [];
+        if (Array.isArray(list) && list.length > 0) {
+          setAvailableBranches(list);
+        }
+      })
+      .catch((err) => {
+        console.warn("Direct workspace branches fetch failed, using available store branches:", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingBranches(false);
+      });
+
+    if (getWorkspaceCompanies) {
+      getWorkspaceCompanies().catch(() => {});
     }
-    if (!companies || companies.length === 0) {
-      getWorkspaceCompanies?.()?.catch?.(() => {});
-    }
-  }, [getWorkspaceBranches, getWorkspaceCompanies, workspaceBranches?.length, companies?.length]);
+  }, [isOpen, getWorkspaceCompanies]);
 
   // Extract origin branch and company
   const originBranch = returnRecord?.branchId || currentBranch || {};
@@ -160,32 +183,74 @@ export const ReturnBoxLabelModal = ({
     }
   }, [otherCompanies, destinationCompanyId]);
 
-  // Filter branches for the chosen destination company
-  const allWorkspaceBranches = useMemo(() => {
-    return workspaceBranches.length > 0 ? workspaceBranches : branches;
-  }, [workspaceBranches, branches]);
+  // If a company is selected and no branches found yet, trigger targeted fetch
+  useEffect(() => {
+    if (!isOpen || !destinationCompanyId) return;
 
+    const hasCompanyBranches = availableBranches.some((b) => {
+      const bCompId = b.companyId?._id || b.companyId || b.company?._id || b.company;
+      return String(bCompId) === String(destinationCompanyId);
+    });
+
+    if (!hasCompanyBranches) {
+      branchService
+        .getWorkspaceBranches({ companyId: destinationCompanyId, includeAll: true })
+        .then((res) => {
+          const list = res.data?.data || res.data || [];
+          if (Array.isArray(list) && list.length > 0) {
+            setAvailableBranches((prev) => {
+              const prevIds = new Set(prev.map((b) => String(b._id)));
+              const newItems = list.filter((b) => !prevIds.has(String(b._id)));
+              return [...prev, ...newItems];
+            });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, destinationCompanyId, availableBranches]);
+
+  // Combine all branch sources safely
+  const allBranches = useMemo(() => {
+    const map = new Map();
+    (branches || []).forEach((b) => map.set(String(b._id), b));
+    (workspaceBranches || []).forEach((b) => map.set(String(b._id), b));
+    (availableBranches || []).forEach((b) => map.set(String(b._id), b));
+    return Array.from(map.values());
+  }, [branches, workspaceBranches, availableBranches]);
+
+  // Filter branches for the chosen destination company (strictly excluding origin facility)
   const eligibleDestinationBranches = useMemo(() => {
-    return allWorkspaceBranches.filter((b) => {
+    return allBranches.filter((b) => {
       // Exclude origin facility
-      if (String(b._id) === String(originBranchId)) return false;
+      if (originBranchId && String(b._id) === String(originBranchId)) return false;
+
       // If destinationCompanyId selected, match company
       if (destinationCompanyId) {
-        const bCompId = b.companyId?._id || b.companyId;
-        return String(bCompId) === String(destinationCompanyId);
+        const bCompId =
+          b.companyId?._id ||
+          (typeof b.companyId === "string" ? b.companyId : null) ||
+          b.company?._id ||
+          (typeof b.company === "string" ? b.company : null);
+
+        if (bCompId) {
+          return String(bCompId) === String(destinationCompanyId);
+        }
       }
       return true;
     });
-  }, [allWorkspaceBranches, originBranchId, destinationCompanyId]);
+  }, [allBranches, originBranchId, destinationCompanyId]);
 
   // Default destination branch when eligible branches change
   useEffect(() => {
-    if (
-      (!destinationBranchId ||
-        !eligibleDestinationBranches.some((b) => String(b._id) === String(destinationBranchId))) &&
-      eligibleDestinationBranches.length > 0
-    ) {
-      setDestinationBranchId(eligibleDestinationBranches[0]._id);
+    if (eligibleDestinationBranches.length > 0) {
+      const exists = eligibleDestinationBranches.some(
+        (b) => String(b._id) === String(destinationBranchId)
+      );
+      if (!exists) {
+        setDestinationBranchId(eligibleDestinationBranches[0]._id);
+      }
+    } else {
+      setDestinationBranchId("");
     }
   }, [eligibleDestinationBranches, destinationBranchId]);
 
@@ -195,11 +260,11 @@ export const ReturnBoxLabelModal = ({
 
   const selectedDestinationBranch = useMemo(() => {
     return (
-      allWorkspaceBranches.find((b) => String(b._id) === String(destinationBranchId)) ||
+      allBranches.find((b) => String(b._id) === String(destinationBranchId)) ||
       eligibleDestinationBranches[0] ||
       null
     );
-  }, [allWorkspaceBranches, destinationBranchId, eligibleDestinationBranches]);
+  }, [allBranches, destinationBranchId, eligibleDestinationBranches]);
 
   // Extract supplier details
   const supplier =
@@ -714,10 +779,12 @@ export const ReturnBoxLabelModal = ({
                 onChange={(val) => setDestinationBranchId(val)}
                 options={eligibleDestinationBranches.map((b) => ({
                   value: b._id,
-                  label: b.name,
+                  label: b.branchCode ? `${b.name} (${b.branchCode})` : b.name,
                 }))}
                 placeholder={
-                  eligibleDestinationBranches.length === 0
+                  isLoadingBranches
+                    ? "Loading branches..."
+                    : eligibleDestinationBranches.length === 0
                     ? "No branches available for selected company"
                     : "Select destination branch..."
                 }
