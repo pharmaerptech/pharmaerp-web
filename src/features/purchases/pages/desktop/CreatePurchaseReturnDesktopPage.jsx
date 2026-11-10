@@ -367,10 +367,10 @@ export const CreatePurchaseReturnDesktopPage = () => {
   };
 
   const motiveTabs = [
-    { id: "SELLABLE", label: "Sellable (Shelf)", icon: Package },
-    { id: "EXPIRED", label: "Expired Scrap", icon: Trash2 },
-    { id: "BROKEN", label: "Broken Scrap", icon: AlertTriangle },
-    { id: "MIXED", label: "Mixed", icon: Boxes },
+    { id: "SELLABLE", label: "Sellable (Shelf)", icon: <Package className="size-3.5" /> },
+    { id: "EXPIRED", label: "Expired Scrap", icon: <Trash2 className="size-3.5" /> },
+    { id: "BROKEN", label: "Broken Scrap", icon: <AlertTriangle className="size-3.5" /> },
+    { id: "MIXED", label: "Mixed", icon: <Boxes className="size-3.5" /> },
   ];
 
   return (
@@ -378,9 +378,10 @@ export const CreatePurchaseReturnDesktopPage = () => {
       {/* 1. Sticky Glass Page Header (Component #16) */}
       <UIPageHeader
         sticky
-        glass
-        backButton
-        onBack={() => navigate(ROUTES.PURCHASE_RETURNS)}
+        backButton={{
+          onClick: () => navigate(ROUTES.PURCHASE_RETURNS),
+          label: "Back to Returns",
+        }}
         title="New Purchase Return & Debit Note"
         description="Return purchased medicine stock to vendor and issue GST Section 34 Debit Note"
         actions={
@@ -422,11 +423,11 @@ export const CreatePurchaseReturnDesktopPage = () => {
             {selectedSupplier ? (
               <UIInfoCard
                 title={selectedSupplier.businessName || selectedSupplier.name}
-                subtitle="Target Supplier / Creditor"
+                description="Target Supplier / Creditor"
                 icon={<Truck className="size-5" />}
                 color="primary"
                 variant="accent"
-                action={
+                actions={
                   <UIButton
                     variant="ghost"
                     size="xs"
@@ -436,11 +437,10 @@ export const CreatePurchaseReturnDesktopPage = () => {
                     Change Supplier
                   </UIButton>
                 }
-                fields={[
+                items={[
                   {
                     label: "GSTIN",
                     value: selectedSupplier.gstNumber || "Unregistered",
-                    copyable: !!selectedSupplier.gstNumber,
                   },
                   {
                     label: "Phone",

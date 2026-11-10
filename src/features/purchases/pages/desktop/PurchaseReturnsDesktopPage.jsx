@@ -167,10 +167,10 @@ export const PurchaseReturnsDesktopPage = () => {
   }, [returns]);
 
   const motiveTabs = [
-    { id: "all", label: "All Returns", icon: Boxes },
-    { id: "SELLABLE", label: "Sellable Shelf", icon: Package },
-    { id: "EXPIRED", label: "Expired Scrap", icon: Trash2 },
-    { id: "BROKEN", label: "Broken Scrap", icon: AlertTriangle },
+    { id: "all", label: "All Returns", icon: <Boxes className="size-3.5" /> },
+    { id: "SELLABLE", label: "Sellable Shelf", icon: <Package className="size-3.5" /> },
+    { id: "EXPIRED", label: "Expired Scrap", icon: <Trash2 className="size-3.5" /> },
+    { id: "BROKEN", label: "Broken Scrap", icon: <AlertTriangle className="size-3.5" /> },
   ];
 
   return (
@@ -179,11 +179,6 @@ export const PurchaseReturnsDesktopPage = () => {
       <UIPageHeader
         title="Purchase Returns & Debit Notes"
         description={`Manage vendor returns, issue Section 34 GST Debit Notes, and track stock reversals for ${currentBranch?.name || "Active Facility"}`}
-        breadcrumbs={[
-          { label: "Dashboard", href: "/" },
-          { label: "Purchases", href: ROUTES.PURCHASES },
-          { label: "Purchase Returns" },
-        ]}
         actions={
           <div className="flex items-center gap-2.5">
             <UIButton
@@ -216,7 +211,8 @@ export const PurchaseReturnsDesktopPage = () => {
           value={totalCount}
           subtitle={`Across ${currentBranch?.name || "facility"}`}
           icon={<Undo2 className="size-5" />}
-          variant="primary"
+          color="primary"
+          variant="default"
           isLoading={isLoading}
         />
 
@@ -226,7 +222,8 @@ export const PurchaseReturnsDesktopPage = () => {
           prefix="₹"
           subtitle="Direct AP reduction claimed"
           icon={<Receipt className="size-5" />}
-          variant="success"
+          color="success"
+          variant="default"
           isLoading={isLoading}
         />
 
@@ -236,7 +233,8 @@ export const PurchaseReturnsDesktopPage = () => {
           prefix="₹"
           subtitle="GSTR-2 Sec 34 reversal"
           icon={<ShieldCheck className="size-5" />}
-          variant="purple"
+          color="purple"
+          variant="default"
           isLoading={isLoading}
         />
 
@@ -245,7 +243,8 @@ export const PurchaseReturnsDesktopPage = () => {
           value={stats.scrapCount}
           subtitle={`${stats.sellableCount} sellable returns`}
           icon={<Trash2 className="size-5" />}
-          variant="warning"
+          color="warning"
+          variant="default"
           isLoading={isLoading}
         />
       </div>

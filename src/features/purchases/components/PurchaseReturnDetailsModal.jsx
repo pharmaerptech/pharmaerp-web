@@ -198,7 +198,7 @@ export const PurchaseReturnDetailsModal = ({
   const branch = purchaseReturn.branchId || {};
 
   return (
-    <UIModal open={isOpen} onOpenChange={onClose} size="4xl">
+    <UIModal isOpen={isOpen} onClose={onClose} size="xl">
       <UIModalHeader className="border-b border-border pb-4">
         <div className="flex items-center justify-between w-full pr-8">
           <div className="space-y-1">
@@ -241,12 +241,12 @@ export const PurchaseReturnDetailsModal = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <UIInfoCard
             title={supplier.businessName || "Supplier"}
-            subtitle="Creditor Details"
+            description="Creditor Details"
             icon={<Truck className="size-4.5" />}
             color="primary"
             variant="accent"
-            fields={[
-              { label: "GSTIN", value: supplier.gstNumber || "Unregistered", copyable: !!supplier.gstNumber },
+            items={[
+              { label: "GSTIN", value: supplier.gstNumber || "Unregistered" },
               { label: "Phone", value: supplier.mobile || "—" },
               { label: "Drug License", value: supplier.drugLicenseNumber || "—" },
             ]}
@@ -254,11 +254,11 @@ export const PurchaseReturnDetailsModal = ({
 
           <UIInfoCard
             title={branch.name || "Main Warehouse"}
-            subtitle="Dispatch Facility & Accounting"
+            description="Dispatch Facility & Accounting"
             icon={<Building2 className="size-4.5" />}
             color="success"
             variant="accent"
-            fields={[
+            items={[
               { label: "Settlement Status", value: purchaseReturn.settlementStatus || "PENDING" },
               { label: "Remarks", value: purchaseReturn.remarks || "No remarks" },
             ]}
