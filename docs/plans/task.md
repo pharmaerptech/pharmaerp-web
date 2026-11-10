@@ -1,77 +1,149 @@
-| Task                                                                           | Status | Notes                                                                                                                                                                                             |
-| :----------------------------------------------------------------------------- | :----- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Redesign OpenBusinessDayDialog pixel-by-pixel per screenshot                   | Done   | Matching all 6 sections (header with badge, info callout, scheduled date card, workflow rules 3-col panel, opening note with 0/500 counter, footer buttons)                                       |
-| Compact dialog height & eliminate scrollbars                                   | Done   | Tightened padding, streamlined vertical gaps, removed scroll container so entire modal fits comfortably with generous top and bottom margins                                                      |
-| Dynamic Date Badge (TODAY vs TOMORROW)                                         | Done   | Dynamic relative day calculation: shows TOMORROW when today is closed & opening for tomorrow, and TODAY when opening for today                                                                    |
-| Scheduled Date Skeleton Loader (No Flash Bug)                                  | Done   | Shows smooth skeleton placeholder while determining date from backend; removed premature fallback to today so there is no visual flip                                                             |
-| Full-width Centered Tabs in ViewBusinessDayDialog                              | Done   | Tabs span full width across 3 equal columns (`grid grid-cols-3 w-full`), centered labels & icons                                                                                                  |
-| Fixed Dimensions & Non-Jumping Tab Layout                                      | Done   | Fixed dialog width/height (`w-[960px] max-w-[95vw] h-[82vh] max-h-[700px] min-h-[580px]`) with inner scroll container (`flex-1 min-h-0 overflow-y-auto`) so switching tabs never shifts the modal |
-| Removed All Mock / Fake Data                                                   | Done   | No dummy fallbacks; real shifts or UIEmptyState, real fund transfers or UIEmptyState, real calculated financials, real remarks                                                                    |
-| Real "Opened By" User Name (Backend + Frontend)                                | Done   | Backend populates createdBy and shifts.openedBy with real user credentials; displayed in Overview and Shift tables                                                                                |
-| Connect real backend state and dispatch logic                                  | Done   | getSuggestedBusinessDate, openBusinessDay thunk, session summary API, shifts, fund transfers, and close flow preserved                                                                            |
-| Ensure theme tokens & dark/light mode compatibility                            | Done   | Uses bg-surface, text-text, text-text-muted, border-border, bg-emerald/success, etc.                                                                                                              |
-| Populate & Display Branch in ViewBusinessDayDialog                             | Done   | Backend populates branchId with name & branchCode; frontend resolves real branch from populated object, Redux store branches, or active branch                                                    |
-| Streamline Shift Tab Table Columns                                             | Done   | Removed shift number and actual cash; shift name is column 1; unified deposits & withdrawals into Net Transfers column with dynamic +/- colored indicators; changed action to Eye icon button     |
-| Real Fund Transfers, Bank Deposit Slips & Branch Cash in ViewBusinessDayDialog | Done   | Aggregated shift manual deposits & withdrawals, queried linked bank deposit slips, fetched branch cash balances, and displayed across all 3 dialog tabs                                           |
-| Streamline CloseBusinessDayDialog Shift Table                                  | Done   | Removed shift number, shift name in column 1, net transfer column (deposit - withdraw), removed actual cash column, Eye icon action button                                                        |
-| Remove Cash Summary Card in CloseBusinessDayDialog                             | Done   | Removed Cash Summary section completely (no redundant re-calculation at day close), passed last shift cash to day close payload                                                                   |
-| Open CloseBusinessDayDialog from ViewBusinessDayDialog                         | Done   | Fixed argument order in BusinessDaysDesktopPage and BusinessDaysMobilePage so clicking "Close Business Day" opens CloseBusinessDayDialog directly                                                 |
-| Validate production build with 0 errors                                        | Done   | Vite production build passed cleanly with 15,993 modules transformed and 0 errors                                                                                                                 |
-| Shift Page Redesign - Explore context & requirements                           | Done   | Investigated image, BusinessDaysDesktopPage, and current shift components                                                                                                                         |
-| Shift Page Redesign - Brainstorming & clarify key preferences                  | Done   | Clarified Table + Card hybrid requirement, no breadcrumbs                                                                                                                                         |
-| Shift Page Redesign - Propose approaches & present design                      | Done   | Approach 1 approved by user                                                                                                                                                                       |
-| Shift Page Redesign - Write design doc                                         | Done   | Saved to docs/plans/2026-10-07-shift-page-redesign-design.md                                                                                                                                      |
-| Task 1: Rebuild ShiftTableView with all 12 columns                             | Done   | Matching screenshot with exact columns, avatars, badges, actions                                                                                                                                  |
-| Task 2: Rebuild ShiftCard for Card View                                        | Done   | Modernized cards matching tokens and metrics                                                                                                                                                      |
-| Task 3: Completely Rewrite ShiftsDesktopPage                                   | Done   | No breadcrumbs, 4 KPI cards, toolbar, dialogs, pagination                                                                                                                                         |
-| Task 4: Connect & Validate in ShiftsPage                                       | Done   | Wire props, filters, view modes, page sizes                                                                                                                                                       |
-| Task 5: Production Build Verification                                          | Done   | Verified with `npm run build` (exit code 0, 0 errors)                                                                                                                                             |
-| Task 6: Remove # and Shift No columns, make Shift Name column 1                | Done   | Shift Name is now the first column                                                                                                                                                                |
-| Task 7: Merge Date & Time into 1 column (line 1 date, line 2 time range)       | Done   | Range-wise on a single line for time                                                                                                                                                              |
-| Task 8: Add Expected Cash column                                               | Done   | Formatted currency calculation                                                                                                                                                                    |
-| Task 9: Remove Status column, highlight Open shift row with distinct BG        | Done   | Emerald background highlight for active open shift                                                                                                                                                |
-| Task 10: Seamless Table + UIPagination container (0 gap, like Business Days)   | Done   | Same parent card container, connected directly                                                                                                                                                    |
-| Task 11: Production build verification                                         | Done   | Verified with `npm run build` (exit code 0, 0 errors)                                                                                                                                             |
-| Task 13: Redesign CloseShiftDialog pixel-by-pixel per screenshot               | Done   | Match exact UI from media_1791390718686.png (header, meta bar, 5 KPI stat cards, Expected vs Actual panel, 2-col Denominations panel with Auto Fill, 3 bottom cards, validation, red Close button) |
-| Task 14: Redesign ViewShiftDialog 4 tabs pixel-by-pixel per screenshot         | Done   | Match exact 4 screens from media_1791390718737.jpg (Cash Summary, Bills & Payments, Cash Drawer, Fund Movements)                                                                                         |
-| Task 15: Enforce Fixed Dimensions & Non-Jumping Tab Layout in ViewShiftDialog    | Done   | Fixed width & height (w-[1040px] max-w-[96vw] h-[84vh] max-h-[740px] min-h-[600px]) with inner scroll container so switching tabs never shrinks or enlarges the dialog                                 |
-| Task 16: Verify production build with 0 errors                                 | Done   | Verified with `npm run build` (exit code 0, 0 errors, 15,993 modules transformed)                                                                                                                        |
-| Task 17: Redesign PostShiftCloseDialog workflow modal                          | Done   | Modern tokens, balance cards (Carry Forward & Frozen Reserve), interactive workflow buttons (Start Next Shift & Close Business Day), clean dismissal footer                                             |
-| Task 18: Redesign PostDayCloseDialog workflow modal                            | Done   | Modern tokens, dual balance cards, interactive action button (Create Bank Deposit Slip), clean dismissal footer                                                                                          |
-| Task 19: Hide Open Business Day button when a day is already open               | Done   | In BusinessDaysDesktopPage, dynamically check open day status and hide "+ Open Business Day" action button and empty state action                                                                         |
-| Task 20: Redesign POS Gatekeeper screens per mockup                             | Done   | Created POSSessionGatekeeperCard for Business Day Closed & No Active Shift states; updated desktop and mobile POS pages                                                                                    |
-| Task 21: Fix App Desktop Header on Business Day Page                            | Done   | Removed custom isBusinessDaysPage override in AppDesktopHeader so Business Day matches Shifts and all other pages                                                                                          |
-| Task 22: Fix infinite loading on clicking Open Shift from POS                   | Done   | Removed redundant getOpenShift/getOpenBusinessDay in CreateShiftDialog; safeguarded SalesDesktopPage/SalesMobilePage from unmounting modals                                                                |
-| Task 23: Redesign Branch Cash Uninitialized Screen                             | Done   | Hero illustration with open drawer and coins, 4 top stat cards, CTA button, 4 bottom feature benefit cards                                                                                                |
-| Task 24: Redesign Branch Cash Dashboard - Visual Drawers & Matrix Tabs         | Done   | 4 Top KPI cards, Visual Drawers (Running Cash & Frozen Vault cards + Combined Summary), Denomination Matrix with % bars & Chart View toggle                                                               |
-| Task 25: Redesign Initialize Branch Cash Dialog                                | Done   | Amber warning banner, Branch Info, Narration with 0/500 char counter, Denomination table with color badges & steppers, Total Opening Amount card                                                          |
-| Task 26: Redesign Withdraw Cash Dialog                                         | Done   | Header with withdraw badge, Branch info & Withdraw From dropdown, Available & Remaining cards, Denomination table with Available count & steppers, Summary, Narration, Warning note, red action button     |
-| Task 27: Redesign Deposit Cash Dialog                                          | Done   | Header with deposit badge, Branch info & Current Running Cash card, Narration, Denomination stepper table, Total Deposit & Projected Running Cash cards, green action button                              |
-| Task 28: Shift-gate Deposit/Withdraw & Fix Business Day Date logic             | Done   | Deposit & withdraw hidden when shift closed; fixed 12:30 AM UTC bug, client date header & Today/Tomorrow only selector                                                                                    |
-| Task 29: Create CreateCashExchangeModal matching Branch Cash dialog style      | Done   | Denominations received & given steppers, drawer available bounds, balanced indicator, narration, shift-aware                                                                                              |
-| Task 30: Create ViewCashExchangeModal matching View dialog style               | Done   | Fixed non-jumping layout, side-by-side breakdown cards, audit info, status badge                                                                                                                          |
-| Task 31: Redesign CashExchangesDesktopPage with Branch Cash UI style           | Done   | 4 KPI cards, modern toolbar, table with avatar & badges, hide New Exchange when !isShiftActive, trigger modals in-place                                                                                   |
-| Task 32: Update Cash Exchange routes & page wrapper for modal-driven UX        | Done   | Route redirects to /cash-exchanges with state to open modal if navigated directly                                                                                                                         |
-| Task 33: Production build verification with npm run build                      | Done   | Verified with `npm run build` (0 errors, 0 warnings, build succeeded in 54.4s)                                                                                                                             |
-| Task 34: Restore Running-to-Frozen cash transfer in CloseShiftDialog           | Done   | Added frozenCounts state, quick-freeze actions (High/All/Clear), 4-col Denom & Freeze table, auto-clamping, branch cash preview cards, validation, and payload integration |
-| Task 35: Redesign BankAccountDialog & Fix Select / Dimensions / Spacing Bug     | Done   | Fix UISelect selection handler bug, expand dialog to size xl with generous width and height, de-congest layout with spacious sections and fields, add live corporate bank card preview, and polish View mode |
-| Task 36: Redesign PaymentQrDialog & Fix Select / Dimensions / Spacing Bug       | Done   | Fix UISelect & UICheckbox selection bug in UPI dialog, expand to size xl, build interactive Countertop UPI Standee live preview, de-congest form fields into clean cards, and auto-select primary bank account |
-| Task 37: Fix Selection Bug & Layout Congestion across all DIALOG_MIGRATION Dialogs | Done   | Fixed UISelect value-passing bug, added resilient handleFieldChange, expanded dialogs to size xl / lg with responsive max height and scrollable body in CustomerDialog, SupplierDialog, AccountGroupDialog, AccountDialog, FinancialPeriodDialog, JournalVoucherDialog, FundTransferDialog, ChequeDialog, and RoleDialog |
-| Task 38: Migrate Bank Accounts to Dialogs & Delete Dedicated Pages/Routes          | Done   | Wired BankAccountDialog & UIConfirmDialog into BankAccountsPage, removed create/edit/details routes from bankAccountRoutes.jsx, deleted 9 dedicated Bank Account page files |
-| Task 39: Migrate Payment QRs to Dialogs & Delete Dedicated Pages/Routes             | Done   | Wired PaymentQrDialog & UIConfirmDialog into PaymentQrsPage, removed create/edit/details routes from paymentQrRoutes.jsx, deleted 9 dedicated Payment QR page files |
-| Task 40: Update DIALOG_MIGRATION.md checklist & run production build verification   | Done   | Marked T02 & T05 complete in DIALOG_MIGRATION.md and verified build with `npm run build` (exit code 0, 16,084 modules transformed, 0 errors) |
-| Task 41: Redesign CustomerDialog UI & Migrate CustomersPage to Dialog-first UX     | Done   | Redesigned CustomerDialog with live card preview, rich KPI stats in View mode, and View-to-Edit switching; wired into CustomersPage with UIConfirmDialog, simplified customerRoutes.jsx, and deleted 9 dedicated Customer pages |
-| Task 42: Redesign SupplierDialog UI & Migrate SuppliersPage to Dialog-first UX     | Done   | Redesigned SupplierDialog with live vendor preview, rich KPI stats in View mode, and bank remittance card; wired into SuppliersPage with UIConfirmDialog, simplified supplierRoutes.jsx, and deleted 9 dedicated Supplier pages |
-| Task 43: Update DIALOG_MIGRATION.md (P01, P02), command routes & verify build       | Done   | Updated accessibleSearchCommands and recommendedSteps routes, marked P01 & P02 complete, and verified build with `npm run build` (exit code 0, 16,067 modules transformed, 0 errors) |
-| Task 44: Fix Infinite API Loop in useAccount, useAccountGroup, and AccountsPage    | Done   | Wrapped dispatches in useCallback, stabilized fetchAccountsList, isolated account-groups to single mount ref, fixed slice pagination |
-| Task 45: Remove Chart of Accounts Page, Routes, and Sidebar / Search References    | Done   | Removed ChartOfAccountsPage, chartOfAccountsRoutes, sidebar hub, breadcrumbs, and search navigation entries |
-| Task 46: Redesign AccountDialog UI & Migrate Accounts to In-Place Dialogs          | Done   | Upgraded AccountDialog with live GL preview & stats, updated AccountsPage with UIConfirmDialog, pruned routes to ROUTES.ACCOUNTS, deleted 9 pages |
-| Task 47: Redesign AccountGroupDialog UI & Migrate Account Groups to In-Place Dialogs| Done   | Upgraded AccountGroupDialog with live group preview & stats, updated AccountGroupsPage with UIConfirmDialog, pruned routes to ROUTES.ACCOUNT_GROUPS, deleted 9 pages |
-| Task 48: Redesign ChequeDialog UI & Migrate Cheques to In-Place Dialogs            | Done   | Upgraded ChequeDialog with live cheque leaf preview & lifecycle actions, updated ChequesPage, pruned routes to ROUTES.CHEQUES, deleted 6 pages |
-| Task 50: Phase 2 Branch Dashboard Execution & Pixel-Perfect Layout   | Done   | Backend aggregation endpoint GET /api/v1/dashboard/branch, 5 KPI cards, Sales trend combo chart, Donut breakdown, live shift card, 6 tables, sidebar widget, verified with 0 lint errors and build |
-| Task 51: Phase 3 Company Dashboard Execution & Pixel-Perfect Layout  | Done   | Backend aggregation endpoint GET /api/v1/dashboard/company, 6 KPI cards, 6-month clustered bar chart, branch leaderboard, category donut, top products, GST summary, inventory alerts, 3 bottom tables, verified with 0 errors |
-| Task 52: Phase 4 Workspace Dashboard Execution & Pixel-Perfect Layout| Done   | Backend aggregation endpoint GET /api/v1/dashboard/workspace, 6 KPI cards with horizontal icon layout, combo clustered bar+line chart with Oct callout card, top companies leaderboard with progress meters, branch performance table, category donut, stock alerts, financial summary, activity feed, subscription usage panel with days-left card, sidebar widget, verified with 0 eslint errors and clean production build |
-| Task 53: Remove Branch Info Box from Sidebar                          | Done   | Removed the intrusive Branch Info / Branch Settings box from SidebarContextualStatusWidget in the desktop sidebar; scoped remaining contextual widgets strictly to their specific dashboard routes; verified with 0 eslint errors and build |
-| Task 54: Header Dotted Grid Menu & Sidebar Dashboard Relocation      | Done   | Added iconic 9-dot grid waffle app launcher menu to AppDesktopHeader & AppMobileHeader with live search, 3 Dashboards (Branch, Company, Workspace) and top frequent operations (Shifts, Business Days, Cash Counter, Stock, Purchases, Transfers, Customers, Suppliers, Banks, UPI QRs, Slips, Exchanges, GST, Reports); removed Dashboards group from sidebar; verified with 0 eslint errors and production build |
-| Task 55: Billing Page Redesign, Infinite Scroll & Decoupled Metrics   | Done   | Overhauled Invoice & Billing Hub: removed top toolbar & fake dialogs, created reusable UIInfiniteScroll, added sticky header UITable with split payment breakdown, added compact 4-card statistics grid with backend aggregation independent of pagination; verified with clean production build |
-| Task 56: Split Participation, Yesterday Filter & Layout Polish        | Done   | Added Yesterday date range filter; fixed customer phone resolution via Customer model population; reduced AppDesktopLayout and page container padding; implemented Cash & UPI filtering with split allocation participation; added dynamic stat cards with secondary split contribution badges and visual highlight for Split invoices in Cash/UPI results; verified with 0 errors |
+| Status | Task |
+|---|---|
+| [x] | Task 1: Data Models & Schema Enhancements (Job, Staging, Product & Invoice) |
+| [x] | Task 2: Field Extraction, Normalization & Validation Helper |
+| [x] | Task 3: Core Import Engine Service (Chunk Streaming, Staging & Materialization) |
+| [x] | Task 4: API Controller, Validation & Routes |
+| [x] | Task 5: Frontend Service & Interactive Import Modal Component |
+| [x] | Task 6: End-to-End Verification & Edge Case Testing |
+| [x] | Task 7: Marg ERP Statement Parser & Pack Normalizer (Unit Tests & Logic) |
+| [x] | Task 8: Integrate Marg ERP Parsing into Service, Controller & Auto-detection |
+| [x] | Task 9: Verification on User's Exact Marg ERP Sales Statement Sample |
+| [x] | Task 11: Investigate and Fix ECOSPRIN AV 75 CAP 10X15 Matching Failure |
+| [x] | Task 12: Council Deliberation & Single-Column Phone-Lead State Machine Invoicing |
+| [x] | Task 13: Set Customer Type to 'other' & Materialize All Historical Sales Invoices |
+| [x] | Task 15: Remove tooltips from both Hold and Return buttons in POS |
+| [x] | Task 16: Migrate B2C/B2B Switch to UITabs & align Return Button with UI Guidelines |
+| [x] | Task 17: Add missing 'Party / Business Name *' heading and align layout in B2B Customer Strip |
+| [x] | Task 18: Implement Direct Return Item Pickup from Customer History in Return Mode |
+| [x] | Task 19: Make Return button in Customer History appear only on hover matching normal mode |
+| [x] | Task 20: Update Sales Invoice Preview Modal for Return Invoice & Credit Note mode |
+| [x] | Task 21: Update Sales Checkout Modal for Return Mode (Amount to Return, Cash Refund & Advance Deposit) |
+| [x] | Task 22: Backend Sales Return API Module, Restock, GSTR-1 Credit Note Reversal & Shift Cash Management |
+| [x] | Task 23: Cash Drawer Denominations Capture in Refund Settlement Mode |
+| [x] | Task 24: Connect Return Workflow to Backend Return API & Customer Advance Credit Deposit |
+| [x] | Task 25: Update GSTR-1 page to calculate Net applicable GST & Taxable turnover deducting Credit Notes / Sales Returns |
+| [x] | Task 26: Fix Cash Counter & Shift Cash Deduction for Sales Return Refunds |
+| [x] | Task 27: View Shift Detail: Display Returned Bills, Refund Amounts & Breakdown |
+| [x] | Task 28: Fix Inventory Restock on Sales Return (Batches, Facility & Inventory Ledger) |
+| [x] | Task 29: Council Deliberation & Brainstorming for Dedicated Sales Return System (Isolated Models & Standalone UI Page) |
+| [x] | Task 30: Dedicated Backend Sales Return Data Model & Repository (`salesReturn.model.js` & `salesReturn.repository.js`) |
+| [x] | Task 31: Sales Return API Controller, Routes & Service Migration |
+| [x] | Task 32: Frontend Sales Return Feature (Dedicated Page, Routing, Left Drawer Sidebar Entry) |
+| [x] | Task 33: Verification & Integration Testing |
+| [x] | Task 34: Root Cause Investigation: Inspect Sales Return Filters Frontend & Backend Query Flow |
+| [x] | Task 35: Backend Fix: Search matching customer name/phone, Flexible Return/Refund Type, Billing Mode, and Accurate Date Boundaries in `return.service.js` |
+| [x] | Task 36: Frontend Fix: Debounce search, fix Date Range calculation and page resets in `SalesReturnDesktopPage.jsx` & `SalesReturnMobilePage.jsx` |
+| [x] | Task 37: End-to-End Verification of all Sales Return Filters (Search, Date Preset, Refund Type, Billing Mode) |
+| [x] | Task 38: Fix UISelect onChange signatures in `SalesReturnDesktopPage.jsx` and add defensive handling in `UISelect.jsx` |
+| [x] | Task 39: Build & Verify Dropdown Selection End-to-End |
+| [x] | Task 40: Investigate & Fix Sales Return Details Drawer View (Eye icon click) |
+| [x] | Task 41: End-to-End Verification of Sales Return Details Drawer & Print Flow |
+| [x] | Task 42: Migrate Sales Return Details to Centered UIModal matching SalesInvoicePreviewModal.jsx:L360 |
+| [x] | Task 43: Verification of Centered Preview Modal on Desktop & Mobile |
+| [x] | Task 44: Fix React Hook Ordering ('Rendered more hooks than during previous render') in SalesReturnDetailsDrawer |
+| [x] | Task 45: Align Sales Return Details Preview with BillingInvoiceDetailsDrawer.jsx layout, metadata cards, and payment breakdown |
+| [x] | Task 46: Integrate Customer Name/Phone & POS Terminal Search Bar into CreateSalesReturnModal (New Sales Return) |
+| [x] | Task 47: Increase New Sales Return Modal Height & Dropdown Boundary to Prevent Clipping |
+| [x] | Task 48: Council Deliberation & Infinite Scrolling Implementation (Limit 10) in CreateSalesReturnModal |
+| [x] | Task 49: Shift Connection, Original Sale Bill Return Tracking & Double-Return Prevention |
+| [x] | Task 50: (Reverted per user request) Separate Partition for Returned Bills & Display Returned Bill Number in SalesInvoicePreviewModal |
+| [x] | Task 51: Include Return-Related Bills with Numbers & Amounts in BillingInvoiceDetailsDrawer |
+| [x] | Task 52: Prominent Un-truncated Error Banner in SalesCheckoutModal at Line 785 |
+| [x] | Task 53: Align Shift Accounting, Schema & Real-Time Sync for Dedicated SalesReturn Model |
+| [x] | Task 54: Council Deliberation & Removal of Sales Return Components from Sale Bill Invoice Page |
+| [x] | Task 55: Create Dedicated Sales Return Page (/sales-returns/create) replacing Modal |
+| [x] | Task 56: Council Deliberation & POS-Style Sales Return Terminal (Customer Strip, History Panel, Customer-Purchased Medicine Search & Bill-Wise Pickup) |
+| [x] | Task 57: Scrap Store Branch, Automatic Scrap Transfer Order & Sales Return Motive Selection (General vs Expired vs Broken) |
+| [x] | Task 58: Systematic Investigation & Fix for Missing Expiry Date Across Sales Invoices, History, Pickups & Returns |
+| [x] | Task 59: Auto-Resolution & Seeder to Create 'Scrap Store' Branch with General Details for All Existing Companies |
+| [x] | Task 60: Root Cause Investigation & Fix: Inventory Restock & New Batch Creation on Sales Return (Batch & ProductFacility Stock Increase in Current & Scrap Branches) |
+| [x] | Task 61: Council Deliberation on Branch Scrap Bin Architecture & Stock Matrix Expired Items Button |
+| [x] | Task 62: Backend Scrap Bin Implementation on Batch & ProductFacility (Remove Transfer Order & Scrap Store Branch) |
+| [x] | Task 63: Backend Query Support for Expired & Scrap Items (with filters, branch scoping & search) |
+| [x] | Task 64: Frontend Stock Matrix Feature: Expired & Scrap Items View with UI Primitives, Filters & Checkboxes |
+| [x] | Task 65: End-to-End Verification & Testing |
+| [x] | Task 66: Dedicated Expired & Scrap Items Page Routes, Navigation & Header Integration |
+| [x] | Task 67: Universal Dual-Layout Desktop Page (ExpiredScrapItemsDesktopPage.jsx) |
+| [x] | Task 68: Universal Dual-Layout Mobile Page (ExpiredScrapItemsMobilePage.jsx) |
+| [x] | Task 69: Wire Stock Matrix Buttons & Sidebar Navigation to Dedicated Page |
+| [x] | Task 70: End-to-End Build & Verification |
+| [x] | Task 71: Council Deliberation & Resolution for Same-Batch Broken vs Expired Return Separation |
+| [x] | Task 72: Schema & Batch Resolution: Add originalBatchNo & scrapType, Differentiate Target Batch by Scrap Reason |
+| [x] | Task 73: Verification & Multi-Return Unit Testing |
+| [x] | Task 74: Add Branch Filter, Expiry Presets & Custom Date Range Pickers to ExpiredScrapItemsDesktopPage.jsx |
+| [x] | Task 75: Add Branch Filter, Expiry Presets & Custom Date Range Pickers to ExpiredScrapItemsMobilePage.jsx |
+| [x] | Task 76: Add Branch Filter & Custom Date Range to ExpiredScrapItemsModal.jsx |
+| [x] | Task 77: Verification & Build Testing |
+| [x] | Task 78: Root Cause Diagnosis & Schema Scoping for POS Batch Selection |
+| [x] | Task 79: Backend Fix: Normalize branch_id, productId, stock, expiry in workspaceProduct.controller.js |
+| [x] | Task 80: Frontend Fix: Safe ID Extraction, Branch Scoping, Expiry Formatting & Real Batch Retention in WorkspaceProductBatchSelectorModal.jsx |
+| [x] | Task 81: End-to-End Verification & Unit Tests in pharmaerp-api and Build in pharmaerp-web |
+| [x] | Task 82: Council Deliberation on Scrap Transfer Order Architecture & State Hand-off |
+| [x] | Task 83: Data Schema & Backend Transfer Order Service: Support transferType="SCRAP", Scrap Batch Deduction, and Destination Scrap Bin Receipt |
+| [x] | Task 84: Frontend CreateTransferOrderPage.jsx: Location State Prefill, Scrap Transfer Mode Badge, and Staged Scrap Items |
+| [x] | Task 85: Add "Create Transfer Order" Action to ExpiredScrapItemsDesktopPage, MobilePage, and Modal with Navigation State |
+| [x] | Task 86: Unit Testing & Verification in pharmaerp-api (Scrap Transfer Creation, Receipt, and Cancel) |
+| [x] | Task 87: End-to-End Build & Verification in pharmaerp-web |
+| [x] | Task 88: Add Current-Branch-Only Enforcement & Visual Indicators to ExpiredScrapItemsDesktopPage.jsx |
+| [x] | Task 89: Add Current-Branch-Only Enforcement & Visual Indicators to ExpiredScrapItemsMobilePage.jsx and ExpiredScrapItemsModal.jsx |
+| [x] | Task 90: Add Source Branch Validation to CreateTransferOrderPage.jsx and Backend transferOrder.service.js |
+| [x] | Task 91: Verification & End-to-End Build Testing |
+| [x] | Task 92: Root Cause Investigation & Scope Formulation (B2B Sale Bill without GST -> B2C, Sales Return -> Registered vs Unregistered) |
+| [x] | Task 93: Backend Fix: Enforce B2C Invoice Creation for B2B Customers without GST in `invoice.service.js` and GSTR-1 Ledger Mapping |
+| [x] | Task 94: Backend Fix: Sales Return Routing to Registered vs Unregistered Parties based strictly on GST Number in `return.service.js` |
+| [x] | Task 95: Core GST Calculations Fix: Update `gstr1SummaryCalculator.js` in `pharmaerp-api` and `pharmaerp-web` |
+| [x] | Task 96: Frontend Integration: Update POS & Sales Billing (`POSTerminalPage.jsx`, `SalesDesktopPage.jsx`, `SalesMobilePage.jsx`) to handle B2B parties without GST as B2C |
+| [x] | Task 97: Frontend Integration: Update Sales Return Creation (`CreateSalesReturnDesktopPage.jsx`, `CreateSalesReturnMobilePage.jsx`, `CreateSalesReturnModal.jsx`) |
+| [x] | Task 98: Unit & Integration Verification Tests for B2B/B2C Invoices, Sales Returns, and GSTR-1 Group Allocation |
+| [x] | Task 99: Summary Calculator Overhaul: Unify `deduceGstrGroup`, Re-classify Misleading DB Records, and Fix Credit Note Turnover Netting in `gstr1SummaryCalculator.js` |
+| [x] | Task 100: Fix GSTR Date Filtering, Inclusive End-of-Day Boundaries, Branch Voucher Resolution for Sales Returns, and Auto-Sync in `gstLedger.repository.js` |
+| [x] | Task 101: Fix GSTR-1 Summary Registered vs Unregistered Credit Note Allocation & Party Populate in Backend and Frontend |
+| [x] | Task 102: Systematic Investigation & Fix: Scoped Purchase Bill Batch & ProductFacility Ingestion to Current/Bill Branch |
+| [x] | Task 103: Council Deliberation & Architecture Specification for Moving Shelf-Expired Stock to Branch Scrap Bin |
+| [x] | Task 104: Backend API Endpoint & Service: move-to-scrap-bin (Atomic Shelf Batch Deduction, Scrap Batch Increment & ProductFacility Sync) |
+| [x] | Task 105: Frontend Service & Desktop Register Integration: ExpiredScrapItemsDesktopPage.jsx (Dynamic Button Switching & Confirm Dialog) |
+| [x] | Task 106: Frontend Mobile & Modal Integration: ExpiredScrapItemsMobilePage.jsx and ExpiredScrapItemsModal.jsx |
+| [x] | Task 107: Unit Tests in pharmaerp-api for Move-to-Scrap-Bin Operation |
+| [x] | Task 108: End-to-End Build & Verification in pharmaerp-web |
+| [x] | Task 109: Exclude Shelf-Expired Items from "All Expired & Scrap" Tab across Desktop, Mobile, and Modal Views |
+| [x] | Task 110: Verification & End-to-End Build Testing in pharmaerp-web |
+| [x] | Task 111: Remove Redundant Header Panel from ExpiredScrapItemsDesktopPage.jsx and Relocate Action Buttons & Back Navigation to Toolbar |
+| [x] | Task 112: Verification & End-to-End Build in pharmaerp-web |
+| [x] | Task 113: Backend - Enhance getProductFacilityBatchesByQueryV2 with Motive Filtering (Scrap Bin Only for 'all', Shelf Only for 'shelf_expired'), Pagination Meta & Summary Counts |
+| [x] | Task 114: Frontend - Implement Server-Side Pagination with UIInfiniteScroll in ExpiredScrapItemsDesktopPage.jsx |
+| [x] | Task 115: Frontend - Implement Server-Side Pagination with UIInfiniteScroll in ExpiredScrapItemsMobilePage.jsx and ExpiredScrapItemsModal.jsx |
+| [x] | Task 116: Unit Tests in pharmaerp-api for Batch Motive Querying & Pagination |
+| [x] | Task 117: Verification & End-to-End Build in pharmaerp-web |
+| [x] | Task 118: Align Expired & Scrap Items Table with Purchases Table Architecture (UITable containerClassName, divide-y, typography, and infinite scroll endMessage) |
+| [x] | Task 119: Verification & End-to-End Build in pharmaerp-web |
+| [x] | Task 120: Backend - Create StockAdjustment Model, Schema, and Relationships |
+| [x] | Task 121: Backend - Implement addExpiredBrokenStock Controller, Validation, and Routes in workspaceProduct |
+| [x] | Task 122: Backend - Unit Tests in pharmaerp-api for Expired & Broken Stock Adjustment |
+| [x] | Task 123: Frontend - Service Method in workspaceProductService for Stock Adjustment |
+| [x] | Task 124: Frontend - Create AddExpiredBrokenStockModal with Reused WorkspaceProductSearchBar, Batch Picker & Segmented Classification |
+| [x] | Task 125: Frontend - Integrate "Add Expired / Broken Stock" Button on StockMetricsDesktopPage and ExpiredScrapItemsDesktopPage |
+| [x] | Task 126: Frontend - Verification & End-to-End Build in pharmaerp-web |
+| [x] | Task 127: Fix Mongoose 9 pre-save middleware signature in stockAdjustment.model.js (remove legacy next parameter) |
+| [x] | Task 128: Council Deliberation & Multi-Tier Purchase Return Blueprint (Internal vs External Evaluation) |
+| [x] | Task 129: Design Dedicated Single-Company Purchase Return System (Workflow, Data Schema, Stock Deduction, GST Debit Note & UI Flow) |
+| [x] | Task 130: Backend - Purchase Return Constants, Model & Schema (`purchaseReturn.constant.js` & `purchaseReturn.model.js`) |
+| [x] | Task 131: Backend - Purchase Return Repository (`purchaseReturn.repository.js`) |
+| [x] | Task 132: Backend - FIFO Inflow Matching, Stock Decrement, Journal Voucher & GST Service (`purchaseReturn.service.js`) |
+| [x] | Task 133: Backend - Validations, Controller & Routes Mounting (`purchaseReturn.routes.js`) |
+| [x] | Task 134: Backend - Automated Unit & Integration Tests in pharmaerp-api |
+| [x] | Task 135: Frontend - Purchase Return API Service & Route Definitions (`purchaseReturnService.js` & `AppRoutes.jsx`) |
+| [x] | Task 136: Frontend - Integrate "Return to Supplier" Action on Expired & Scrap Items Page (Desktop, Mobile, Modal) |
+| [x] | Task 137: Frontend - Create Purchase Return Terminal Page (`CreatePurchaseReturnPage.jsx`) |
+| [x] | Task 138: Frontend - Purchase Returns Register & Printable Debit Note Modal (`PurchaseReturnsDesktopPage.jsx` & `PurchaseReturnDetailsModal.jsx`) |
+| [x] | Task 139: End-to-End Build & System Verification across API and Web |
+| [x] | Task 140: Upgrade Purchase Return Pages with PharmaERP v3.0 Reusable UI Primitives (PageHeader, StatCards, FilterBar, SummaryCard, InfoCard, Tabs & Motion) |
+| [x] | Task 141: Automatic Supplier Selection based on Selected Return Batches (Backend Enrichment, Scrap Page Handoff, and Auto-Resolution in Return Terminal) |
+| [x] | Task 142: Multi-Supplier Auto-Partitioning & Batch Debit Note Generation (Group by Supplier, Multi-Note Execution & GST Section 34 Isolation) |
+| [x] | Task 143: Streamline & Polish Purchase Return Terminal with Swiss Minimalist UI Design (Single-Bar Context Strip, Spotlight Search, Tabular Steppers, and Sleek Summary) |
+| [x] | Task 144: Council Deliberation & Brainstorming for Return Box Labels & Inter-Branch Dispatch Routing |
+| [x] | Task 145: Create `ReturnBoxLabelModal.jsx` (Thermal 4x6 / A4 Label Generator with Barcode, Current Branch, Destination Branch & Supplier) |
+| [x] | Task 146: Integrate "Create Transport Label" Button in Purchase Return Creation Terminal (Desktop & Mobile) |
+| [x] | Task 147: Integrate "Transport Label" & "Transfer to Other Branch" Actions in `PurchaseReturnDetailsModal.jsx` |
+| [x] | Task 148: End-to-End Build & System Verification across Purchases and Transfer Orders |
+
