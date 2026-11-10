@@ -9,3 +9,4 @@ export const PurchaseReturnsPage = () => {
 };
 
 export default PurchaseReturnsPage;
+
