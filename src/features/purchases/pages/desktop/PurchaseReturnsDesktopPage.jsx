@@ -1,6 +1,6 @@
 // src/features/purchases/pages/desktop/PurchaseReturnsDesktopPage.jsx
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search,
@@ -14,12 +14,26 @@ import {
   Truck,
   Receipt,
   FileSpreadsheet,
+  Package,
+  Boxes,
+  AlertTriangle,
+  TrendingDown,
+  ShieldCheck,
+  CheckCircle2,
+  Clock,
 } from "lucide-react";
 import {
+  UIPageHeader,
+  UIStatCard,
+  UIFilterBar,
+  UITabs,
   UIButton,
+  UIIconButton,
   UIInput,
+  UISearchInput,
   UISelect,
   UIBadge,
+  UIStatusIndicator,
   UITable,
   UITableHeader,
   UITableBody,
@@ -28,7 +42,6 @@ import {
   UITableCell,
   UITableEmpty,
   UITableLoading,
-  UIInfiniteScroll,
   uiToast,
 } from "@/components/ui";
 import purchaseReturnService from "../../services/purchaseReturnService";
@@ -134,75 +147,136 @@ export const PurchaseReturnsDesktopPage = () => {
     setIsPreviewOpen(true);
   };
 
+  // KPI Calculations
+  const stats = useMemo(() => {
+    const totalVal = returns.reduce((acc, r) => acc + (r.grandTotal || 0), 0);
+    const taxVal = returns.reduce((acc, r) => acc + (r.totalGst || 0), 0);
+    const scrapCount = returns.filter(
+      (r) => r.returnMotive === "EXPIRED" || r.returnMotive === "BROKEN"
+    ).length;
+    const sellableCount = returns.filter(
+      (r) => r.returnMotive === "SELLABLE"
+    ).length;
+
+    return {
+      totalVal,
+      taxVal,
+      scrapCount,
+      sellableCount,
+    };
+  }, [returns]);
+
+  const motiveTabs = [
+    { id: "all", label: "All Returns", icon: Boxes },
+    { id: "SELLABLE", label: "Sellable Shelf", icon: Package },
+    { id: "EXPIRED", label: "Expired Scrap", icon: Trash2 },
+    { id: "BROKEN", label: "Broken Scrap", icon: AlertTriangle },
+  ];
+
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
-      {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-text flex items-center gap-2">
-            <Undo2 className="size-6 text-primary" />
-            Purchase Returns & Debit Notes
-          </h1>
-          <p className="text-xs text-text-muted mt-0.5">
-            Manage vendor returns, issue Section 34 Debit Notes, and track stock deductions
-          </p>
-        </div>
+      {/* 1. Page Header (Component #16) */}
+      <UIPageHeader
+        title="Purchase Returns & Debit Notes"
+        description={`Manage vendor returns, issue Section 34 GST Debit Notes, and track stock reversals for ${currentBranch?.name || "Active Facility"}`}
+        breadcrumbs={[
+          { label: "Dashboard", href: "/" },
+          { label: "Purchases", href: ROUTES.PURCHASES },
+          { label: "Purchase Returns" },
+        ]}
+        actions={
+          <div className="flex items-center gap-2.5">
+            <UIButton
+              variant="outline"
+              size="sm"
+              onClick={() => fetchReturns(1, true)}
+              startIcon={<RefreshCw className="size-3.5" />}
+              title="Refresh list"
+            >
+              Refresh
+            </UIButton>
 
-        <div className="flex items-center gap-2.5">
-          <UIButton
-            variant="outline"
-            size="sm"
-            onClick={() => fetchReturns(1, true)}
-            startIcon={<RefreshCw className="size-3.5" />}
-          >
-            Refresh
-          </UIButton>
+            <UIButton
+              variant="primary"
+              size="sm"
+              onClick={() => navigate(ROUTES.CREATE_PURCHASE_RETURN)}
+              startIcon={<Plus className="size-3.5" />}
+              className="font-bold shadow-xs"
+            >
+              New Purchase Return
+            </UIButton>
+          </div>
+        }
+      />
 
-          <UIButton
-            variant="primary"
-            size="sm"
-            onClick={() => navigate(ROUTES.CREATE_PURCHASE_RETURN)}
-            startIcon={<Plus className="size-3.5" />}
-            className="font-bold shadow-xs"
-          >
-            New Purchase Return
-          </UIButton>
-        </div>
+      {/* 2. KPI Stat Cards Grid (Component #28) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <UIStatCard
+          title="Total Debit Notes"
+          value={totalCount}
+          subtitle={`Across ${currentBranch?.name || "facility"}`}
+          icon={<Undo2 className="size-5" />}
+          variant="primary"
+          isLoading={isLoading}
+        />
+
+        <UIStatCard
+          title="Total Debit Value"
+          value={formatCurrency(stats.totalVal)}
+          prefix="₹"
+          subtitle="Direct AP reduction claimed"
+          icon={<Receipt className="size-5" />}
+          variant="success"
+          isLoading={isLoading}
+        />
+
+        <UIStatCard
+          title="ITC Tax Reversal"
+          value={formatCurrency(stats.taxVal)}
+          prefix="₹"
+          subtitle="GSTR-2 Sec 34 reversal"
+          icon={<ShieldCheck className="size-5" />}
+          variant="purple"
+          isLoading={isLoading}
+        />
+
+        <UIStatCard
+          title="Scrap Bin Claims"
+          value={stats.scrapCount}
+          subtitle={`${stats.sellableCount} sellable returns`}
+          icon={<Trash2 className="size-5" />}
+          variant="warning"
+          isLoading={isLoading}
+        />
       </div>
 
-      {/* Filter Toolbar */}
-      <div className="bg-card border rounded-xl p-4 shadow-2xs space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div className="md:col-span-2 relative">
-            <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by debit note #, return memo #, or supplier..."
-              className="w-full h-9 pl-9 pr-3 border rounded-lg bg-background text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
-            />
-          </div>
+      {/* 3. Motive Segmented Tabs & Filters (Components #9 & #26) */}
+      <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          {/* Segmented Motive Tabs */}
+          <UITabs
+            tabs={motiveTabs}
+            activeTab={returnMotive}
+            onChange={(tabId) => setReturnMotive(tabId)}
+            variant="segmented"
+            size="sm"
+          />
 
-          <div>
-            <select
-              value={returnMotive}
-              onChange={(e) => setReturnMotive(e.target.value)}
-              className="w-full h-9 px-3 border rounded-lg bg-background text-xs font-medium"
-            >
-              <option value="all">All Motives</option>
-              <option value="SELLABLE">Sellable Stock</option>
-              <option value="EXPIRED">Expired Stock</option>
-              <option value="BROKEN">Broken / Damaged</option>
-              <option value="MIXED">Mixed Motives</option>
-            </select>
-          </div>
+          {/* Search & Status Filters */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="w-64 sm:w-72">
+              <UISearchInput
+                value={search}
+                onChange={(val) => setSearch(val)}
+                placeholder="Search debit note, memo, supplier..."
+                size="sm"
+              />
+            </div>
 
-          <div>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="w-full h-9 px-3 border rounded-lg bg-background text-xs font-medium"
+              className="h-8.5 px-3 border border-border rounded-lg bg-surface text-xs font-medium text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
             >
               <option value="all">All Statuses</option>
               <option value="CONFIRMED">Confirmed</option>
@@ -212,22 +286,23 @@ export const PurchaseReturnsDesktopPage = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-between text-xs text-text-muted pt-2 border-t">
+        <div className="flex items-center justify-between text-xs text-text-muted pt-2 border-t border-border/60">
           <span>
             Showing <strong className="text-text">{returns.length}</strong> of{" "}
-            <strong className="text-text">{totalCount}</strong> purchase returns
+            <strong className="text-text">{totalCount}</strong> purchase return records
           </span>
-          <span>
+          <span className="flex items-center gap-1.5 font-medium">
+            <Building2 className="size-3.5 text-primary" />
             Facility: <strong className="text-text">{currentBranch?.name || "Active Facility"}</strong>
           </span>
         </div>
       </div>
 
-      {/* Returns Table */}
-      <div className="bg-card border rounded-xl overflow-hidden shadow-2xs">
+      {/* 4. Returns Data Table (Component #11) */}
+      <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
         <UITable>
           <UITableHeader>
-            <UITableRow className="bg-surface/50">
+            <UITableRow className="bg-surface-alt/60">
               <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
                 Debit Note #
               </UITableHead>
@@ -250,7 +325,7 @@ export const PurchaseReturnsDesktopPage = () => {
                 Total GST
               </UITableHead>
               <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
-                Grand Total
+                Debit Total
               </UITableHead>
               <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-center">
                 Status
@@ -268,7 +343,7 @@ export const PurchaseReturnsDesktopPage = () => {
               <UITableEmpty
                 colSpan={10}
                 title="No purchase returns found"
-                description="Create a return above or select quarantined batches from the Expired & Scrap items register."
+                description="Click 'New Purchase Return' or return quarantined stock directly from the Expired & Scrap items register."
               />
             ) : (
               returns.map((ret) => {
@@ -278,10 +353,13 @@ export const PurchaseReturnsDesktopPage = () => {
                 return (
                   <UITableRow
                     key={ret._id}
-                    className="hover:bg-surface/40 transition-colors"
+                    className="hover:bg-surface-hover transition-colors cursor-pointer"
+                    onClick={() => handleOpenPreview(ret)}
                   >
                     <UITableCell className="py-3.5 px-4 font-mono font-bold text-text">
-                      {ret.debitNoteNo || ret.returnNo}
+                      <div className="flex items-center gap-1.5">
+                        <span>{ret.debitNoteNo || ret.returnNo}</span>
+                      </div>
                       {ret.debitNoteNo && ret.returnNo !== ret.debitNoteNo && (
                         <span className="block font-sans text-[11px] font-normal text-text-muted">
                           Memo: {ret.returnNo}
@@ -289,7 +367,7 @@ export const PurchaseReturnsDesktopPage = () => {
                       )}
                     </UITableCell>
 
-                    <UITableCell className="py-3.5 px-4 text-xs text-text-muted">
+                    <UITableCell className="py-3.5 px-4 text-xs text-text-muted font-medium">
                       {formatDate(ret.returnDate)}
                     </UITableCell>
 
@@ -299,19 +377,20 @@ export const PurchaseReturnsDesktopPage = () => {
                       </div>
                       {supplier.gstNumber && (
                         <div className="text-[11px] text-text-muted font-mono">
-                          {supplier.gstNumber}
+                          GST: {supplier.gstNumber}
                         </div>
                       )}
                     </UITableCell>
 
                     <UITableCell className="py-3.5 px-4">
                       <UIBadge
-                        variant={
+                        variant="soft"
+                        color={
                           ret.returnMotive === "SELLABLE"
-                            ? "default"
+                            ? "primary"
                             : ret.returnMotive === "EXPIRED"
                             ? "warning"
-                            : "destructive"
+                            : "error"
                         }
                       >
                         {ret.returnMotive}
@@ -335,20 +414,25 @@ export const PurchaseReturnsDesktopPage = () => {
                     </UITableCell>
 
                     <UITableCell className="py-3.5 px-4 text-center">
-                      <UIBadge
-                        variant={
+                      <UIStatusIndicator
+                        status={
                           ret.status === "CONFIRMED"
-                            ? "default"
+                            ? "success"
                             : ret.status === "CANCELLED"
-                            ? "destructive"
-                            : "secondary"
+                            ? "error"
+                            : "draft"
                         }
-                      >
-                        {ret.status}
-                      </UIBadge>
+                        label={ret.status}
+                        variant="badge"
+                        size="xs"
+                        pulse={ret.status === "CONFIRMED"}
+                      />
                     </UITableCell>
 
-                    <UITableCell className="py-3.5 px-4 text-center">
+                    <UITableCell
+                      className="py-3.5 px-4 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <UIButton
                         variant="ghost"
                         size="xs"
@@ -367,20 +451,20 @@ export const PurchaseReturnsDesktopPage = () => {
         </UITable>
 
         {hasMore && (
-          <div className="p-4 border-t flex justify-center">
+          <div className="p-4 border-t border-border flex justify-center">
             <UIButton
               variant="outline"
               size="sm"
               onClick={handleLoadMore}
               disabled={isLoadingMore}
             >
-              {isLoadingMore ? "Loading more..." : "Load More Returns"}
+              {isLoadingMore ? "Loading more returns..." : "Load More Returns"}
             </UIButton>
           </div>
         )}
       </div>
 
-      {/* Details & Print Modal */}
+      {/* 5. Details & Printable Debit Note Modal */}
       <PurchaseReturnDetailsModal
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
@@ -391,4 +475,3 @@ export const PurchaseReturnsDesktopPage = () => {
 };
 
 export default PurchaseReturnsDesktopPage;
-

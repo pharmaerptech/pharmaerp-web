@@ -10,13 +10,28 @@ import {
   Receipt,
   ShieldCheck,
   Package,
+  Boxes,
+  FileText,
 } from "lucide-react";
 import {
   UIModal,
   UIModalHeader,
   UIModalTitle,
+  UIModalDescription,
+  UIModalBody,
+  UIModalFooter,
+  UIInfoCard,
+  UISummaryCard,
   UIButton,
+  UIIconButton,
   UIBadge,
+  UIStatusIndicator,
+  UITable,
+  UITableHeader,
+  UITableBody,
+  UITableRow,
+  UITableHead,
+  UITableCell,
 } from "@/components/ui";
 
 const formatCurrency = (val) => {
@@ -43,8 +58,6 @@ export const PurchaseReturnDetailsModal = ({
   onClose,
   purchaseReturn,
 }) => {
-  const printAreaRef = useRef(null);
-
   if (!isOpen || !purchaseReturn) return null;
 
   const handlePrint = () => {
@@ -185,110 +198,112 @@ export const PurchaseReturnDetailsModal = ({
   const branch = purchaseReturn.branchId || {};
 
   return (
-    <UIModal open={isOpen} onOpenChange={onClose} size="3xl">
-      <div className="p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-start justify-between border-b pb-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-text">
+    <UIModal open={isOpen} onOpenChange={onClose} size="4xl">
+      <UIModalHeader className="border-b border-border pb-4">
+        <div className="flex items-center justify-between w-full pr-8">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2.5">
+              <UIModalTitle className="text-lg font-bold text-text">
                 Debit Note #{purchaseReturn.debitNoteNo || purchaseReturn.returnNo}
-              </h2>
-              <UIBadge
-                variant={
+              </UIModalTitle>
+              <UIStatusIndicator
+                status={
                   purchaseReturn.status === "CONFIRMED"
-                    ? "default"
+                    ? "success"
                     : purchaseReturn.status === "CANCELLED"
-                    ? "destructive"
-                    : "secondary"
+                    ? "error"
+                    : "draft"
+                }
+                label={purchaseReturn.status}
+                variant="badge"
+                size="xs"
+              />
+              <UIBadge
+                variant="soft"
+                color={
+                  purchaseReturn.returnMotive === "SELLABLE"
+                    ? "primary"
+                    : "warning"
                 }
               >
-                {purchaseReturn.status}
-              </UIBadge>
-              <UIBadge variant="outline">
                 {purchaseReturn.returnMotive}
               </UIBadge>
             </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Issued on {formatDate(purchaseReturn.returnDate)} • Memo: {purchaseReturn.returnNo}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <UIButton
-              variant="outline"
-              size="sm"
-              onClick={handlePrint}
-              startIcon={<Printer className="size-4" />}
-            >
-              Print Debit Note
-            </UIButton>
-            <UIButton variant="ghost" size="sm" onClick={onClose}>
-              <X className="size-4" />
-            </UIButton>
+            <UIModalDescription className="text-xs text-text-muted">
+              Issued on {formatDate(purchaseReturn.returnDate)} • Reference Memo: {purchaseReturn.returnNo}
+            </UIModalDescription>
           </div>
         </div>
+      </UIModalHeader>
 
-        {/* Metadata Boxes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          <div className="p-3.5 border rounded-xl bg-surface/40 space-y-1">
-            <div className="font-bold text-text-muted uppercase text-[10px]">
-              Supplier Details
-            </div>
-            <div className="font-bold text-sm text-text">
-              {supplier.businessName || "Supplier"}
-            </div>
-            {supplier.gstNumber && (
-              <div className="text-text-muted">GSTIN: {supplier.gstNumber}</div>
-            )}
-            {supplier.mobile && (
-              <div className="text-text-muted">Phone: {supplier.mobile}</div>
-            )}
-            {supplier.drugLicenseNumber && (
-              <div className="text-text-muted">DL: {supplier.drugLicenseNumber}</div>
-            )}
-          </div>
+      <UIModalBody className="space-y-5 py-5 max-h-[75vh] overflow-y-auto">
+        {/* Info Cards Row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <UIInfoCard
+            title={supplier.businessName || "Supplier"}
+            subtitle="Creditor Details"
+            icon={<Truck className="size-4.5" />}
+            color="primary"
+            variant="accent"
+            fields={[
+              { label: "GSTIN", value: supplier.gstNumber || "Unregistered", copyable: !!supplier.gstNumber },
+              { label: "Phone", value: supplier.mobile || "—" },
+              { label: "Drug License", value: supplier.drugLicenseNumber || "—" },
+            ]}
+          />
 
-          <div className="p-3.5 border rounded-xl bg-surface/40 space-y-1">
-            <div className="font-bold text-text-muted uppercase text-[10px]">
-              Facility & Accounting
-            </div>
-            <div className="font-bold text-sm text-text">
-              {branch.name || "Main Warehouse"}
-            </div>
-            <div className="text-text-muted">
-              Settlement Status: <strong className="text-text">{purchaseReturn.settlementStatus}</strong>
-            </div>
-            {purchaseReturn.remarks && (
-              <div className="text-text-muted text-[11px] mt-1">
-                Remarks: {purchaseReturn.remarks}
-              </div>
-            )}
-          </div>
+          <UIInfoCard
+            title={branch.name || "Main Warehouse"}
+            subtitle="Dispatch Facility & Accounting"
+            icon={<Building2 className="size-4.5" />}
+            color="success"
+            variant="accent"
+            fields={[
+              { label: "Settlement Status", value: purchaseReturn.settlementStatus || "PENDING" },
+              { label: "Remarks", value: purchaseReturn.remarks || "No remarks" },
+            ]}
+          />
         </div>
 
-        {/* Items Table */}
-        <div className="border rounded-xl overflow-hidden text-xs">
-          <table className="w-full text-left divide-y">
-            <thead className="bg-surface/60 font-semibold text-text-muted uppercase tracking-wider">
-              <tr>
-                <th className="py-2.5 px-3 text-center">#</th>
-                <th className="py-2.5 px-3">Medicine & Pack</th>
-                <th className="py-2.5 px-3 font-mono">Batch</th>
-                <th className="py-2.5 px-3 text-center">Expiry</th>
-                <th className="py-2.5 px-3 text-center">Qty</th>
-                <th className="py-2.5 px-3 text-right">Rate</th>
-                <th className="py-2.5 px-3 text-right">GST %</th>
-                <th className="py-2.5 px-3 text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
+        {/* Line Items Table */}
+        <div className="border border-border rounded-2xl overflow-hidden shadow-xs">
+          <UITable>
+            <UITableHeader>
+              <UITableRow className="bg-surface-alt/60">
+                <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted w-10">
+                  #
+                </UITableHead>
+                <UITableHead className="py-2.5 px-3 text-[11px] uppercase font-semibold text-text-muted">
+                  Medicine & Pack
+                </UITableHead>
+                <UITableHead className="py-2.5 px-3 text-[11px] uppercase font-semibold text-text-muted font-mono">
+                  Batch
+                </UITableHead>
+                <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted">
+                  Expiry
+                </UITableHead>
+                <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted">
+                  Qty
+                </UITableHead>
+                <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
+                  Rate
+                </UITableHead>
+                <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
+                  GST %
+                </UITableHead>
+                <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
+                  Amount
+                </UITableHead>
+              </UITableRow>
+            </UITableHeader>
+
+            <UITableBody>
               {(purchaseReturn.items || []).map((item, idx) => (
-                <tr key={idx} className="hover:bg-surface/30">
-                  <td className="py-2.5 px-3 text-center text-text-muted">
+                <UITableRow key={idx} className="hover:bg-surface-hover transition-colors">
+                  <td className="py-2.5 px-3 text-center text-text-muted font-medium text-xs">
                     {idx + 1}
                   </td>
-                  <td className="py-2.5 px-3 font-medium text-text">
+                  <td className="py-2.5 px-3 font-medium text-text text-xs">
                     {item.productName}
                     {item.pack && (
                       <span className="block text-[11px] text-text-muted font-normal">
@@ -296,65 +311,82 @@ export const PurchaseReturnDetailsModal = ({
                       </span>
                     )}
                   </td>
-                  <td className="py-2.5 px-3 font-mono font-medium">
+                  <td className="py-2.5 px-3 font-mono font-medium text-xs">
                     {item.batchNo}
                   </td>
-                  <td className="py-2.5 px-3 text-center text-text-muted">
+                  <td className="py-2.5 px-3 text-center text-text-muted text-xs">
                     {item.expiry || "-"}
                   </td>
-                  <td className="py-2.5 px-3 text-center font-bold">
+                  <td className="py-2.5 px-3 text-center font-bold text-xs">
                     {item.returnQty}
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-medium">
+                  <td className="py-2.5 px-3 text-right font-mono font-medium text-xs">
                     {formatCurrency(item.rate)}
                   </td>
-                  <td className="py-2.5 px-3 text-right text-text-muted">
+                  <td className="py-2.5 px-3 text-right text-text-muted text-xs">
                     {item.gstPct}%
                   </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-bold text-text">
+                  <td className="py-2.5 px-3 text-right font-mono font-bold text-text text-xs">
                     {formatCurrency(item.totalAmount)}
                   </td>
-                </tr>
+                </UITableRow>
               ))}
-            </tbody>
-          </table>
+            </UITableBody>
+          </UITable>
         </div>
 
-        {/* Totals Summary */}
+        {/* Financial Calculation Breakdown */}
         <div className="flex justify-end">
-          <div className="w-72 space-y-2 text-xs">
-            <div className="flex justify-between text-text-muted">
-              <span>Taxable Subtotal:</span>
-              <span className="font-mono font-medium text-text">
-                {formatCurrency(purchaseReturn.taxableSubtotal)}
-              </span>
-            </div>
-            <div className="flex justify-between text-text-muted">
-              <span>Total GST (ITC Reversal):</span>
-              <span className="font-mono font-medium text-text">
-                {formatCurrency(purchaseReturn.totalGst)}
-              </span>
-            </div>
-            {purchaseReturn.roundOff !== 0 && (
-              <div className="flex justify-between text-text-muted">
-                <span>Round Off:</span>
-                <span className="font-mono text-text">
-                  {formatCurrency(purchaseReturn.roundOff)}
-                </span>
-              </div>
-            )}
-            <div className="pt-2 border-t flex justify-between items-baseline font-bold">
-              <span className="text-sm text-text">Grand Total Debit:</span>
-              <span className="text-lg font-black text-primary font-mono">
-                {formatCurrency(purchaseReturn.grandTotal)}
-              </span>
-            </div>
+          <div className="w-80">
+            <UISummaryCard
+              title="Debit Note Summary"
+              items={[
+                {
+                  label: "Taxable Subtotal",
+                  value: formatCurrency(purchaseReturn.taxableSubtotal),
+                },
+                {
+                  label: "Total GST (ITC Reversal)",
+                  value: formatCurrency(purchaseReturn.totalGst),
+                  isDeduction: true,
+                },
+                ...(purchaseReturn.roundOff
+                  ? [
+                      {
+                        label: "Round Off",
+                        value: formatCurrency(purchaseReturn.roundOff),
+                      },
+                    ]
+                  : []),
+              ]}
+              total={{
+                label: "Grand Total Debit",
+                value: formatCurrency(purchaseReturn.grandTotal),
+              }}
+              variant="compact"
+            />
           </div>
         </div>
-      </div>
+      </UIModalBody>
+
+      <UIModalFooter className="border-t border-border pt-4">
+        <div className="flex items-center justify-end gap-2.5 w-full">
+          <UIButton variant="outline" size="sm" onClick={onClose}>
+            Close
+          </UIButton>
+          <UIButton
+            variant="primary"
+            size="sm"
+            onClick={handlePrint}
+            startIcon={<Printer className="size-4" />}
+            className="font-bold shadow-xs"
+          >
+            Print Debit Note Voucher
+          </UIButton>
+        </div>
+      </UIModalFooter>
     </UIModal>
   );
 };
 
 export default PurchaseReturnDetailsModal;
-

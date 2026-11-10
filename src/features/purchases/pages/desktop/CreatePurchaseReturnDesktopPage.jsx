@@ -22,10 +22,28 @@ import {
   Receipt,
   X,
   BadgeAlert,
+  AlertTriangle,
+  Info,
 } from "lucide-react";
 import {
+  UIPageHeader,
+  UISectionHeader,
+  UIInfoCard,
+  UISummaryCard,
+  UIAlert,
+  UITabs,
   UIButton,
+  UIIconButton,
+  UIInput,
+  UISearchInput,
   UIBadge,
+  UIEmptyState,
+  UITable,
+  UITableHeader,
+  UITableBody,
+  UITableRow,
+  UITableHead,
+  UITableCell,
   uiToast,
 } from "@/components/ui";
 import { SupplierSearchBar } from "@/features/parties/suppliers/components/SupplierSearchBar";
@@ -97,7 +115,6 @@ export const CreatePurchaseReturnDesktopPage = () => {
       }));
       setItems(staged);
 
-      // Attempt to auto-set supplier if prefilled items carry supplier info
       if (prefilledItems[0]?.supplierId && !selectedSupplier) {
         setSelectedSupplier({
           _id: prefilledItems[0].supplierId,
@@ -175,12 +192,10 @@ export const CreatePurchaseReturnDesktopPage = () => {
 
   // Add Batch to Staged Items
   const handleSelectBatch = (b) => {
-    // If supplier is not selected yet, auto-select from batch inflow
     if (!selectedSupplier && b.supplier) {
       setSelectedSupplier(b.supplier);
     }
 
-    // Check if batch is already staged
     const existingIndex = items.findIndex((i) => i.batchId === b.batchId);
     if (existingIndex > -1) {
       uiToast.info(`Batch ${b.batchNo} is already in the return list.`);
@@ -203,7 +218,10 @@ export const CreatePurchaseReturnDesktopPage = () => {
       return;
     }
 
-    const maxReturnable = Math.min(availableStock, b.unreturnedBillQuota || availableStock);
+    const maxReturnable = Math.min(
+      availableStock,
+      b.unreturnedBillQuota || availableStock
+    );
 
     const newItem = {
       id: `item-${Date.now()}-${b.batchId}`,
@@ -348,34 +366,25 @@ export const CreatePurchaseReturnDesktopPage = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-background pb-16">
-      {/* Top Header */}
-      <div className="border-b bg-card/90 backdrop-blur sticky top-0 z-30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <UIButton
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(ROUTES.PURCHASE_RETURNS)}
-              startIcon={<ArrowLeft className="size-4" />}
-              className="text-text-muted hover:text-text"
-            >
-              Back
-            </UIButton>
-            <div className="h-4 w-px bg-border" />
-            <div>
-              <h1 className="text-lg font-bold text-text flex items-center gap-2">
-                <Undo2 className="size-5 text-primary" />
-                New Purchase Return & Debit Note
-              </h1>
-              <p className="text-xs text-text-muted">
-                Return purchased stock to vendor and issue GST Section 34 Debit Note
-              </p>
-            </div>
-          </div>
+  const motiveTabs = [
+    { id: "SELLABLE", label: "Sellable (Shelf)", icon: Package },
+    { id: "EXPIRED", label: "Expired Scrap", icon: Trash2 },
+    { id: "BROKEN", label: "Broken Scrap", icon: AlertTriangle },
+    { id: "MIXED", label: "Mixed", icon: Boxes },
+  ];
 
-          <div className="flex items-center gap-2">
+  return (
+    <div className="min-h-screen bg-bg pb-20 font-sans">
+      {/* 1. Sticky Glass Page Header (Component #16) */}
+      <UIPageHeader
+        sticky
+        glass
+        backButton
+        onBack={() => navigate(ROUTES.PURCHASE_RETURNS)}
+        title="New Purchase Return & Debit Note"
+        description="Return purchased medicine stock to vendor and issue GST Section 34 Debit Note"
+        actions={
+          <div className="flex items-center gap-2.5">
             <UIButton
               variant="outline"
               size="sm"
@@ -384,6 +393,7 @@ export const CreatePurchaseReturnDesktopPage = () => {
             >
               Cancel
             </UIButton>
+
             <UIButton
               variant="primary"
               size="sm"
@@ -401,124 +411,127 @@ export const CreatePurchaseReturnDesktopPage = () => {
               {isSubmitting ? "Processing..." : "Confirm & Issue Debit Note"}
             </UIButton>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Section 1: Header Parameters Card */}
-        <div className="bg-card border rounded-xl p-5 shadow-2xs space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Supplier Selector */}
-            <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                Target Supplier *
-              </label>
-              {selectedSupplier ? (
-                <div className="flex items-center justify-between p-3 border rounded-lg bg-surface/50 border-primary/30">
-                  <div className="flex items-center gap-3">
-                    <div className="size-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold">
-                      <Truck className="size-4.5" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-text text-sm">
-                        {selectedSupplier.businessName || selectedSupplier.name}
-                      </div>
-                      <div className="text-xs text-text-muted flex items-center gap-2">
-                        {selectedSupplier.gstNumber && (
-                          <span>GSTIN: {selectedSupplier.gstNumber}</span>
-                        )}
-                        {selectedSupplier.mobile && (
-                          <span>Phone: {selectedSupplier.mobile}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+        {/* 2. Top Context Grid (Supplier InfoCard, Motive Tabs, Facility Meta) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          {/* Supplier InfoCard (Component #30) */}
+          <div className="lg:col-span-2">
+            {selectedSupplier ? (
+              <UIInfoCard
+                title={selectedSupplier.businessName || selectedSupplier.name}
+                subtitle="Target Supplier / Creditor"
+                icon={<Truck className="size-5" />}
+                color="primary"
+                variant="accent"
+                action={
                   <UIButton
                     variant="ghost"
                     size="xs"
                     onClick={() => setSelectedSupplier(null)}
-                    className="text-text-muted hover:text-rose-600"
+                    className="text-text-muted hover:text-error"
                   >
-                    Change
+                    Change Supplier
                   </UIButton>
+                }
+                fields={[
+                  {
+                    label: "GSTIN",
+                    value: selectedSupplier.gstNumber || "Unregistered",
+                    copyable: !!selectedSupplier.gstNumber,
+                  },
+                  {
+                    label: "Phone",
+                    value: selectedSupplier.mobile || selectedSupplier.phone || "—",
+                  },
+                  {
+                    label: "Drug License",
+                    value: selectedSupplier.drugLicenseNumber || "—",
+                  },
+                  {
+                    label: "City / State",
+                    value: selectedSupplier.address?.city || selectedSupplier.address?.state || "India",
+                  },
+                ]}
+              />
+            ) : (
+              <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-text uppercase tracking-wider">
+                    Select Target Supplier *
+                  </label>
+                  <span className="text-[11px] text-text-muted">
+                    Search from master parties
+                  </span>
                 </div>
-              ) : (
                 <SupplierSearchBar
                   selectedSupplier={selectedSupplier}
                   onSelectSupplier={(s) => setSelectedSupplier(s)}
-                  placeholder="Type to search supplier by business name or GSTIN..."
+                  placeholder="Type to search supplier by business name, phone, or GST..."
                 />
-              )}
-            </div>
-
-            {/* Return Motive Selector */}
-            <div>
-              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                Return Motive *
-              </label>
-              <select
-                value={returnMotive}
-                onChange={(e) => setReturnMotive(e.target.value)}
-                className="w-full h-10 px-3 border rounded-lg bg-background text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
-              >
-                <option value="SELLABLE">Sellable Stock (Shelf)</option>
-                <option value="EXPIRED">Expired Stock (Scrap Bin)</option>
-                <option value="BROKEN">Broken / Damaged (Scrap Bin)</option>
-                <option value="MIXED">Mixed Motive</option>
-              </select>
-            </div>
-
-            {/* Return Date */}
-            <div>
-              <label className="block text-xs font-semibold text-text-muted uppercase tracking-wider mb-1.5">
-                Debit Note Date *
-              </label>
-              <input
-                type="date"
-                value={returnDate}
-                onChange={(e) => setReturnDate(e.target.value)}
-                className="w-full h-10 px-3 border rounded-lg bg-background text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
-              />
-            </div>
+              </div>
+            )}
           </div>
 
-          {/* Active Facility Indicator */}
-          <div className="pt-2 border-t flex items-center justify-between text-xs text-text-muted">
-            <span className="flex items-center gap-1.5">
-              <Building2 className="size-3.5 text-primary" />
-              Dispatch Facility: <strong className="text-text">{currentBranch?.name || "Active Facility"}</strong>
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Receipt className="size-3.5 text-emerald-600" />
-              Settlement Mode: <strong>Immediate Supplier AP Debit Note</strong>
-            </span>
+          {/* Motive & Date Parameters Card */}
+          <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-3.5 flex flex-col justify-between">
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-text uppercase tracking-wider block">
+                Stock Motive *
+              </label>
+              <UITabs
+                tabs={motiveTabs}
+                activeTab={returnMotive}
+                onChange={(tabId) => setReturnMotive(tabId)}
+                variant="segmented"
+                size="xs"
+                fullWidth
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/60">
+              <div>
+                <label className="text-[11px] font-semibold text-text-muted block mb-1">
+                  Debit Note Date
+                </label>
+                <input
+                  type="date"
+                  value={returnDate}
+                  onChange={(e) => setReturnDate(e.target.value)}
+                  className="w-full h-8.5 px-2.5 border border-border rounded-lg bg-surface text-xs font-medium text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-text-muted block mb-1">
+                  Dispatch Facility
+                </label>
+                <div className="h-8.5 px-2.5 border border-border rounded-lg bg-surface-alt flex items-center gap-1.5 text-xs font-medium text-text truncate">
+                  <Building2 className="size-3 text-primary shrink-0" />
+                  <span className="truncate">{currentBranch?.name || "Active Facility"}</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Section 2: Medicine / Batch Fast Search Bar */}
-        <div className="bg-card border rounded-xl p-5 shadow-2xs space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-text flex items-center gap-2">
-              <Search className="size-4 text-primary" />
-              Search & Add Medicines from Facility
-            </h2>
-            <span className="text-xs text-text-muted">
-              Auto-resolves original purchase bill & effective FIFO rate
-            </span>
-          </div>
+        {/* 3. Medicine / Batch Fast Search Bar (Component #4 & Autocomplete) */}
+        <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-3">
+          <UISectionHeader
+            title="Search & Add Batches from Facility"
+            description="Scans inventory, checks bin stock, and auto-resolves original purchase rates via FIFO"
+            icon={<Search className="size-4" />}
+          />
 
           <div ref={searchContainerRef} className="relative">
             <div className="relative">
-              <Search className="size-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted" />
-              <input
-                type="text"
+              <UISearchInput
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => {
-                  if (searchResults.length > 0) setShowSearchResults(true);
-                }}
+                onChange={(val) => setSearchQuery(val)}
                 placeholder="Scan barcode or type medicine name / batch number..."
-                className="w-full h-11 pl-10 pr-10 border rounded-lg bg-background text-sm font-medium focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+                size="lg"
               />
               {isSearchingBatches && (
                 <Loader2 className="size-4 animate-spin absolute right-3.5 top-1/2 -translate-y-1/2 text-primary" />
@@ -527,13 +540,13 @@ export const CreatePurchaseReturnDesktopPage = () => {
 
             {/* Autocomplete Dropdown */}
             {showSearchResults && searchResults.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1.5 bg-card border rounded-xl shadow-xl z-50 max-h-80 overflow-y-auto divide-y">
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-surface border border-border rounded-2xl shadow-xl z-50 max-h-80 overflow-y-auto divide-y divide-border/60">
                 {searchResults.map((b) => (
                   <button
                     key={b.batchId}
                     type="button"
                     onClick={() => handleSelectBatch(b)}
-                    className="w-full text-left p-3 hover:bg-surface/80 flex items-center justify-between transition-colors"
+                    className="w-full text-left p-3.5 hover:bg-surface-hover flex items-center justify-between transition-colors font-sans"
                   >
                     <div className="space-y-1">
                       <div className="font-bold text-text text-sm flex items-center gap-2">
@@ -548,21 +561,21 @@ export const CreatePurchaseReturnDesktopPage = () => {
                         <span>Batch: <strong className="font-mono text-text">{b.batchNo}</strong></span>
                         {b.expiry && <span>Exp: {b.expiry}</span>}
                         {b.purchaseBillNo && (
-                          <span className="text-primary font-medium">Bill: #{b.purchaseBillNo}</span>
+                          <span className="text-primary font-medium">Inflow Bill: #{b.purchaseBillNo}</span>
                         )}
                       </div>
                     </div>
 
                     <div className="text-right space-y-1">
-                      <div className="text-sm font-bold text-text">
+                      <div className="text-sm font-bold text-text font-mono">
                         Rate: {formatCurrency(b.rate)}
                       </div>
                       <div className="text-xs flex items-center gap-1.5 justify-end">
-                        <UIBadge variant={b.availableShelfStock > 0 ? "default" : "warning"}>
+                        <UIBadge variant={b.availableShelfStock > 0 ? "soft" : "outline"} color="primary">
                           Shelf: {b.availableShelfStock}
                         </UIBadge>
                         {b.availableScrapStock > 0 && (
-                          <UIBadge variant="destructive">
+                          <UIBadge variant="soft" color="warning">
                             Scrap: {b.availableScrapStock}
                           </UIBadge>
                         )}
@@ -575,19 +588,20 @@ export const CreatePurchaseReturnDesktopPage = () => {
           </div>
         </div>
 
-        {/* Section 3: Staged Line Items Table */}
-        <div className="bg-card border rounded-xl overflow-hidden shadow-2xs">
-          <div className="px-5 py-4 border-b flex items-center justify-between">
-            <h2 className="text-sm font-bold text-text flex items-center gap-2">
-              <Boxes className="size-4 text-primary" />
-              Return Items List ({items.length})
-            </h2>
+        {/* 4. Staged Line Items Table (Component #11) */}
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
+          <div className="p-4 border-b border-border flex items-center justify-between">
+            <UISectionHeader
+              title={`Return Line Items (${items.length})`}
+              description="Review quantities, purchase rates, tax slabs, and bin origins"
+              icon={<Boxes className="size-4" />}
+            />
             {items.length > 0 && (
               <UIButton
                 variant="ghost"
                 size="xs"
                 onClick={() => setItems([])}
-                className="text-text-muted hover:text-rose-600"
+                className="text-text-muted hover:text-error"
               >
                 Clear All
               </UIButton>
@@ -595,51 +609,77 @@ export const CreatePurchaseReturnDesktopPage = () => {
           </div>
 
           {items.length === 0 ? (
-            <div className="py-12 text-center text-text-muted space-y-2">
-              <Boxes className="size-10 mx-auto text-text-muted/40 stroke-1" />
-              <div className="text-sm font-medium">No medicines added to return yet</div>
-              <p className="text-xs max-w-sm mx-auto">
-                Search medicines above or pick quarantined batches directly from the Expired & Scrap items register.
-              </p>
+            <div className="p-12">
+              <UIEmptyState
+                icon={<Boxes className="size-8" />}
+                title="No medicines staged for return"
+                description="Search medicines above or select quarantined items directly from the Expired & Scrap items page."
+                variant="dashed"
+                size="md"
+              />
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs divide-y">
-                <thead className="bg-surface/50 text-text-muted uppercase font-semibold tracking-wider">
-                  <tr>
-                    <th className="py-3 px-4">#</th>
-                    <th className="py-3 px-4">Medicine & Pack</th>
-                    <th className="py-3 px-4">Batch & Expiry</th>
-                    <th className="py-3 px-4">Stock Source</th>
-                    <th className="py-3 px-4 text-center">Return Qty</th>
-                    <th className="py-3 px-4 text-right">Purchase Rate</th>
-                    <th className="py-3 px-4 text-right">Disc %</th>
-                    <th className="py-3 px-4 text-right">GST %</th>
-                    <th className="py-3 px-4 text-right">Total Amount</th>
-                    <th className="py-3 px-4 text-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
+              <UITable>
+                <UITableHeader>
+                  <UITableRow className="bg-surface-alt/60">
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-center w-12">
+                      #
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
+                      Medicine & Pack
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
+                      Batch & Expiry
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
+                      Stock Bin
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-center">
+                      Return Qty
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
+                      Purchase Rate
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
+                      Disc %
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
+                      GST %
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
+                      Total Amount
+                    </UITableHead>
+                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-center">
+                      Action
+                    </UITableHead>
+                  </UITableRow>
+                </UITableHeader>
+
+                <UITableBody>
                   {items.map((item, idx) => {
                     const qty = Number(item.returnQty) || 0;
                     const rate = Number(item.rate) || 0;
                     const disc = Number(item.discountPct) || 0;
                     const lineGross = qty * rate;
                     const lineTaxable = lineGross - lineGross * (disc / 100);
-                    const lineTotal = lineTaxable + (lineTaxable * (Number(item.gstPct) || 0)) / 100;
+                    const lineTotal =
+                      lineTaxable + (lineTaxable * (Number(item.gstPct) || 0)) / 100;
 
                     return (
-                      <tr key={item.id} className="hover:bg-surface/30">
-                        <td className="py-3 px-4 text-text-muted">{idx + 1}</td>
+                      <tr key={item.id} className="hover:bg-surface-hover transition-colors">
+                        <td className="py-3 px-4 text-center text-text-muted font-medium">
+                          {idx + 1}
+                        </td>
                         <td className="py-3 px-4 font-semibold text-text">
                           {item.productName}
                           {item.pack && (
                             <span className="block text-[11px] font-normal text-text-muted">
-                              {item.pack}
+                              ({item.pack})
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 font-mono">
+                        <td className="py-3 px-4 font-mono font-medium">
                           {item.batchNo}
                           {item.expiry && (
                             <span className="block text-[11px] font-sans text-text-muted">
@@ -653,7 +693,7 @@ export const CreatePurchaseReturnDesktopPage = () => {
                             onChange={(e) =>
                               handleUpdateItem(idx, "sourceBin", e.target.value)
                             }
-                            className="h-8 px-2 border rounded bg-background text-xs"
+                            className="h-7.5 px-2 border border-border rounded-lg bg-surface text-xs font-medium text-text"
                           >
                             <option value="SELLABLE">Shelf (Sellable)</option>
                             <option value="SCRAP_EXPIRED">Scrap (Expired)</option>
@@ -668,7 +708,7 @@ export const CreatePurchaseReturnDesktopPage = () => {
                             onChange={(e) =>
                               handleUpdateItem(idx, "returnQty", e.target.value)
                             }
-                            className="w-16 h-8 text-center border rounded bg-background text-xs font-bold"
+                            className="w-16 h-8 text-center border border-border rounded-lg bg-surface text-xs font-bold text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
                           />
                         </td>
                         <td className="py-3 px-4 text-right font-medium">
@@ -679,7 +719,7 @@ export const CreatePurchaseReturnDesktopPage = () => {
                             onChange={(e) =>
                               handleUpdateItem(idx, "rate", e.target.value)
                             }
-                            className="w-20 h-8 text-right px-2 border rounded bg-background text-xs font-mono"
+                            className="w-20 h-8 text-right px-2 border border-border rounded-lg bg-surface text-xs font-mono font-bold text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
                           />
                         </td>
                         <td className="py-3 px-4 text-right">
@@ -691,7 +731,7 @@ export const CreatePurchaseReturnDesktopPage = () => {
                             onChange={(e) =>
                               handleUpdateItem(idx, "discountPct", e.target.value)
                             }
-                            className="w-14 h-8 text-right px-1.5 border rounded bg-background text-xs font-mono"
+                            className="w-14 h-8 text-right px-1.5 border border-border rounded-lg bg-surface text-xs font-mono text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
                           />
                         </td>
                         <td className="py-3 px-4 text-right font-medium text-text-muted">
@@ -701,71 +741,97 @@ export const CreatePurchaseReturnDesktopPage = () => {
                           {formatCurrency(lineTotal)}
                         </td>
                         <td className="py-3 px-4 text-center">
-                          <button
-                            type="button"
+                          <UIIconButton
+                            size="sm"
+                            variant="ghost"
                             onClick={() => handleRemoveItem(idx)}
-                            className="p-1 text-text-muted hover:text-rose-600 rounded transition-colors"
-                          >
-                            <Trash2 className="size-4" />
-                          </button>
+                            icon={<Trash2 className="size-4 text-text-muted hover:text-error" />}
+                            tooltip="Remove Item"
+                          />
                         </td>
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
+                </UITableBody>
+              </UITable>
             </div>
           )}
         </div>
 
-        {/* Section 4: Remarks & Final Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="md:col-span-2 bg-card border rounded-xl p-5 shadow-2xs space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted">
-              Notes & Return Remarks
-            </h3>
-            <textarea
-              rows="3"
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Add courier/transporter notes, reason for return, or supplier claim memo details..."
-              className="w-full p-3 border rounded-lg bg-background text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+        {/* 5. Notes & Financial Summary (Component #29 UISummaryCard) */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-2.5">
+              <label className="text-xs font-bold text-text uppercase tracking-wider block">
+                Reason & Transporter Notes
+              </label>
+              <textarea
+                rows="3"
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Add courier/transporter details, carton numbers, or return reason..."
+                className="w-full p-3 border border-border rounded-xl bg-surface text-xs font-medium text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+              />
+            </div>
+
+            {/* GST Compliance Alert Banner (Component #36) */}
+            <UIAlert
+              variant="info"
+              title="GST Section 34 Compliance & ITC Reversal"
+              description="Confirming this return will automatically post an Accounts Payable Debit Note and generate a negative GSTR-2 ledger entry for Input Tax Credit reversal."
+              icon={<ShieldCheck className="size-4.5" />}
             />
           </div>
 
-          <div className="bg-card border rounded-xl p-5 shadow-2xs space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-text-muted border-b pb-2">
-              Debit Note Financial Summary
-            </h3>
-            <div className="space-y-2 text-xs">
-              <div className="flex justify-between text-text-muted">
-                <span>Taxable Subtotal:</span>
-                <span className="font-mono font-medium text-text">
-                  {formatCurrency(calculatedTotals.taxableSubtotal)}
-                </span>
-              </div>
-              <div className="flex justify-between text-text-muted">
-                <span>Total GST (ITC Reversal):</span>
-                <span className="font-mono font-medium text-text">
-                  {formatCurrency(calculatedTotals.totalGst)}
-                </span>
-              </div>
-              {calculatedTotals.roundOff !== 0 && (
-                <div className="flex justify-between text-text-muted">
-                  <span>Round Off:</span>
-                  <span className="font-mono text-text">
-                    {calculatedTotals.roundOff > 0 ? "+" : ""}
-                    {calculatedTotals.roundOff}
-                  </span>
-                </div>
-              )}
-              <div className="pt-2 border-t flex justify-between items-baseline">
-                <span className="text-sm font-bold text-text">Total Debit Amount:</span>
-                <span className="text-lg font-black text-primary font-mono">
-                  {formatCurrency(calculatedTotals.grandTotal)}
-                </span>
-              </div>
-            </div>
+          <div>
+            <UISummaryCard
+              title="Debit Note Financial Summary"
+              subtitle="Direct Vendor AP Adjustment"
+              items={[
+                {
+                  label: "Taxable Subtotal",
+                  value: formatCurrency(calculatedTotals.taxableSubtotal),
+                },
+                {
+                  label: "Total GST (ITC Reversal)",
+                  value: formatCurrency(calculatedTotals.totalGst),
+                  isDeduction: true,
+                },
+                ...(calculatedTotals.roundOff !== 0
+                  ? [
+                      {
+                        label: "Round Off",
+                        value: `${calculatedTotals.roundOff > 0 ? "+" : ""}${calculatedTotals.roundOff}`,
+                      },
+                    ]
+                  : []),
+              ]}
+              total={{
+                label: "Net Debit Amount",
+                value: formatCurrency(calculatedTotals.grandTotal),
+                subtext: "Credited to Supplier Balance",
+              }}
+              variant="card"
+              footer={
+                <UIButton
+                  variant="primary"
+                  size="md"
+                  fullWidth
+                  onClick={handleSubmitReturn}
+                  disabled={isSubmitting || items.length === 0}
+                  startIcon={
+                    isSubmitting ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <ShieldCheck className="size-4" />
+                    )
+                  }
+                  className="font-bold shadow-xs mt-2"
+                >
+                  {isSubmitting ? "Processing..." : "Confirm & Issue Debit Note"}
+                </UIButton>
+              }
+            />
           </div>
         </div>
       </div>
@@ -774,4 +840,3 @@ export const CreatePurchaseReturnDesktopPage = () => {
 };
 
 export default CreatePurchaseReturnDesktopPage;
-
