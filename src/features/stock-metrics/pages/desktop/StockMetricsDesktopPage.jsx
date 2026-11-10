@@ -1,6 +1,6 @@
 // src/features/stock-metrics/pages/desktop/StockMetricsDesktopPage.jsx
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -13,9 +13,8 @@ import {
   XCircle,
   Boxes,
   Calendar,
-  Clock,
-  Check,
   Trash2,
+  Plus,
 } from "lucide-react";
 
 import {
@@ -36,6 +35,7 @@ import { ROUTES } from "@/constants";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useUser from "@/features/user/hooks/useUser";
 import workspaceProductService from "@/features/workspace-products/services/workspaceProductService";
+import AddExpiredBrokenStockModal from "../../components/AddExpiredBrokenStockModal";
 
 /**
  * Format currency in Indian locale
@@ -233,6 +233,7 @@ export const StockMetricsDesktopPage = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [isAddExpiredBrokenModalOpen, setIsAddExpiredBrokenModalOpen] = useState(false);
 
   // Search Debounce
   useEffect(() => {
@@ -399,6 +400,7 @@ export const StockMetricsDesktopPage = () => {
 
   // Initial and reactive fetch on filter changes
   useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
     fetchBatches(true);
   }, [fetchBatches]);
 
@@ -717,8 +719,21 @@ export const StockMetricsDesktopPage = () => {
           </UIButton>
         )}
 
-        {/* Right-Aligned Cluster: Expired Items Button, Low Stock Switch & Refresh */}
+        {/* Right-Aligned Cluster: Add Stock Button, Expired Items Button, Low Stock Switch & Refresh */}
         <div className="flex items-center gap-2 ml-auto">
+          {/* Add Expired / Broken Stock Button */}
+          <UIButton
+            type="button"
+            variant="default"
+            size="md"
+            onClick={() => setIsAddExpiredBrokenModalOpen(true)}
+            startIcon={<Plus className="size-4" />}
+            className="h-10 px-3.5 text-xs font-semibold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer bg-primary text-white hover:bg-primary/90"
+            title="Mark stock as expired or broken and quarantine to scrap bin"
+          >
+            <span>Add Expired / Broken Stock</span>
+          </UIButton>
+
           {/* Expired & Scrap Items Page Navigation Button */}
           <UIButton
             type="button"
@@ -951,6 +966,23 @@ export const StockMetricsDesktopPage = () => {
           )}
         </div>
       </div>
+
+      {/* Add Expired / Broken Stock Modal */}
+      <AddExpiredBrokenStockModal
+        open={isAddExpiredBrokenModalOpen}
+        onClose={() => setIsAddExpiredBrokenModalOpen(false)}
+        onSuccess={({ product, quantity, reason }) => {
+          const prodName =
+            typeof product?.name === "object"
+              ? product.name?.name
+              : product?.name || "Product";
+          setToastMessage(
+            `Successfully marked ${quantity} unit(s) of ${prodName} as ${reason} stock.`
+          );
+          setTimeout(() => setToastMessage(null), 4000);
+          fetchBatches(true);
+        }}
+      />
     </div>
   );
 };

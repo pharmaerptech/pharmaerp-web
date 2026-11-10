@@ -1,6 +1,6 @@
 // src/features/stock-metrics/components/ExpiredScrapItemsModal.jsx
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -20,6 +20,7 @@ import {
   FileSpreadsheet,
   Building2,
   Truck,
+  Archive,
 } from "lucide-react";
 
 import {
@@ -42,6 +43,8 @@ import {
   UITableCell,
   UITableEmpty,
   UITableLoading,
+  UIConfirmDialog,
+  UIInfiniteScroll,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/constants";
@@ -215,125 +218,187 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
     return opts;
   }, [branches, currentBranch]);
 
-  // Data states
+  // Data states & pagination
+  const PAGE_LIMIT = 20;
   const [items, setItems] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [tabCounts, setTabCounts] = useState({
+    all: 0,
+    shelfExpired: 0,
+    scrapExpired: 0,
+    broken: 0,
+  });
+
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterMotive, setFilterMotive] = useState("all"); // 'all' | 'shelf_expired' | 'scrap_expired' | 'broken'
   const [selectedIds, setSelectedIds] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
+  const modalBodyRef = useRef(null);
+
+  // Search query debounce (350ms)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearch(searchQuery.trim());
+    }, 350);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
 
   // Expiry date filter states
   const [expiryPreset, setExpiryPreset] = useState("all");
   const [customFromDate, setCustomFromDate] = useState("");
   const [customToDate, setCustomToDate] = useState("");
 
-  // Fetch expired and scrap items
-  const fetchExpiredItems = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const payload = {
-        page: 1,
-        limit: 300,
-        companyId: activeCompanyId,
-        filters: {
-          ...(selectedBranch && selectedBranch !== "all" ? { facility: selectedBranch } : {}),
-          expiredOnly: true,
-        },
-      };
+  // Move to scrap bin modal and operation state
+  const [isMoveConfirmOpen, setIsMoveConfirmOpen] = useState(false);
+  const [isMovingToScrap, setIsMovingToScrap] = useState(false);
 
-      const res = await workspaceProductService.getProductFacilityBatchesByQueryV2(payload);
-      const rawList = res?.data?.data?.batches || [];
+  // Standardize batch row
+  const formatBatchRow = useCallback((b, idx) => {
+    const pName = typeof b.name === "object" ? b.name?.name : (b.name || b.productName || "Unknown");
+    const pCode = b.productCode || b.workspaceProductCode || b.code || "—";
+    const mfg = typeof b.manufacturer === "object" ? b.manufacturer?.name : (b.manufacturer || b.marketer || "—");
+    const pack = typeof b.pack === "object" ? b.pack?.name : (b.pack || "PCS");
 
-      const parsedList = [];
-      const now = new Date();
-      const currMonth = now.getMonth() + 1;
-      const currYear = now.getFullYear();
+    const shelfStock = Number(b.batchQty || b.qty || 0);
+    const scrapStock = Number(b.scrapQty || 0);
+    const brokenStock = Number(b.brokenQty || 0);
+    const expReturnStock = Number(b.expiredQty || 0);
 
-      rawList.forEach((b, idx) => {
-        const pName = typeof b.name === "object" ? b.name?.name : (b.name || b.productName || "Unknown");
-        const pCode = b.productCode || b.workspaceProductCode || b.code || "—";
-        const mfg = typeof b.manufacturer === "object" ? b.manufacturer?.name : (b.manufacturer || b.marketer || "—");
-        const pack = typeof b.pack === "object" ? b.pack?.name : (b.pack || "PCS");
+    const hasScrap = scrapStock > 0 || brokenStock > 0 || expReturnStock > 0;
+    const mrp = Number(b.mrp || b.MRP || 0);
+    const rateA = Number(b.rateA || b.rate || 0);
+    const affectedQty = hasScrap ? (scrapStock || (brokenStock + expReturnStock)) : shelfStock;
+    const lossValue = affectedQty * mrp;
 
-        const shelfStock = Number(b.batchQty || b.qty || 0);
-        const scrapStock = Number(b.scrapQty || 0);
-        const brokenStock = Number(b.brokenQty || 0);
-        const expReturnStock = Number(b.expiredQty || 0);
+    let category = "shelf_expired";
+    if (brokenStock > 0 || b.scrapType === "BROKEN" || (b.batchNo && b.batchNo.includes("[BROKEN]"))) {
+      category = "broken";
+    } else if (expReturnStock > 0 || b.scrapType === "EXPIRED" || (b.batchNo && b.batchNo.includes("[EXPIRED]")) || hasScrap) {
+      category = "scrap_expired";
+    }
 
-        // Check if shelf date is strictly expired
-        const dObj = parseDateSafely(b.expiryDate);
-        let isDateExpired = false;
-        if (dObj) {
-          const expM = dObj.getMonth() + 1;
-          const expY = dObj.getFullYear();
-          isDateExpired = expY < currYear || (expY === currYear && expM <= currMonth);
-        }
+    const displayBatchNo =
+      b.originalBatchNo || (b.batchNo ? b.batchNo.replace(/\s*\[(EXPIRED|BROKEN|SCRAP)\]/gi, "").trim() : "N/A");
 
-        const hasScrap = scrapStock > 0 || brokenStock > 0 || expReturnStock > 0;
-        const hasShelfExpired = isDateExpired && shelfStock > 0;
+    const rowBranchName =
+      b.branchName ||
+      (branches.find((br) => (br._id || br.id) === (b.branch_id?._id || b.branch_id || b.branchId))?.name) ||
+      currentBranch?.name ||
+      "Main Branch";
 
-        if (hasScrap || hasShelfExpired) {
-          const mrp = Number(b.mrp || b.MRP || 0);
-          const rateA = Number(b.rateA || b.rate || 0);
-          const affectedQty = hasScrap ? scrapStock : shelfStock;
-          const lossValue = affectedQty * mrp;
+    return {
+      ...b,
+      uniqueRowId: b._id || `${b.batchNo || "b"}-${category}-${idx}`,
+      productName: pName,
+      productCode: pCode,
+      manufacturer: mfg,
+      pack,
+      batchNo: displayBatchNo,
+      rawBatchNo: b.batchNo,
+      expiryDate: b.expiryDate || "",
+      shelfStock,
+      scrapStock,
+      brokenStock,
+      expReturnStock,
+      affectedQty,
+      mrp,
+      rateA,
+      lossValue,
+      category,
+      branchName: rowBranchName,
+    };
+  }, [branches, currentBranch]);
 
-          let category = "shelf_expired";
-          if (brokenStock > 0 || b.scrapType === "BROKEN" || (b.batchNo && b.batchNo.includes("[BROKEN]"))) {
-            category = "broken";
-          } else if (expReturnStock > 0 || b.scrapType === "EXPIRED" || (b.batchNo && b.batchNo.includes("[EXPIRED]")) || hasScrap) {
-            category = "scrap_expired";
-          }
+  // Fetch expired and scrap items with server-side pagination
+  const fetchExpiredItems = useCallback(
+    async (pageToFetch = 1, isReset = true) => {
+      if (!isOpen) return;
 
-          const displayBatchNo =
-            b.originalBatchNo || (b.batchNo ? b.batchNo.replace(/\s*\[(EXPIRED|BROKEN|SCRAP)\]/gi, "").trim() : "N/A");
+      if (isReset) {
+        setIsLoading(true);
+      } else {
+        setIsLoadingMore(true);
+      }
 
-          const rowBranchName =
-            b.branchName ||
-            (branches.find((br) => (br._id || br.id) === (b.branch_id?._id || b.branch_id || b.branchId))?.name) ||
-            currentBranch?.name ||
-            "Main Branch";
+      try {
+        const payload = {
+          page: pageToFetch,
+          limit: PAGE_LIMIT,
+          companyId: activeCompanyId,
+          search: debouncedSearch || undefined,
+          filters: {
+            ...(selectedBranch && selectedBranch !== "all" ? { facility: selectedBranch } : {}),
+            motive: filterMotive,
+          },
+        };
 
-          parsedList.push({
-            ...b,
-            uniqueRowId: b._id || `${b.batchNo || "b"}-${category}-${idx}`,
-            productName: pName,
-            productCode: pCode,
-            manufacturer: mfg,
-            pack,
-            batchNo: displayBatchNo,
-            rawBatchNo: b.batchNo,
-            expiryDate: b.expiryDate || "",
-            shelfStock,
-            scrapStock,
-            brokenStock,
-            expReturnStock,
-            affectedQty,
-            mrp,
-            rateA,
-            lossValue,
-            category,
-            branchName: rowBranchName,
+        const res = await workspaceProductService.getProductFacilityBatchesByQueryV2(payload);
+        const resData = res?.data?.data || {};
+        const rawBatches = Array.isArray(resData.batches) ? resData.batches : [];
+        const total = typeof resData.total === "number" ? resData.total : rawBatches.length;
+
+        if (resData.counts) {
+          setTabCounts({
+            all: Number(resData.counts.all || 0),
+            shelfExpired: Number(resData.counts.shelfExpired || 0),
+            scrapExpired: Number(resData.counts.scrapExpired || 0),
+            broken: Number(resData.counts.broken || 0),
           });
         }
-      });
 
-      setItems(parsedList);
-      setSelectedIds([]);
-    } catch (err) {
-      console.error("Failed to fetch expired & scrap items in modal:", err);
-      setItems([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeCompanyId, selectedBranch, branches, currentBranch]);
+        const newRows = rawBatches.map((b, idx) => formatBatchRow(b, idx));
+
+        if (isReset) {
+          setItems(newRows);
+          setTotalCount(total);
+          setCurrentPage(1);
+          setHasMore(newRows.length < total);
+          setSelectedIds([]);
+          if (modalBodyRef.current) {
+            modalBodyRef.current.scrollTop = 0;
+          }
+        } else {
+          setItems((prev) => {
+            const existingIds = new Set(prev.map((i) => i.uniqueRowId));
+            const fresh = newRows.filter((i) => !existingIds.has(i.uniqueRowId));
+            const combined = [...prev, ...fresh];
+            setHasMore(combined.length < total);
+            return combined;
+          });
+          setCurrentPage(pageToFetch);
+        }
+      } catch (err) {
+        console.error("Failed to fetch expired & scrap items in modal:", err);
+        if (isReset) {
+          setItems([]);
+          setTotalCount(0);
+          setHasMore(false);
+        }
+      } finally {
+        setIsLoading(false);
+        setIsLoadingMore(false);
+      }
+    },
+    [isOpen, activeCompanyId, selectedBranch, debouncedSearch, filterMotive, formatBatchRow]
+  );
 
   useEffect(() => {
     if (isOpen) {
-      fetchExpiredItems();
+      /* eslint-disable-next-line react-hooks/set-state-in-effect */
+      fetchExpiredItems(1, true);
     }
   }, [isOpen, fetchExpiredItems]);
+
+  const handleLoadMore = useCallback(async () => {
+    if (isLoading || isLoadingMore || !hasMore) return;
+    const nextPage = currentPage + 1;
+    await fetchExpiredItems(nextPage, false);
+  }, [isLoading, isLoadingMore, hasMore, currentPage, fetchExpiredItems]);
 
   // Filtered list
   const filteredItems = useMemo(() => {
@@ -357,6 +422,9 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
       result = result.filter((i) => i.category === "scrap_expired");
     } else if (filterMotive === "broken") {
       result = result.filter((i) => i.category === "broken");
+    } else {
+      // filterMotive === "all": exclude shelf-expired items
+      result = result.filter((i) => i.category !== "shelf_expired");
     }
 
     // Expiry Date Range
@@ -451,34 +519,43 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
     return { totalQty, totalLoss };
   }, [selectedItems]);
 
+  const selectedShelfItems = useMemo(
+    () => selectedItems.filter((i) => i.category === "shelf_expired"),
+    [selectedItems]
+  );
+  const selectedScrapItems = useMemo(
+    () => selectedItems.filter((i) => i.category !== "shelf_expired"),
+    [selectedItems]
+  );
+  const hasShelfSelected = selectedShelfItems.length > 0;
+  const hasScrapSelected = selectedScrapItems.length > 0;
+
   // Overall statistics for KPI cards
   const overallStats = useMemo(() => {
-    let shelfExpiredCount = 0;
+    let shelfExpiredCount = tabCounts.shelfExpired;
     let shelfExpiredQty = 0;
-    let scrapBinCount = 0;
+    let scrapBinCount = tabCounts.all;
     let scrapBinQty = 0;
     let totalLossValue = 0;
 
     items.forEach((i) => {
       if (i.category === "shelf_expired") {
-        shelfExpiredCount++;
         shelfExpiredQty += i.shelfStock;
       } else {
-        scrapBinCount++;
         scrapBinQty += i.affectedQty;
       }
       totalLossValue += i.lossValue;
     });
 
     return {
-      totalBatches: items.length,
+      totalBatches: totalCount,
       shelfExpiredCount,
       shelfExpiredQty,
       scrapBinCount,
       scrapBinQty,
       totalLossValue,
     };
-  }, [items]);
+  }, [items, tabCounts, totalCount]);
 
   // Active filter count and reset
   const hasActiveFilters = Boolean(
@@ -690,10 +767,14 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
       return;
     }
 
-    const listToTransfer = selectedItems.length > 0 ? selectedItems : [];
+    const listToTransfer = selectedScrapItems.length > 0 ? selectedScrapItems : selectedItems.filter((i) => i.category !== "shelf_expired");
     if (listToTransfer.length === 0) {
-      setToastMessage("Please select at least one expired or scrap batch to transfer.");
-      setTimeout(() => setToastMessage(null), 3000);
+      if (selectedShelfItems.length > 0) {
+        setToastMessage("Shelf-expired items are on shelves and must first be moved to the scrap bin before transferring.");
+      } else {
+        setToastMessage("Please select at least one scrap bin batch to transfer.");
+      }
+      setTimeout(() => setToastMessage(null), 3500);
       return;
     }
 
@@ -752,32 +833,90 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
     });
   };
 
+  // Handle moving selected shelf-expired items to branch scrap bin
+  const handleConfirmMoveToScrapBin = async () => {
+    if (!isCurrentBranchSelected) {
+      setToastMessage(
+        `Stock can only be moved to the scrap bin of your active branch (${currentBranch?.name || "Active Facility"}). Please switch branch filter to your current branch.`
+      );
+      setTimeout(() => setToastMessage(null), 4000);
+      setIsMoveConfirmOpen(false);
+      return;
+    }
+
+    const itemsToMove = selectedShelfItems
+      .map((item) => ({
+        batchId: item._id || item.batchId || item.batch,
+        productId:
+          item.productId ||
+          item.product_id ||
+          item.product?._id ||
+          item.product,
+        qty: Number(item.shelfStock || item.affectedQty || item.batchQty || 0),
+        batchNo: item.rawBatchNo || item.batchNo,
+        originalBatchNo: item.originalBatchNo || item.batchNo,
+      }))
+      .filter((i) => i.batchId && i.qty > 0);
+
+    if (itemsToMove.length === 0) {
+      setToastMessage("No valid shelf-expired items selected to move.");
+      setTimeout(() => setToastMessage(null), 3000);
+      setIsMoveConfirmOpen(false);
+      return;
+    }
+
+    try {
+      setIsMovingToScrap(true);
+      await workspaceProductService.moveToScrapBin({
+        branchId: activeBranchId,
+        items: itemsToMove,
+      });
+
+      setToastMessage(
+        `Successfully moved ${itemsToMove.length} item(s) to ${currentBranch?.name || "Branch"} scrap bin.`
+      );
+      setTimeout(() => setToastMessage(null), 4000);
+      setIsMoveConfirmOpen(false);
+      setSelectedIds([]);
+      await fetchExpiredItems(1, true);
+    } catch (err) {
+      console.error("Failed to move batches to scrap bin:", err);
+      setToastMessage(
+        `Error moving to scrap bin: ${err?.response?.data?.message || err?.message || "Failed to move stock"}`
+      );
+      setTimeout(() => setToastMessage(null), 5000);
+    } finally {
+      setIsMovingToScrap(false);
+    }
+  };
+
   const MOTIVE_TABS = [
-    { id: "all", label: "All Items", count: items.length },
+    { id: "all", label: "All Expired & Scrap", count: tabCounts.all },
     {
       id: "shelf_expired",
       label: "Shelf Expired",
-      count: overallStats.shelfExpiredCount,
+      count: tabCounts.shelfExpired,
     },
     {
       id: "scrap_expired",
       label: "Scrap: Expired",
-      count: items.filter((i) => i.category === "scrap_expired").length,
+      count: tabCounts.scrapExpired,
     },
     {
       id: "broken",
       label: "Scrap: Broken",
-      count: items.filter((i) => i.category === "broken").length,
+      count: tabCounts.broken,
     },
   ];
 
   return (
-    <UIModal
-      open={isOpen}
-      onOpenChange={(open) => !open && onClose()}
-      size="5xl"
-      className="p-0 overflow-hidden max-h-[92vh] flex flex-col"
-    >
+    <>
+      <UIModal
+        open={isOpen}
+        onOpenChange={(open) => !open && onClose()}
+        size="5xl"
+        className="p-0 overflow-hidden max-h-[92vh] flex flex-col"
+      >
       {/* Toast */}
       <AnimatePresence>
         {toastMessage && (
@@ -816,26 +955,87 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            <UIButton
-              variant={isCurrentBranchSelected ? "primary" : "secondary"}
-              size="sm"
-              onClick={handleCreateTransferOrder}
-              disabled={!isCurrentBranchSelected}
-              startIcon={<Truck className="size-3.5" />}
-              className={cn(
-                "h-8 text-xs font-semibold",
-                !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
-              )}
-              title={
-                !isCurrentBranchSelected
-                  ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to create transfer order`
-                  : selectedIds.length > 0
-                  ? `Create transfer order for ${selectedIds.length} selected batches`
-                  : "Select items below and create transfer order"
-              }
-            >
-              Create Transfer Order {selectedIds.length > 0 && isCurrentBranchSelected ? `(${selectedIds.length})` : ""}
-            </UIButton>
+            {filterMotive === "shelf_expired" || (hasShelfSelected && !hasScrapSelected) ? (
+              <UIButton
+                variant={isCurrentBranchSelected && hasShelfSelected ? "warning" : "secondary"}
+                size="sm"
+                onClick={() => {
+                  if (!hasShelfSelected) {
+                    setToastMessage("Please select at least one shelf-expired item to move to scrap bin.");
+                    setTimeout(() => setToastMessage(null), 3000);
+                    return;
+                  }
+                  setIsMoveConfirmOpen(true);
+                }}
+                disabled={!isCurrentBranchSelected || selectedShelfItems.length === 0}
+                startIcon={<Archive className="size-3.5" />}
+                className={cn(
+                  "h-8 text-xs font-semibold",
+                  (!isCurrentBranchSelected || selectedShelfItems.length === 0) && "opacity-60 cursor-not-allowed"
+                )}
+                title={
+                  !isCurrentBranchSelected
+                    ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to move to scrap bin`
+                    : hasShelfSelected
+                    ? `Move ${selectedShelfItems.length} selected shelf item(s) to scrap bin`
+                    : "Select shelf-expired items below to move to scrap bin"
+                }
+              >
+                Move to Scrap Bin {hasShelfSelected && isCurrentBranchSelected ? `(${selectedShelfItems.length})` : ""}
+              </UIButton>
+            ) : hasShelfSelected && hasScrapSelected ? (
+              <>
+                <UIButton
+                  variant="warning"
+                  size="sm"
+                  onClick={() => setIsMoveConfirmOpen(true)}
+                  disabled={!isCurrentBranchSelected}
+                  startIcon={<Archive className="size-3.5" />}
+                  className={cn(
+                    "h-8 text-xs font-semibold",
+                    !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
+                  )}
+                  title="Move selected shelf-expired items to scrap bin"
+                >
+                  Move to Bin ({selectedShelfItems.length})
+                </UIButton>
+                <UIButton
+                  variant={isCurrentBranchSelected ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={handleCreateTransferOrder}
+                  disabled={!isCurrentBranchSelected}
+                  startIcon={<Truck className="size-3.5" />}
+                  className={cn(
+                    "h-8 text-xs font-semibold",
+                    !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
+                  )}
+                  title="Transfer selected scrap items to store"
+                >
+                  Transfer to Store ({selectedScrapItems.length})
+                </UIButton>
+              </>
+            ) : (
+              <UIButton
+                variant={isCurrentBranchSelected ? "primary" : "secondary"}
+                size="sm"
+                onClick={handleCreateTransferOrder}
+                disabled={!isCurrentBranchSelected}
+                startIcon={<Truck className="size-3.5" />}
+                className={cn(
+                  "h-8 text-xs font-semibold",
+                  !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
+                )}
+                title={
+                  !isCurrentBranchSelected
+                    ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to create transfer order`
+                    : selectedIds.length > 0
+                    ? `Create transfer order for ${selectedIds.length} selected batches`
+                    : "Select items below and create transfer order"
+                }
+              >
+                Create Transfer Order {selectedIds.length > 0 && isCurrentBranchSelected ? `(${selectedIds.length})` : ""}
+              </UIButton>
+            )}
             <UIButton
               variant="outline"
               size="sm"
@@ -1092,27 +1292,51 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
             {!isCurrentBranchSelected && (
               <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1 mr-1">
                 <AlertCircle className="size-3.5 shrink-0" />
-                Select {currentBranch?.name || "current branch"} only to transfer
+                Select {currentBranch?.name || "current branch"} only to take action
               </span>
             )}
-            <UIButton
-              variant="primary"
-              size="xs"
-              onClick={handleCreateTransferOrder}
-              disabled={!isCurrentBranchSelected}
-              startIcon={<Truck className="size-3" />}
-              className={cn(
-                "h-7 text-[11px] font-bold shadow-xs",
-                !isCurrentBranchSelected && "opacity-50 cursor-not-allowed"
-              )}
-              title={
-                !isCurrentBranchSelected
-                  ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to transfer`
-                  : "Transfer selected items to store / branch"
-              }
-            >
-              Transfer Selected to Store
-            </UIButton>
+            {hasShelfSelected && (
+              <UIButton
+                variant="warning"
+                size="xs"
+                onClick={() => setIsMoveConfirmOpen(true)}
+                disabled={!isCurrentBranchSelected}
+                startIcon={<Archive className="size-3" />}
+                className={cn(
+                  "h-7 text-[11px] font-bold shadow-xs",
+                  !isCurrentBranchSelected && "opacity-50 cursor-not-allowed"
+                )}
+                title={
+                  !isCurrentBranchSelected
+                    ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to move to scrap bin`
+                    : "Move selected shelf-expired items to branch scrap bin"
+                }
+              >
+                Move Selected to Scrap Bin ({selectedShelfItems.length})
+              </UIButton>
+            )}
+            {(!hasShelfSelected || hasScrapSelected) && (
+              <UIButton
+                variant="primary"
+                size="xs"
+                onClick={handleCreateTransferOrder}
+                disabled={!isCurrentBranchSelected || !hasScrapSelected}
+                startIcon={<Truck className="size-3" />}
+                className={cn(
+                  "h-7 text-[11px] font-bold shadow-xs",
+                  (!isCurrentBranchSelected || !hasScrapSelected) && "opacity-50 cursor-not-allowed"
+                )}
+                title={
+                  !isCurrentBranchSelected
+                    ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to transfer`
+                    : !hasScrapSelected
+                    ? "Shelf-expired items must first be moved to scrap bin before transferring"
+                    : "Transfer selected scrap items to store / branch"
+                }
+              >
+                Transfer Selected to Store {hasScrapSelected ? `(${selectedScrapItems.length})` : ""}
+              </UIButton>
+            )}
             <UIButton
               variant="outline"
               size="xs"
@@ -1144,7 +1368,7 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
       )}
 
       {/* ── Data Table with Row Checkboxes ────────────────────────── */}
-      <UIModalBody className="p-0 flex-1 min-h-[300px] max-h-[55vh] overflow-y-auto overflow-x-auto bg-surface">
+      <UIModalBody ref={modalBodyRef} className="p-0 flex-1 min-h-[300px] max-h-[55vh] overflow-y-auto overflow-x-auto bg-surface">
         <UITable stickyHeader className="w-full">
           <UITableHeader sticky className="sticky top-0 z-10 bg-surface-alt border-b border-border">
             <UITableRow className="h-9 text-[11px] font-semibold text-text-muted uppercase tracking-wider bg-surface-alt">
@@ -1313,13 +1537,24 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
             )}
           </UITableBody>
         </UITable>
+
+        {/* Infinite Scroll loader */}
+        {!isLoading && filteredItems.length > 0 && (
+          <UIInfiniteScroll
+            onLoadMore={handleLoadMore}
+            hasMore={hasMore}
+            isLoading={isLoadingMore}
+            rootRef={modalBodyRef}
+            rootMargin="160px"
+          />
+        )}
       </UIModalBody>
 
       {/* ── Modal Footer ──────────────────────────────────────────── */}
       <UIModalFooter className="px-5 py-3 border-t border-border bg-surface-alt/50 flex items-center justify-between shrink-0">
         <div className="text-xs text-text-muted">
           Showing <strong className="text-text">{filteredItems.length}</strong> of{" "}
-          <strong className="text-text">{items.length}</strong> quarantined batches
+          <strong className="text-text">{totalCount}</strong> quarantined batches
         </div>
 
         <div className="flex items-center gap-2">
@@ -1329,6 +1564,43 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
         </div>
       </UIModalFooter>
     </UIModal>
+
+    {/* Confirmation Dialog for Moving Shelf-Expired Items to Scrap Bin */}
+    <UIConfirmDialog
+      isOpen={isMoveConfirmOpen}
+      onClose={() => setIsMoveConfirmOpen(false)}
+      onConfirm={handleConfirmMoveToScrapBin}
+      intent="warning"
+      title="Move Shelf-Expired Items to Scrap Bin"
+      description="Are you sure you want to move the selected shelf-expired batches to the quarantine scrap bin of this branch? This will remove them from sellable inventory."
+      confirmText={isMovingToScrap ? "Moving..." : "Move to Scrap Bin"}
+      isLoading={isMovingToScrap}
+      itemName={`${selectedShelfItems.length} Batch(es) to Quarantine`}
+      itemDetails={
+        <div className="flex flex-col gap-1.5 text-xs text-text">
+          <div className="flex justify-between items-center py-0.5 border-b border-border/40">
+            <span className="text-text-muted">Target Branch:</span>
+            <span className="font-semibold">{currentBranch?.name || "Active Facility"}</span>
+          </div>
+          <div className="flex justify-between items-center py-0.5 border-b border-border/40">
+            <span className="text-text-muted">Total Units to Quarantine:</span>
+            <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">
+              {selectedShelfItems.reduce((acc, i) => acc + (i.shelfStock || i.affectedQty || 0), 0)} units
+            </span>
+          </div>
+          <div className="flex justify-between items-center py-0.5 border-b border-border/40">
+            <span className="text-text-muted">Total Valuation:</span>
+            <span className="font-bold font-mono">
+              ₹{formatCurrency(selectedShelfItems.reduce((acc, i) => acc + (i.lossValue || 0), 0))}
+            </span>
+          </div>
+          <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-400 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20 leading-relaxed">
+            Note: Shelf batch quantities will be zeroed out and converted into branch scrap bin stock marked with [EXPIRED].
+          </div>
+        </div>
+      }
+    />
+  </>
   );
 };
 

@@ -419,6 +419,8 @@ export const ENDPOINTS = {
     BY_CODE: (productCode) => `/catalog/products/code/${productCode}`,
     // New endpoint for product facility batches query with filters
     BATCHES_QUERY: "/catalog/products/workspace-product/batches/query",
+    MOVE_TO_SCRAP_BIN: "/catalog/products/workspace-product/batches/move-to-scrap-bin",
+    ADD_EXPIRED_BROKEN_STOCK: "/catalog/products/workspace-product/stock-adjustments/expired-broken",
   },
 
   GLOBAL_PRODUCTS: {
