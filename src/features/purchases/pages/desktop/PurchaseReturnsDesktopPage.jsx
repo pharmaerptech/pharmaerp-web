@@ -272,16 +272,19 @@ export const PurchaseReturnsDesktopPage = () => {
               />
             </div>
 
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="h-8.5 px-3 border border-border rounded-lg bg-surface text-xs font-medium text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
-            >
-              <option value="all">All Statuses</option>
-              <option value="CONFIRMED">Confirmed</option>
-              <option value="CANCELLED">Cancelled</option>
-              <option value="DRAFT">Draft</option>
-            </select>
+            <div className="w-40">
+              <UISelect
+                value={status}
+                onChange={(val) => setStatus(val)}
+                options={[
+                  { value: "all", label: "All Statuses" },
+                  { value: "CONFIRMED", label: "Confirmed" },
+                  { value: "CANCELLED", label: "Cancelled" },
+                  { value: "DRAFT", label: "Draft" },
+                ]}
+                size="sm"
+              />
+            </div>
           </div>
         </div>
 

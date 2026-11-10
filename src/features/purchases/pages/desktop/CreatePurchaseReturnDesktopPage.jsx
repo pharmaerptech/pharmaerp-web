@@ -553,17 +553,23 @@ export const CreatePurchaseReturnDesktopPage = () => {
 
   return (
     <div className="min-h-screen bg-bg pb-20 font-sans">
-      {/* 1. Sticky Glass Page Header (Component #16) */}
+      {/* 1. Sleek Sticky Header */}
       <UIPageHeader
         sticky
         backButton={{
           onClick: () => navigate(ROUTES.PURCHASE_RETURNS),
-          label: "Back to Returns",
+          label: "Returns",
         }}
-        title="New Purchase Return & Debit Note"
-        description="Return purchased medicine stock to vendor and issue GST Section 34 Debit Note"
+        title="New Purchase Return"
+        description="Issue GST Section 34 Debit Notes to vendors for shelf or quarantined scrap inventory"
+        badge={
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-primary-soft text-primary border border-primary/20">
+            <Building2 className="size-3.5" />
+            {currentBranch?.name || "Active Facility"}
+          </span>
+        }
         actions={
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <UIButton
               variant="outline"
               size="sm"
@@ -580,252 +586,206 @@ export const CreatePurchaseReturnDesktopPage = () => {
               disabled={isSubmitting || items.length === 0}
               startIcon={
                 isSubmitting ? (
-                  <Loader2 className="size-4 animate-spin" />
+                  <Loader2 className="size-3.5 animate-spin" />
                 ) : (
-                  <ShieldCheck className="size-4" />
+                  <ShieldCheck className="size-3.5" />
                 )
               }
-              className="font-bold shadow-xs"
+              className="font-bold shadow-xs px-4"
             >
               {isSubmitting
                 ? "Processing..."
                 : isMultiSupplier
-                ? `Confirm & Issue ${supplierList.length} Debit Notes`
-                : "Confirm & Issue Debit Note"}
+                ? `Issue ${supplierList.length} Debit Notes`
+                : "Issue Debit Note"}
             </UIButton>
           </div>
         }
       />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {/* Multi-Supplier Alert Banner */}
-        {isMultiSupplier && (
-          <UIAlert
-            variant="warning"
-            title={`Multi-Supplier Consignment: ${supplierList.length} Different Suppliers Detected`}
-            description="Under GST Section 34, a separate Debit Note must be issued to each registered supplier. When you confirm, the system will automatically generate a dedicated Debit Note for each supplier."
-            icon={<Building2 className="size-4.5" />}
-          />
-        )}
-
-        {/* 2. Top Context Grid (Supplier InfoCard, Motive Tabs, Facility Meta) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Supplier InfoCard (Component #30) */}
-          <div className="lg:col-span-2">
-            {selectedSupplier ? (
-              <UIInfoCard
-                title={selectedSupplier.businessName || selectedSupplier.name}
-                description="Target Supplier / Creditor"
-                icon={<Truck className="size-5" />}
-                color="primary"
-                variant="accent"
-                actions={
-                  <UIButton
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setSelectedSupplier(null)}
-                    className="text-text-muted hover:text-error"
-                  >
-                    Change Supplier
-                  </UIButton>
-                }
-                items={[
-                  {
-                    label: "GSTIN",
-                    value: selectedSupplier.gstNumber || "Unregistered",
-                  },
-                  {
-                    label: "Phone",
-                    value: selectedSupplier.mobile || selectedSupplier.phone || "—",
-                  },
-                  {
-                    label: "Drug License",
-                    value: selectedSupplier.drugLicenseNumber || "—",
-                  },
-                  {
-                    label: "City / State",
-                    value: selectedSupplier.address?.city || selectedSupplier.address?.state || "India",
-                  },
-                ]}
-              />
-            ) : (
-              <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-text uppercase tracking-wider">
-                    Select Target Supplier *
-                  </label>
-                  <span className="text-[11px] text-text-muted">
-                    Search from master parties
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-5">
+        {/* Sleek Context & Control Strip (Unified 1-Bar) */}
+        <div className="bg-surface border border-border rounded-2xl p-4 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          {/* Left: Supplier Identity */}
+          <div className="flex items-center gap-3 min-w-0 flex-1">
+            {isMultiSupplier ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <UIBadge variant="soft" color="warning" className="px-2.5 py-1 text-xs font-bold gap-1.5">
+                  <Building2 className="size-3.5" />
+                  {supplierList.length} Suppliers Detected
+                </UIBadge>
+                <span className="text-xs text-text-muted">
+                  Auto-partitions into {supplierList.length} separate GST Debit Notes
+                </span>
+              </div>
+            ) : selectedSupplier ? (
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="size-9 rounded-xl bg-primary-soft border border-primary/20 flex items-center justify-center shrink-0 text-primary">
+                  <Truck className="size-4.5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-text truncate">
+                      {selectedSupplier.businessName || selectedSupplier.name}
+                    </span>
+                    {selectedSupplier.gstNumber && (
+                      <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-surface-alt border border-border text-text-muted font-medium">
+                        GST: {selectedSupplier.gstNumber}
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-text-muted block truncate">
+                    {selectedSupplier.mobile ? `Phone: ${selectedSupplier.mobile}` : "Auto-selected creditor"}
                   </span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSupplier(null)}
+                  className="text-xs text-primary hover:text-primary-hover font-semibold underline underline-offset-2 ml-1 cursor-pointer shrink-0"
+                >
+                  Change
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 max-w-md">
                 <SupplierSearchBar
                   selectedSupplier={selectedSupplier}
                   onSelectSupplier={(s) => setSelectedSupplier(s)}
-                  placeholder="Type to search supplier by business name, phone, or GST..."
+                  placeholder="Select supplier (or search medicines below to auto-select)..."
                 />
               </div>
             )}
           </div>
 
-          {/* Motive & Date Parameters Card */}
-          <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-3.5 flex flex-col justify-between">
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-text uppercase tracking-wider block">
-                Stock Motive *
-              </label>
-              <UITabs
-                tabs={motiveTabs}
-                activeTab={returnMotive}
-                onChange={(tabId) => setReturnMotive(tabId)}
-                variant="segmented"
-                size="xs"
-                fullWidth
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/60">
-              <div>
-                <label className="text-[11px] font-semibold text-text-muted block mb-1">
-                  Debit Note Date
-                </label>
-                <input
-                  type="date"
-                  value={returnDate}
-                  onChange={(e) => setReturnDate(e.target.value)}
-                  className="w-full h-8.5 px-2.5 border border-border rounded-lg bg-surface text-xs font-medium text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-semibold text-text-muted block mb-1">
-                  Dispatch Facility
-                </label>
-                <div className="h-8.5 px-2.5 border border-border rounded-lg bg-surface-alt flex items-center gap-1.5 text-xs font-medium text-text truncate">
-                  <Building2 className="size-3 text-primary shrink-0" />
-                  <span className="truncate">{currentBranch?.name || "Active Facility"}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Medicine / Batch Fast Search Bar (Component #4 & Autocomplete) */}
-        <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-3">
-          <UISectionHeader
-            title="Search & Add Batches from Facility"
-            description="Scans inventory, checks bin stock, and auto-resolves original purchase rates via FIFO"
-            icon={<Search className="size-4" />}
-          />
-
-          <div ref={searchContainerRef} className="relative">
-            <div className="relative">
-              <UISearchInput
-                value={searchQuery}
-                onChange={(val) => setSearchQuery(val)}
-                placeholder="Scan barcode or type medicine name / batch number..."
-                size="lg"
-              />
-              {isSearchingBatches && (
-                <Loader2 className="size-4 animate-spin absolute right-3.5 top-1/2 -translate-y-1/2 text-primary" />
-              )}
-            </div>
-
-            {/* Autocomplete Dropdown */}
-            {showSearchResults && searchResults.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1.5 bg-surface border border-border rounded-2xl shadow-xl z-50 max-h-80 overflow-y-auto divide-y divide-border/60">
-                {searchResults.map((b) => (
-                  <button
-                    key={b.batchId}
-                    type="button"
-                    onClick={() => handleSelectBatch(b)}
-                    className="w-full text-left p-3.5 hover:bg-surface-hover flex items-center justify-between transition-colors font-sans"
-                  >
-                    <div className="space-y-1">
-                      <div className="font-bold text-text text-sm flex items-center gap-2">
-                        {b.productName}
-                        {b.pack && (
-                          <span className="text-xs font-normal text-text-muted">
-                            ({b.pack})
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-text-muted flex items-center gap-3">
-                        <span>Batch: <strong className="font-mono text-text">{b.batchNo}</strong></span>
-                        {b.expiry && <span>Exp: {b.expiry}</span>}
-                        {b.purchaseBillNo && (
-                          <span className="text-primary font-medium">Inflow Bill: #{b.purchaseBillNo}</span>
-                        )}
-                        {(b.supplierName || b.supplier?.businessName) && (
-                          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                            Supplier: {b.supplierName || b.supplier?.businessName}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="text-right space-y-1">
-                      <div className="text-sm font-bold text-text font-mono">
-                        Rate: {formatCurrency(b.rate)}
-                      </div>
-                      <div className="text-xs flex items-center gap-1.5 justify-end">
-                        <UIBadge variant={b.availableShelfStock > 0 ? "soft" : "outline"} color="primary">
-                          Shelf: {b.availableShelfStock}
-                        </UIBadge>
-                        {b.availableScrapStock > 0 && (
-                          <UIBadge variant="soft" color="warning">
-                            Scrap: {b.availableScrapStock}
-                          </UIBadge>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 4. Staged Line Items Table (Component #11) */}
-        <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
-          <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <UISectionHeader
-              title={`Return Line Items (${items.length})`}
-              description="Review quantities, purchase rates, tax slabs, and bin origins"
-              icon={<Boxes className="size-4" />}
+          {/* Right: Motive Segmented Tabs & Return Date */}
+          <div className="flex items-center gap-3 shrink-0">
+            <UITabs
+              tabs={motiveTabs}
+              activeTab={returnMotive}
+              onChange={(tabId) => setReturnMotive(tabId)}
+              variant="segmented"
+              size="xs"
             />
+
+            <input
+              type="date"
+              value={returnDate}
+              onChange={(e) => setReturnDate(e.target.value)}
+              aria-label="Return Date"
+              className="h-8 px-2.5 border border-border rounded-lg bg-surface text-xs font-mono font-medium text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+            />
+          </div>
+        </div>
+
+        {/* 3. Spotlight Medicine & Batch Fast Search Bar */}
+        <div ref={searchContainerRef} className="relative">
+          <div className="relative">
+            <UISearchInput
+              value={searchQuery}
+              onChange={(val) => setSearchQuery(val)}
+              placeholder="Scan barcode or type medicine name / batch number to stage for return..."
+              size="lg"
+            />
+            {isSearchingBatches && (
+              <Loader2 className="size-4 animate-spin absolute right-3.5 top-1/2 -translate-y-1/2 text-primary" />
+            )}
+          </div>
+
+          {/* Autocomplete Dropdown */}
+          {showSearchResults && searchResults.length > 0 && (
+            <div className="absolute left-0 right-0 top-full mt-2 bg-surface border border-border rounded-xl shadow-xl z-50 max-h-80 overflow-y-auto divide-y divide-border/60">
+              {searchResults.map((b) => (
+                <button
+                  key={b.batchId}
+                  type="button"
+                  onClick={() => handleSelectBatch(b)}
+                  className="w-full text-left p-3.5 hover:bg-surface-hover flex items-center justify-between transition-colors group cursor-pointer"
+                >
+                  <div className="space-y-1 min-w-0 pr-4">
+                    <div className="font-semibold text-text text-sm flex items-center gap-2">
+                      <span className="truncate">{b.productName}</span>
+                      {b.pack && (
+                        <span className="text-xs font-normal text-text-muted shrink-0">
+                          ({b.pack})
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-text-muted flex items-center gap-3 flex-wrap">
+                      <span>Batch: <strong className="font-mono text-text">{b.batchNo}</strong></span>
+                      {b.expiry && <span>Exp: {b.expiry}</span>}
+                      {b.purchaseBillNo && (
+                        <span className="text-primary font-medium">Inflow Bill: #{b.purchaseBillNo}</span>
+                      )}
+                      {(b.supplierName || b.supplier?.businessName) && (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                          Supplier: {b.supplierName || b.supplier?.businessName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right space-y-1 shrink-0">
+                    <div className="text-sm font-bold text-text font-mono tabular-nums">
+                      {formatCurrency(b.rate)}
+                    </div>
+                    <div className="text-xs flex items-center gap-1.5 justify-end">
+                      <UIBadge variant={b.availableShelfStock > 0 ? "soft" : "outline"} color="primary" size="sm">
+                        Shelf: {b.availableShelfStock}
+                      </UIBadge>
+                      {b.availableScrapStock > 0 && (
+                        <UIBadge variant="soft" color="warning" size="sm">
+                          Scrap: {b.availableScrapStock}
+                        </UIBadge>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 4. Staged Line Items Table */}
+        <div className="bg-surface border border-border rounded-2xl overflow-hidden shadow-xs">
+          <div className="px-4 py-3 border-b border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <Boxes className="size-4 text-primary" />
+              <h3 className="text-sm font-bold text-text">Return Line Items</h3>
+              <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-surface-alt text-text-muted border border-border">
+                {items.length}
+              </span>
+            </div>
+
             <div className="flex items-center gap-2">
               {isMultiSupplier && (
-                <div className="flex items-center gap-1.5 bg-surface-alt px-2.5 py-1 rounded-xl border border-border">
-                  <span className="text-[11px] font-semibold text-text-muted">Supplier:</span>
-                  <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 bg-surface-alt p-0.5 rounded-lg border border-border">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSupplierFilter("all")}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-xs font-semibold transition-colors",
+                      activeSupplierFilter === "all"
+                        ? "bg-surface text-text shadow-xs"
+                        : "text-text-muted hover:text-text"
+                    )}
+                  >
+                    All ({supplierList.length} Notes)
+                  </button>
+                  {supplierList.map((g) => (
                     <button
+                      key={g.supplierId}
                       type="button"
-                      onClick={() => setActiveSupplierFilter("all")}
+                      onClick={() => setActiveSupplierFilter(g.supplierId)}
                       className={cn(
-                        "px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors",
-                        activeSupplierFilter === "all"
-                          ? "bg-primary text-primary-contrast"
+                        "px-2.5 py-1 rounded-md text-xs font-semibold transition-colors",
+                        activeSupplierFilter === g.supplierId
+                          ? "bg-surface text-text shadow-xs"
                           : "text-text-muted hover:text-text"
                       )}
                     >
-                      All ({supplierList.length} Notes)
+                      {g.supplierName} ({g.items.length})
                     </button>
-                    {supplierList.map((g) => (
-                      <button
-                        key={g.supplierId}
-                        type="button"
-                        onClick={() => setActiveSupplierFilter(g.supplierId)}
-                        className={cn(
-                          "px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors",
-                          activeSupplierFilter === g.supplierId
-                            ? "bg-primary text-primary-contrast"
-                            : "text-text-muted hover:text-text"
-                        )}
-                      >
-                        {g.supplierName} ({g.items.length})
-                      </button>
-                    ))}
-                  </div>
+                  ))}
                 </div>
               )}
 
@@ -857,37 +817,37 @@ export const CreatePurchaseReturnDesktopPage = () => {
               <UITable>
                 <UITableHeader>
                   <UITableRow className="bg-surface-alt/60">
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-center w-12">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px] text-center w-10">
                       #
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px]">
                       Medicine & Pack
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px]">
                       Batch & Expiry
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px]">
                       Supplier / Creditor
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px]">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px]">
                       Stock Bin
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-center">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px] text-center w-28">
                       Return Qty
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
-                      Purchase Rate
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px] text-right w-24">
+                      Rate (₹)
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px] text-right w-18">
                       Disc %
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px] text-right w-16">
                       GST %
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-right">
-                      Total Amount
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px] text-right w-28">
+                      Total
                     </UITableHead>
-                    <UITableHead className="py-3 px-4 font-semibold text-text-muted uppercase text-[11px] text-center">
+                    <UITableHead className="py-2.5 px-3 font-semibold text-text-muted uppercase text-[11px] text-center w-12">
                       Action
                     </UITableHead>
                   </UITableRow>
@@ -904,61 +864,97 @@ export const CreatePurchaseReturnDesktopPage = () => {
                       lineTaxable + (lineTaxable * (Number(item.gstPct) || 0)) / 100;
 
                     return (
-                      <tr key={item.id} className="hover:bg-surface-hover transition-colors">
-                        <td className="py-3 px-4 text-center text-text-muted font-medium">
+                      <tr key={item.id} className="hover:bg-surface-hover/80 transition-colors border-b border-border/40">
+                        <td className="py-2.5 px-3 text-center text-text-muted font-mono text-xs">
                           {idx + 1}
                         </td>
-                        <td className="py-3 px-4 font-semibold text-text">
-                          {item.productName}
+                        <td className="py-2.5 px-3">
+                          <span className="font-semibold text-text text-xs block leading-tight">
+                            {item.productName}
+                          </span>
                           {item.pack && (
-                            <span className="block text-[11px] font-normal text-text-muted">
-                              ({item.pack})
+                            <span className="text-[11px] font-normal text-text-muted block mt-0.5">
+                              Pack: {item.pack}
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 font-mono font-medium">
-                          {item.batchNo}
+                        <td className="py-2.5 px-3 font-mono text-xs">
+                          <span className="font-semibold text-text block leading-tight">
+                            {item.batchNo}
+                          </span>
                           {item.expiry && (
-                            <span className="block text-[11px] font-sans text-text-muted">
+                            <span className="text-[11px] font-sans text-text-muted block mt-0.5">
                               Exp: {item.expiry}
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
-                          <span className="font-semibold text-xs text-text block">
+                        <td className="py-2.5 px-3">
+                          <span className="font-semibold text-xs text-text block leading-tight">
                             {item.supplierName || item.supplier?.businessName || selectedSupplier?.businessName || "Supplier"}
                           </span>
                           {(item.supplierGst || item.supplier?.gstNumber) && (
-                            <span className="font-mono text-[10px] text-text-muted block">
+                            <span className="font-mono text-[10px] text-text-muted block mt-0.5">
                               GST: {item.supplierGst || item.supplier?.gstNumber}
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4">
+                        <td className="py-2.5 px-3">
                           <select
                             value={item.sourceBin}
                             onChange={(e) =>
                               handleUpdateItem(idx, "sourceBin", e.target.value)
                             }
-                            className="h-7.5 px-2 border border-border rounded-lg bg-surface text-xs font-medium text-text"
+                            aria-label="Stock Bin"
+                            className="h-7 px-2 border border-border/80 rounded-md bg-surface-alt/60 hover:bg-surface text-xs font-medium text-text focus:ring-1 focus:ring-primary focus:border-primary outline-hidden cursor-pointer"
                           >
                             <option value="SELLABLE">Shelf (Sellable)</option>
                             <option value="SCRAP_EXPIRED">Scrap (Expired)</option>
                             <option value="SCRAP_BROKEN">Scrap (Broken)</option>
                           </select>
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.returnQty}
-                            onChange={(e) =>
-                              handleUpdateItem(idx, "returnQty", e.target.value)
-                            }
-                            className="w-16 h-8 text-center border border-border rounded-lg bg-surface text-xs font-bold text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
-                          />
+                        <td className="py-2.5 px-3 text-center">
+                          <div className="inline-flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateItem(
+                                  idx,
+                                  "returnQty",
+                                  Math.max(1, (Number(item.returnQty) || 1) - 1)
+                                )
+                              }
+                              className="size-7 rounded-md border border-border bg-surface hover:bg-surface-hover flex items-center justify-center text-text-muted hover:text-text transition-colors cursor-pointer"
+                              title="Decrease quantity"
+                            >
+                              <Minus className="size-3" />
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.returnQty}
+                              onChange={(e) =>
+                                handleUpdateItem(idx, "returnQty", e.target.value)
+                              }
+                              aria-label="Return Quantity"
+                              className="w-12 h-7 text-center border border-border rounded-md bg-surface text-xs font-mono font-bold text-text focus:ring-1 focus:ring-primary focus:border-primary outline-hidden tabular-nums"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateItem(
+                                  idx,
+                                  "returnQty",
+                                  (Number(item.returnQty) || 0) + 1
+                                )
+                              }
+                              className="size-7 rounded-md border border-border bg-surface hover:bg-surface-hover flex items-center justify-center text-text-muted hover:text-text transition-colors cursor-pointer"
+                              title="Increase quantity"
+                            >
+                              <Plus className="size-3" />
+                            </button>
+                          </div>
                         </td>
-                        <td className="py-3 px-4 text-right font-medium">
+                        <td className="py-2.5 px-3 text-right">
                           <input
                             type="number"
                             step="0.01"
@@ -966,10 +962,11 @@ export const CreatePurchaseReturnDesktopPage = () => {
                             onChange={(e) =>
                               handleUpdateItem(idx, "rate", e.target.value)
                             }
-                            className="w-20 h-8 text-right px-2 border border-border rounded-lg bg-surface text-xs font-mono font-bold text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+                            aria-label="Purchase Rate"
+                            className="w-20 h-7 text-right px-2 border border-border/80 rounded-md bg-surface-alt/60 hover:bg-surface text-xs font-mono font-bold text-text focus:ring-1 focus:ring-primary focus:border-primary outline-hidden tabular-nums"
                           />
                         </td>
-                        <td className="py-3 px-4 text-right">
+                        <td className="py-2.5 px-3 text-right">
                           <input
                             type="number"
                             min="0"
@@ -978,23 +975,25 @@ export const CreatePurchaseReturnDesktopPage = () => {
                             onChange={(e) =>
                               handleUpdateItem(idx, "discountPct", e.target.value)
                             }
-                            className="w-14 h-8 text-right px-1.5 border border-border rounded-lg bg-surface text-xs font-mono text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+                            aria-label="Discount Percentage"
+                            className="w-14 h-7 text-right px-1.5 border border-border/80 rounded-md bg-surface-alt/60 hover:bg-surface text-xs font-mono text-text focus:ring-1 focus:ring-primary focus:border-primary outline-hidden tabular-nums"
                           />
                         </td>
-                        <td className="py-3 px-4 text-right font-medium text-text-muted">
+                        <td className="py-2.5 px-3 text-right font-mono text-xs text-text-muted tabular-nums">
                           {item.gstPct}%
                         </td>
-                        <td className="py-3 px-4 text-right font-bold text-text font-mono">
+                        <td className="py-2.5 px-3 text-right font-bold text-text font-mono text-xs tabular-nums">
                           {formatCurrency(lineTotal)}
                         </td>
-                        <td className="py-3 px-4 text-center">
-                          <UIIconButton
-                            size="sm"
-                            variant="ghost"
+                        <td className="py-2.5 px-3 text-center">
+                          <button
+                            type="button"
                             onClick={() => handleRemoveItem(idx)}
-                            icon={<Trash2 className="size-4 text-text-muted hover:text-error" />}
-                            tooltip="Remove Item"
-                          />
+                            className="size-7 inline-flex items-center justify-center rounded-md text-text-muted hover:text-error hover:bg-error-soft/30 transition-colors cursor-pointer"
+                            title="Remove Item"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
                         </td>
                       </tr>
                     );
@@ -1005,10 +1004,10 @@ export const CreatePurchaseReturnDesktopPage = () => {
           )}
         </div>
 
-        {/* 5. Notes & Financial Summary (Component #29 UISummaryCard) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-4">
-            <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-2.5">
+        {/* 5. Notes & Financial Summary */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+          <div className="lg:col-span-2 space-y-3">
+            <div className="bg-surface border border-border rounded-2xl p-4 shadow-xs space-y-2">
               <label className="text-xs font-bold text-text uppercase tracking-wider block">
                 Reason & Transporter Notes
               </label>
@@ -1017,17 +1016,17 @@ export const CreatePurchaseReturnDesktopPage = () => {
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="Add courier/transporter details, carton numbers, or return reason..."
-                className="w-full p-3 border border-border rounded-xl bg-surface text-xs font-medium text-text focus:ring-2 focus:ring-primary/20 focus:border-primary outline-hidden"
+                className="w-full p-3 border border-border rounded-xl bg-surface-alt/40 text-xs font-medium text-text placeholder:text-text-muted focus:ring-1 focus:ring-primary focus:border-primary outline-hidden resize-none"
               />
             </div>
 
-            {/* GST Compliance Alert Banner (Component #36) */}
-            <UIAlert
-              variant="info"
-              title="GST Section 34 Compliance & ITC Reversal"
-              description="Confirming this return will automatically post an Accounts Payable Debit Note and generate a negative GSTR-2 ledger entry for Input Tax Credit reversal."
-              icon={<ShieldCheck className="size-4.5" />}
-            />
+            {/* GST Compliance Micro-strip */}
+            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-primary-soft/40 border border-primary/20 text-xs text-text-muted">
+              <ShieldCheck className="size-4 text-primary shrink-0" />
+              <span>
+                <strong>GST Section 34 Compliance:</strong> Confirming will post an Accounts Payable Debit Note and generate a negative GSTR-2 ledger entry for Input Tax Credit reversal.
+              </span>
+            </div>
           </div>
 
           <div>
