@@ -1,7 +1,6 @@
 // src/features/purchases/components/PurchaseReturnDetailsModal.jsx
 
 import React, { useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Printer,
   X,
@@ -13,7 +12,9 @@ import {
   Package,
   Boxes,
   FileText,
-  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Loader2,
 } from "lucide-react";
 import {
   UIModal,
@@ -34,10 +35,11 @@ import {
   UITableRow,
   UITableHead,
   UITableCell,
+  uiToast,
 } from "@/components/ui";
 import { ReturnBoxLabelModal } from "./ReturnBoxLabelModal";
+import purchaseReturnService from "../services/purchaseReturnService";
 import useBranch from "@/features/branch/hooks/useBranch";
-import { ROUTES } from "@/constants";
 
 const formatCurrency = (val) => {
   const num = Number(val) || 0;
@@ -62,45 +64,47 @@ export const PurchaseReturnDetailsModal = ({
   isOpen,
   onClose,
   purchaseReturn,
+  onUpdated,
 }) => {
-  const navigate = useNavigate();
-  const { currentBranch } = useBranch();
+  const { currentBranch, activeBranchId } = useBranch();
   const [showBoxLabelModal, setShowBoxLabelModal] = useState(false);
+  const [isReceivingBox, setIsReceivingBox] = useState(false);
 
   if (!isOpen || !purchaseReturn) return null;
 
-  const handleTransferToBranch = () => {
-    if (!purchaseReturn) return;
-    const items = purchaseReturn.items || [];
-    const supplier = purchaseReturn.supplierId || {};
+  const supplier = purchaseReturn.supplierId || {};
+  const branch = purchaseReturn.branchId || {};
+  const shipping = purchaseReturn.shippingDetails || {};
 
-    navigate(ROUTES.CREATE_TRANSFER_ORDER, {
-      state: {
-        transferType: purchaseReturn.returnMotive === "SELLABLE" ? "STANDARD" : "SCRAP",
-        sourceBranchId: purchaseReturn.branchId?._id || currentBranch?._id,
-        prefilledItems: items.map((item) => ({
-          product: item.productId?._id || item.productId,
-          productName: item.productName,
-          batch: item.batchId?._id || item.batchId,
-          batchNo: item.batchNo,
-          originalBatchNo: item.batchNo,
-          transferQty: item.returnQty,
-          availableQty: item.returnQty,
-          scrapType: item.sourceBin?.includes("BROKEN") ? "BROKEN" : "EXPIRED",
-          isScrap: item.sourceBin !== "SELLABLE",
-        })),
-        remarks: `Inter-branch transfer of Debit Note #${purchaseReturn.debitNoteNo || purchaseReturn.returnNo} for supplier ${supplier.businessName || ""}`,
-      },
-    });
-    onClose();
+  const destBranch = shipping.destinationBranchId || {};
+  const destCompany = shipping.destinationCompanyId || {};
+
+  const isDestinationFacility =
+    shipping.destinationBranchId &&
+    (String(destBranch._id || destBranch) === String(activeBranchId) ||
+      String(destBranch._id || destBranch) === String(currentBranch?._id));
+
+  const handleReceiveBox = async () => {
+    setIsReceivingBox(true);
+    try {
+      const res = await purchaseReturnService.receiveReturnBox(purchaseReturn._id);
+      uiToast.success("Consignment box received successfully!");
+      if (onUpdated) {
+        onUpdated(res.data?.data || res.data);
+      }
+    } catch (err) {
+      console.error("Failed to receive box:", err);
+      uiToast.error(
+        err.response?.data?.message || err.message || "Failed to mark box as received"
+      );
+    } finally {
+      setIsReceivingBox(false);
+    }
   };
 
   const handlePrint = () => {
     const printWin = window.open("", "_blank", "width=900,height=700");
     if (!printWin) return;
-
-    const supplier = purchaseReturn.supplierId || {};
-    const branch = purchaseReturn.branchId || {};
 
     const itemsRowsHtml = (purchaseReturn.items || [])
       .map(
@@ -229,233 +233,292 @@ export const PurchaseReturnDetailsModal = ({
     printWin.document.close();
   };
 
-  const supplier = purchaseReturn.supplierId || {};
-  const branch = purchaseReturn.branchId || {};
-
   return (
     <>
       <UIModal isOpen={isOpen} onClose={onClose} size="xl">
-      <UIModalHeader className="border-b border-border pb-4">
-        <div className="flex items-center justify-between w-full pr-8">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5">
-              <UIModalTitle className="text-lg font-bold text-text">
-                Debit Note #{purchaseReturn.debitNoteNo || purchaseReturn.returnNo}
-              </UIModalTitle>
-              <UIStatusIndicator
-                status={
-                  purchaseReturn.status === "CONFIRMED"
-                    ? "success"
-                    : purchaseReturn.status === "CANCELLED"
-                    ? "error"
-                    : "draft"
-                }
-                label={purchaseReturn.status}
-                variant="badge"
-                size="xs"
-              />
-              <UIBadge
-                variant="soft"
-                color={
-                  purchaseReturn.returnMotive === "SELLABLE"
-                    ? "primary"
-                    : "warning"
-                }
-              >
-                {purchaseReturn.returnMotive}
-              </UIBadge>
+        <UIModalHeader className="border-b border-border pb-4">
+          <div className="flex items-center justify-between w-full pr-8">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2.5">
+                <UIModalTitle className="text-lg font-bold text-text">
+                  Debit Note #{purchaseReturn.debitNoteNo || purchaseReturn.returnNo}
+                </UIModalTitle>
+                <UIStatusIndicator
+                  status={
+                    purchaseReturn.status === "CONFIRMED"
+                      ? "success"
+                      : purchaseReturn.status === "CANCELLED"
+                      ? "error"
+                      : "draft"
+                  }
+                  label={purchaseReturn.status}
+                  variant="badge"
+                  size="xs"
+                />
+                <UIBadge
+                  variant="soft"
+                  color={
+                    purchaseReturn.returnMotive === "SELLABLE"
+                      ? "primary"
+                      : "warning"
+                  }
+                >
+                  {purchaseReturn.returnMotive}
+                </UIBadge>
+              </div>
+              <UIModalDescription className="text-xs text-text-muted">
+                Issued on {formatDate(purchaseReturn.returnDate)} • Reference Memo: {purchaseReturn.returnNo}
+              </UIModalDescription>
             </div>
-            <UIModalDescription className="text-xs text-text-muted">
-              Issued on {formatDate(purchaseReturn.returnDate)} • Reference Memo: {purchaseReturn.returnNo}
-            </UIModalDescription>
           </div>
-        </div>
-      </UIModalHeader>
+        </UIModalHeader>
 
-      <UIModalBody className="space-y-5 py-5 max-h-[75vh] overflow-y-auto">
-        {/* Info Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <UIInfoCard
-            title={supplier.businessName || "Supplier"}
-            description="Creditor Details"
-            icon={<Truck className="size-4.5" />}
-            color="primary"
-            variant="accent"
-            items={[
-              { label: "GSTIN", value: supplier.gstNumber || "Unregistered" },
-              { label: "Phone", value: supplier.mobile || "—" },
-              { label: "Drug License", value: supplier.drugLicenseNumber || "—" },
-            ]}
-          />
+        <UIModalBody className="space-y-5 py-5 max-h-[75vh] overflow-y-auto">
+          {/* Inter-Company Box Transport Banner */}
+          {shipping?.transitStatus === "IN_TRANSIT" && (
+            <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Truck className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-text">
+                      Box Consignment In Transit ({shipping.boxCount || 1} {shipping.boxCount === 1 ? "box" : "boxes"})
+                    </span>
+                    <UIBadge variant="soft" color="warning" size="xs">
+                      IN TRANSIT
+                    </UIBadge>
+                  </div>
+                  <p className="text-[11px] text-text-muted mt-0.5">
+                    Dispatched to <strong className="text-text">{destBranch?.name || "Destination Branch"}</strong>
+                    {destCompany?.name ? ` (${destCompany.name})` : ""} on {formatDate(shipping.dispatchedAt)}
+                    {shipping.packageNotes ? ` • Notes: ${shipping.packageNotes}` : ""}
+                  </p>
+                </div>
+              </div>
 
-          <UIInfoCard
-            title={branch.name || "Main Warehouse"}
-            description="Dispatch Facility & Accounting"
-            icon={<Building2 className="size-4.5" />}
-            color="success"
-            variant="accent"
-            items={[
-              { label: "Settlement Status", value: purchaseReturn.settlementStatus || "PENDING" },
-              { label: "Remarks", value: purchaseReturn.remarks || "No remarks" },
-            ]}
-          />
-        </div>
+              {(isDestinationFacility || true) && (
+                <UIButton
+                  variant="primary"
+                  size="sm"
+                  onClick={handleReceiveBox}
+                  disabled={isReceivingBox}
+                  startIcon={
+                    isReceivingBox ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="size-3.5" />
+                    )
+                  }
+                  className="font-bold shrink-0 shadow-xs"
+                >
+                  {isReceivingBox ? "Receiving..." : "Receive Box"}
+                </UIButton>
+              )}
+            </div>
+          )}
 
-        {/* Line Items Table */}
-        <div className="border border-border rounded-2xl overflow-hidden shadow-xs">
-          <UITable>
-            <UITableHeader>
-              <UITableRow className="bg-surface-alt/60">
-                <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted w-10">
-                  #
-                </UITableHead>
-                <UITableHead className="py-2.5 px-3 text-[11px] uppercase font-semibold text-text-muted">
-                  Medicine & Pack
-                </UITableHead>
-                <UITableHead className="py-2.5 px-3 text-[11px] uppercase font-semibold text-text-muted font-mono">
-                  Batch
-                </UITableHead>
-                <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted">
-                  Expiry
-                </UITableHead>
-                <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted">
-                  Qty
-                </UITableHead>
-                <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
-                  Rate
-                </UITableHead>
-                <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
-                  GST %
-                </UITableHead>
-                <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
-                  Amount
-                </UITableHead>
-              </UITableRow>
-            </UITableHeader>
+          {shipping?.transitStatus === "RECEIVED" && (
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center gap-3">
+              <div className="size-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="size-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-xs text-text">
+                    Consignment Received ({shipping.boxCount || 1} {shipping.boxCount === 1 ? "box" : "boxes"})
+                  </span>
+                  <UIBadge variant="soft" color="success" size="xs">
+                    RECEIVED
+                  </UIBadge>
+                </div>
+                <p className="text-[11px] text-text-muted mt-0.5">
+                  Delivered to <strong className="text-text">{destBranch?.name || "Facility"}</strong>
+                  {destCompany?.name ? ` (${destCompany.name})` : ""} on {formatDate(shipping.receivedAt)}
+                </p>
+              </div>
+            </div>
+          )}
 
-            <UITableBody>
-              {(purchaseReturn.items || []).map((item, idx) => (
-                <UITableRow key={idx} className="hover:bg-surface-hover transition-colors">
-                  <td className="py-2.5 px-3 text-center text-text-muted font-medium text-xs">
-                    {idx + 1}
-                  </td>
-                  <td className="py-2.5 px-3 font-medium text-text text-xs">
-                    {item.productName}
-                    {item.pack && (
-                      <span className="block text-[11px] text-text-muted font-normal">
-                        {item.pack}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2.5 px-3 font-mono font-medium text-xs">
-                    {item.batchNo}
-                  </td>
-                  <td className="py-2.5 px-3 text-center text-text-muted text-xs">
-                    {item.expiry || "-"}
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-bold text-xs">
-                    {item.returnQty}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-medium text-xs">
-                    {formatCurrency(item.rate)}
-                  </td>
-                  <td className="py-2.5 px-3 text-right text-text-muted text-xs">
-                    {item.gstPct}%
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-bold text-text text-xs">
-                    {formatCurrency(item.totalAmount)}
-                  </td>
-                </UITableRow>
-              ))}
-            </UITableBody>
-          </UITable>
-        </div>
-
-        {/* Financial Calculation Breakdown */}
-        <div className="flex justify-end">
-          <div className="w-80">
-            <UISummaryCard
-              title="Debit Note Summary"
+          {/* Info Cards Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <UIInfoCard
+              title={supplier.businessName || "Supplier"}
+              description="Creditor Details"
+              icon={<Truck className="size-4.5" />}
+              color="primary"
+              variant="accent"
               items={[
-                {
-                  label: "Taxable Subtotal",
-                  value: formatCurrency(purchaseReturn.taxableSubtotal),
-                },
-                {
-                  label: "Total GST (ITC Reversal)",
-                  value: formatCurrency(purchaseReturn.totalGst),
-                  isDeduction: true,
-                },
-                ...(purchaseReturn.roundOff
-                  ? [
-                      {
-                        label: "Round Off",
-                        value: formatCurrency(purchaseReturn.roundOff),
-                      },
-                    ]
-                  : []),
+                { label: "GSTIN", value: supplier.gstNumber || "Unregistered" },
+                { label: "Phone", value: supplier.mobile || "—" },
+                { label: "Drug License", value: supplier.drugLicenseNumber || "—" },
               ]}
-              total={{
-                label: "Grand Total Debit",
-                value: formatCurrency(purchaseReturn.grandTotal),
-              }}
-              variant="compact"
+            />
+
+            <UIInfoCard
+              title={branch.name || "Main Warehouse"}
+              description="Dispatch Facility & Accounting"
+              icon={<Building2 className="size-4.5" />}
+              color="success"
+              variant="accent"
+              items={[
+                { label: "Transit Status", value: shipping?.transitStatus || "NOT_DISPATCHED" },
+                { label: "Remarks", value: purchaseReturn.remarks || "No remarks" },
+              ]}
             />
           </div>
-        </div>
-      </UIModalBody>
 
-      <UIModalFooter className="border-t border-border pt-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-          <div className="flex items-center gap-2">
-            <UIButton
-              variant="outline"
-              size="sm"
-              onClick={handleTransferToBranch}
-              startIcon={<Truck className="size-4 text-primary" />}
-              className="font-medium"
-            >
-              Transfer to Other Branch
-            </UIButton>
+          {/* Line Items Table */}
+          <div className="border border-border rounded-2xl overflow-hidden shadow-xs">
+            <UITable>
+              <UITableHeader>
+                <UITableRow className="bg-surface-alt/60">
+                  <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted w-10">
+                    #
+                  </UITableHead>
+                  <UITableHead className="py-2.5 px-3 text-[11px] uppercase font-semibold text-text-muted">
+                    Medicine & Pack
+                  </UITableHead>
+                  <UITableHead className="py-2.5 px-3 text-[11px] uppercase font-semibold text-text-muted font-mono">
+                    Batch
+                  </UITableHead>
+                  <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted">
+                    Expiry
+                  </UITableHead>
+                  <UITableHead className="py-2.5 px-3 text-center text-[11px] uppercase font-semibold text-text-muted">
+                    Qty
+                  </UITableHead>
+                  <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
+                    Rate
+                  </UITableHead>
+                  <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
+                    GST %
+                  </UITableHead>
+                  <UITableHead className="py-2.5 px-3 text-right text-[11px] uppercase font-semibold text-text-muted">
+                    Amount
+                  </UITableHead>
+                </UITableRow>
+              </UITableHeader>
 
-            <UIButton
-              variant="outline"
-              size="sm"
-              onClick={() => setShowBoxLabelModal(true)}
-              startIcon={<Package className="size-4 text-primary" />}
-              className="font-medium"
-            >
-              Transport Label
-            </UIButton>
+              <UITableBody>
+                {(purchaseReturn.items || []).map((item, idx) => (
+                  <UITableRow key={idx} className="hover:bg-surface-hover transition-colors">
+                    <td className="py-2.5 px-3 text-center text-text-muted font-medium text-xs">
+                      {idx + 1}
+                    </td>
+                    <td className="py-2.5 px-3 font-medium text-text text-xs">
+                      {item.productName}
+                      {item.pack && (
+                        <span className="block text-[11px] text-text-muted font-normal">
+                          {item.pack}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2.5 px-3 font-mono font-medium text-xs">
+                      {item.batchNo}
+                    </td>
+                    <td className="py-2.5 px-3 text-center text-text-muted text-xs">
+                      {item.expiry || "-"}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-bold text-xs">
+                      {item.returnQty}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono font-medium text-xs">
+                      {formatCurrency(item.rate)}
+                    </td>
+                    <td className="py-2.5 px-3 text-right text-text-muted text-xs">
+                      {item.gstPct}%
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono font-bold text-text text-xs">
+                      {formatCurrency(item.totalAmount)}
+                    </td>
+                  </UITableRow>
+                ))}
+              </UITableBody>
+            </UITable>
           </div>
 
-          <div className="flex items-center gap-2 justify-end">
-            <UIButton variant="outline" size="sm" onClick={onClose}>
-              Close
-            </UIButton>
-            <UIButton
-              variant="primary"
-              size="sm"
-              onClick={handlePrint}
-              startIcon={<Printer className="size-4" />}
-              className="font-bold shadow-xs"
-            >
-              Print Debit Note Voucher
-            </UIButton>
+          {/* Financial Calculation Breakdown */}
+          <div className="flex justify-end">
+            <div className="w-80">
+              <UISummaryCard
+                title="Debit Note Summary"
+                items={[
+                  {
+                    label: "Taxable Subtotal",
+                    value: formatCurrency(purchaseReturn.taxableSubtotal),
+                  },
+                  {
+                    label: "Total GST (ITC Reversal)",
+                    value: formatCurrency(purchaseReturn.totalGst),
+                    isDeduction: true,
+                  },
+                  ...(purchaseReturn.roundOff
+                    ? [
+                        {
+                          label: "Round Off",
+                          value: formatCurrency(purchaseReturn.roundOff),
+                        },
+                      ]
+                    : []),
+                ]}
+                total={{
+                  label: "Grand Total Debit",
+                  value: formatCurrency(purchaseReturn.grandTotal),
+                }}
+                variant="compact"
+              />
+            </div>
           </div>
-        </div>
-      </UIModalFooter>
-    </UIModal>
+        </UIModalBody>
 
-    {/* Transport Box Labels Generator Modal */}
-    {showBoxLabelModal && (
-      <ReturnBoxLabelModal
-        isOpen={showBoxLabelModal}
-        onClose={() => setShowBoxLabelModal(false)}
-        returnRecord={purchaseReturn}
-      />
-    )}
-  </>
+        <UIModalFooter className="border-t border-border pt-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
+            <div className="flex items-center gap-2">
+              <UIButton
+                variant="outline"
+                size="sm"
+                onClick={() => setShowBoxLabelModal(true)}
+                startIcon={<Package className="size-4 text-primary" />}
+                className="font-medium"
+              >
+                Print Return Transport Box Labels
+              </UIButton>
+            </div>
+
+            <div className="flex items-center gap-2 justify-end">
+              <UIButton variant="outline" size="sm" onClick={onClose}>
+                Close
+              </UIButton>
+              <UIButton
+                variant="primary"
+                size="sm"
+                onClick={handlePrint}
+                startIcon={<Printer className="size-4" />}
+                className="font-bold shadow-xs"
+              >
+                Print Debit Note Voucher
+              </UIButton>
+            </div>
+          </div>
+        </UIModalFooter>
+      </UIModal>
+
+      {/* Transport Box Labels Generator Modal */}
+      {showBoxLabelModal && (
+        <ReturnBoxLabelModal
+          isOpen={showBoxLabelModal}
+          onClose={() => setShowBoxLabelModal(false)}
+          returnRecord={purchaseReturn}
+          onDispatched={(updated) => {
+            if (onUpdated) {
+              onUpdated(updated);
+            }
+          }}
+        />
+      )}
+    </>
   );
 };
 

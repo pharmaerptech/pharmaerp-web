@@ -14,6 +14,7 @@ import {
   AlertCircle,
   FileText,
   Boxes,
+  Loader2,
 } from "lucide-react";
 import {
   UIModal,
@@ -26,15 +27,18 @@ import {
   UISelect,
   UIBadge,
   UITabs,
+  uiToast,
 } from "@/components/ui";
 import useBranch from "@/features/branch/hooks/useBranch";
+import useCompany from "@/features/company/hooks/useCompany";
+import purchaseReturnService from "../services/purchaseReturnService";
 import { cn } from "@/lib/utils";
 
-// Minimal vector Code39 barcode generator for reliable print rendering without external dependencies
+// Minimal vector Code39 barcode generator for reliable thermal & desktop print rendering
 const generateBarcodeSvg = (text) => {
   const clean = String(text).toUpperCase().replace(/[^A-Z0-9\-\.\ \$\/\+\%]/g, "") || "PKG";
   const fullText = `*${clean}*`;
-  
+
   // Code 39 character patterns (9 bars: 0=narrow, 1=wide)
   const patterns = {
     "0": "000110100", "1": "100100001", "2": "001100001", "3": "101100000",
@@ -47,7 +51,7 @@ const generateBarcodeSvg = (text) => {
     "S": "001000110", "T": "000010110", "U": "110000001", "V": "011000001",
     "W": "111000000", "X": "010010001", "Y": "110010000", "Z": "011010000",
     "-": "010000101", ".": "110000100", " ": "011000100", "*": "010010100",
-    "$": "010101000", "/": "010100010", "+": "010001010", "%": "000101010"
+    "$": "010101000", "/": "010100010", "+": "010001010", "%": "000101010",
   };
 
   let bars = [];
@@ -83,35 +87,119 @@ export const ReturnBoxLabelModal = ({
   isOpen,
   onClose,
   returnRecord,
+  onDispatched,
 }) => {
-  const { currentBranch, branches = [] } = useBranch();
+  const { currentBranch, branches = [], workspaceBranches = [], getWorkspaceBranches } = useBranch();
+  const { companies = [], currentCompany, getWorkspaceCompanies } = useCompany();
 
-  // Local configuration states
-  const [destinationBranchId, setDestinationBranchId] = useState("");
-  const [boxCount, setBoxCount] = useState(1);
-  const [printFormat, setPrintFormat] = useState("THERMAL_4X6");
-  const [packageNotes, setPackageNotes] = useState("");
-  const [previewBoxIndex, setPreviewBoxIndex] = useState(1);
+  // Load workspace branches & companies if not present
+  useEffect(() => {
+    if (!workspaceBranches || workspaceBranches.length === 0) {
+      getWorkspaceBranches?.()?.catch?.(() => {});
+    }
+    if (!companies || companies.length === 0) {
+      getWorkspaceCompanies?.()?.catch?.(() => {});
+    }
+  }, [getWorkspaceBranches, getWorkspaceCompanies, workspaceBranches?.length, companies?.length]);
 
-  // Extract source & destination branch objects
+  // Extract origin branch and company
   const originBranch = returnRecord?.branchId || currentBranch || {};
   const originBranchId = originBranch?._id || currentBranch?._id;
 
-  // Filter available destination branches (exclude current facility)
-  const eligibleDestinationBranches = useMemo(() => {
-    return branches.filter((b) => String(b._id) !== String(originBranchId));
-  }, [branches, originBranchId]);
+  const originCompanyId =
+    returnRecord?.companyId?._id ||
+    returnRecord?.companyId ||
+    currentCompany?._id ||
+    originBranch?.companyId?._id ||
+    originBranch?.companyId;
 
-  // Default to first eligible destination branch
+  const originCompany = useMemo(() => {
+    if (returnRecord?.companyId && typeof returnRecord.companyId === "object") {
+      return returnRecord.companyId;
+    }
+    return (
+      companies.find((c) => String(c._id) === String(originCompanyId)) ||
+      currentCompany ||
+      null
+    );
+  }, [companies, returnRecord?.companyId, originCompanyId, currentCompany]);
+
+  // Filter other companies attached to workspace (excluding origin company)
+  const otherCompanies = useMemo(() => {
+    const list = companies.filter(
+      (c) => String(c._id) !== String(originCompanyId)
+    );
+    return list.length > 0 ? list : companies;
+  }, [companies, originCompanyId]);
+
+  // State management
+  const [destinationCompanyId, setDestinationCompanyId] = useState(
+    returnRecord?.shippingDetails?.destinationCompanyId?._id ||
+    returnRecord?.shippingDetails?.destinationCompanyId ||
+    ""
+  );
+  const [destinationBranchId, setDestinationBranchId] = useState(
+    returnRecord?.shippingDetails?.destinationBranchId?._id ||
+    returnRecord?.shippingDetails?.destinationBranchId ||
+    ""
+  );
+  const [boxCount, setBoxCount] = useState(
+    returnRecord?.shippingDetails?.boxCount || 1
+  );
+  const [packageNotes, setPackageNotes] = useState(
+    returnRecord?.shippingDetails?.packageNotes || ""
+  );
+  const [printFormat, setPrintFormat] = useState("THERMAL_4X6");
+  const [previewBoxIndex, setPreviewBoxIndex] = useState(1);
+  const [isDispatching, setIsDispatching] = useState(false);
+
+  // Default to first other company if unselected
   useEffect(() => {
-    if (!destinationBranchId && eligibleDestinationBranches.length > 0) {
+    if (!destinationCompanyId && otherCompanies.length > 0) {
+      setDestinationCompanyId(otherCompanies[0]._id);
+    }
+  }, [otherCompanies, destinationCompanyId]);
+
+  // Filter branches for the chosen destination company
+  const allWorkspaceBranches = useMemo(() => {
+    return workspaceBranches.length > 0 ? workspaceBranches : branches;
+  }, [workspaceBranches, branches]);
+
+  const eligibleDestinationBranches = useMemo(() => {
+    return allWorkspaceBranches.filter((b) => {
+      // Exclude origin facility
+      if (String(b._id) === String(originBranchId)) return false;
+      // If destinationCompanyId selected, match company
+      if (destinationCompanyId) {
+        const bCompId = b.companyId?._id || b.companyId;
+        return String(bCompId) === String(destinationCompanyId);
+      }
+      return true;
+    });
+  }, [allWorkspaceBranches, originBranchId, destinationCompanyId]);
+
+  // Default destination branch when eligible branches change
+  useEffect(() => {
+    if (
+      (!destinationBranchId ||
+        !eligibleDestinationBranches.some((b) => String(b._id) === String(destinationBranchId))) &&
+      eligibleDestinationBranches.length > 0
+    ) {
       setDestinationBranchId(eligibleDestinationBranches[0]._id);
     }
   }, [eligibleDestinationBranches, destinationBranchId]);
 
+  const selectedDestinationCompany = useMemo(() => {
+    return companies.find((c) => String(c._id) === String(destinationCompanyId)) || null;
+  }, [companies, destinationCompanyId]);
+
   const selectedDestinationBranch = useMemo(() => {
-    return branches.find((b) => String(b._id) === String(destinationBranchId)) || eligibleDestinationBranches[0] || null;
-  }, [branches, destinationBranchId, eligibleDestinationBranches]);
+    return (
+      allWorkspaceBranches.find((b) => String(b._id) === String(destinationBranchId)) ||
+      eligibleDestinationBranches[0] ||
+      null
+    );
+  }, [allWorkspaceBranches, destinationBranchId, eligibleDestinationBranches]);
 
   // Extract supplier details
   const supplier =
@@ -180,7 +268,7 @@ export const ReturnBoxLabelModal = ({
           <!-- Document Reference Bar -->
           <div class="ref-bar">
             <div>
-              <span class="label-key">DEBIT NOTE / ORDER REF:</span>
+              <span class="label-key">DEBIT NOTE REF:</span>
               <span class="label-val mono">${debitNoteNo}</span>
             </div>
             <div>
@@ -193,10 +281,11 @@ export const ReturnBoxLabelModal = ({
             </div>
           </div>
 
-          <!-- FROM & TO Section -->
+          <!-- FROM & TO Routing Grid -->
           <div class="routing-grid">
             <div class="route-block from-block">
               <span class="block-tag">FROM (ORIGIN FACILITY):</span>
+              <div class="company-sub">${originCompany?.name || originCompany?.legalName || "Origin Company"}</div>
               <div class="facility-name">${originBranch?.name || "Active Facility"}</div>
               <div class="facility-address">
                 ${
@@ -218,8 +307,9 @@ export const ReturnBoxLabelModal = ({
             </div>
 
             <div class="route-block to-block">
-              <span class="block-tag">TO (DESTINATION FACILITY / HUB):</span>
-              <div class="facility-name">${selectedDestinationBranch?.name || "Target Company Branch"}</div>
+              <span class="block-tag">TO (DESTINATION HUB):</span>
+              <div class="company-sub">${selectedDestinationCompany?.name || "Target Company"}</div>
+              <div class="facility-name">${selectedDestinationBranch?.name || "Target Hub / Branch"}</div>
               <div class="facility-address">
                 ${
                   typeof selectedDestinationBranch?.address === "string"
@@ -258,7 +348,7 @@ export const ReturnBoxLabelModal = ({
             </div>
             <div class="cargo-stat">
               <span class="stat-num">${totalUnits}</span>
-              <span class="stat-lbl">Total Return Units</span>
+              <span class="stat-lbl">Total Units</span>
             </div>
             <div class="cargo-stat">
               <span class="stat-num">BOX ${i} / ${boxCount}</span>
@@ -407,7 +497,14 @@ export const ReturnBoxLabelModal = ({
               color: #555;
               text-transform: uppercase;
               display: block;
-              margin-bottom: 2px;
+              margin-bottom: 1px;
+            }
+            .company-sub {
+              font-size: 9px;
+              font-weight: 800;
+              color: #111;
+              text-transform: uppercase;
+              letter-spacing: 0.02em;
             }
             .facility-name {
               font-size: 11.5px;
@@ -502,6 +599,48 @@ export const ReturnBoxLabelModal = ({
     printWin.document.close();
   };
 
+  const handleDispatchAndPrint = async () => {
+    if (!returnRecord?._id) {
+      handlePrint();
+      return;
+    }
+
+    if (!destinationBranchId) {
+      uiToast.error("Please select a destination branch");
+      return;
+    }
+
+    setIsDispatching(true);
+    try {
+      const payload = {
+        destinationCompanyId: destinationCompanyId || null,
+        destinationBranchId,
+        boxCount: Number(boxCount) || 1,
+        packageNotes: packageNotes?.trim() || undefined,
+      };
+
+      const res = await purchaseReturnService.dispatchReturnBox(returnRecord._id, payload);
+      const updatedData = res.data?.data || res.data;
+
+      uiToast.success(
+        `Consignment dispatched to ${selectedDestinationBranch?.name || "destination hub"}!`
+      );
+
+      if (onDispatched) {
+        onDispatched(updatedData);
+      }
+
+      handlePrint();
+    } catch (err) {
+      console.error("Failed to dispatch return box:", err);
+      uiToast.error(
+        err.response?.data?.message || err.message || "Failed to dispatch return box"
+      );
+    } finally {
+      setIsDispatching(false);
+    }
+  };
+
   const previewBarcodeSvg = useMemo(() => {
     return generateBarcodeSvg(`${debitNoteNo}-B${previewBoxIndex}`);
   }, [debitNoteNo, previewBoxIndex]);
@@ -518,7 +657,7 @@ export const ReturnBoxLabelModal = ({
               Print Return Transport Box Labels
             </UIModalTitle>
             <UIModalDescription className="text-xs text-text-muted">
-              Generate barcode stickers for routing packed consignment to company hub & supplier
+              Dispatch packed boxes to other workspace company branch and generate barcode stickers
             </UIModalDescription>
           </div>
         </div>
@@ -526,13 +665,49 @@ export const ReturnBoxLabelModal = ({
 
       <UIModalBody className="py-4 space-y-4 max-h-[75vh] overflow-y-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* Left Column: Packing Configuration (5 cols) */}
-          <div className="lg:col-span-5 space-y-4">
-            {/* 1. Destination Branch Selector */}
+          {/* Left Column: Routing & Packing Configuration (5 cols) */}
+          <div className="lg:col-span-5 space-y-3.5">
+            {/* Origin Facility Information Strip */}
+            <div className="p-2.5 rounded-xl bg-surface-alt border border-border/80 space-y-1">
+              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                Origin Consignment Dispatcher
+              </span>
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-text truncate">
+                  {originCompany?.name || "Origin Company"}
+                </span>
+                <UIBadge variant="soft" color="primary">
+                  {originBranch?.name || "Active Facility"}
+                </UIBadge>
+              </div>
+            </div>
+
+            {/* 1. Destination Company Selector */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text flex items-center gap-1.5">
                 <Building2 className="size-3.5 text-primary" />
-                Final Selected Branch (Destination) *
+                Target Company (Workspace) *
+              </label>
+              <UISelect
+                value={destinationCompanyId}
+                onChange={(val) => {
+                  setDestinationCompanyId(val);
+                  setDestinationBranchId("");
+                }}
+                options={otherCompanies.map((c) => ({
+                  value: c._id,
+                  label: `${c.name || c.legalName} ${c.code ? `(${c.code})` : ""}`,
+                }))}
+                placeholder="Select workspace company..."
+                size="sm"
+              />
+            </div>
+
+            {/* 2. Destination Branch Selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-text flex items-center gap-1.5">
+                <Truck className="size-3.5 text-primary" />
+                Destination Branch / Hub *
               </label>
               <UISelect
                 value={destinationBranchId}
@@ -541,15 +716,19 @@ export const ReturnBoxLabelModal = ({
                   value: b._id,
                   label: b.name,
                 }))}
-                placeholder="Select destination hub..."
+                placeholder={
+                  eligibleDestinationBranches.length === 0
+                    ? "No branches available for selected company"
+                    : "Select destination branch..."
+                }
                 size="sm"
               />
               <span className="text-[11px] text-text-muted block">
-                Goods will be routed from <strong className="text-text">{originBranch?.name || "Active Facility"}</strong> to this branch.
+                The box will be received at <strong className="text-text">{selectedDestinationBranch?.name || "Selected Branch"}</strong>.
               </span>
             </div>
 
-            {/* 2. Number of Packed Boxes (Stepper) */}
+            {/* 3. Number of Packed Boxes (Stepper) */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text flex items-center gap-1.5">
                 <Boxes className="size-3.5 text-primary" />
@@ -579,7 +758,7 @@ export const ReturnBoxLabelModal = ({
               </div>
             </div>
 
-            {/* 3. Print Format Picker */}
+            {/* 4. Print Format Picker */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text flex items-center gap-1.5">
                 <Printer className="size-3.5 text-primary" />
@@ -597,32 +776,32 @@ export const ReturnBoxLabelModal = ({
               />
             </div>
 
-            {/* 4. Optional Transport Notes */}
+            {/* 5. Optional Transport Notes */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-text-muted block">
-                Carton / Handling Instructions (Optional)
+                Carton Handling Instructions (Optional)
               </label>
               <input
                 type="text"
                 value={packageNotes}
                 onChange={(e) => setPackageNotes(e.target.value)}
-                placeholder="e.g. Fragile liquids / Keep refrigerated / Heavy"
+                placeholder="e.g. Fragile glass bottles / Keep refrigerated"
                 className="w-full h-8 px-2.5 border border-border rounded-lg bg-surface text-xs font-medium text-text placeholder:text-text-muted focus:ring-1 focus:ring-primary focus:border-primary outline-hidden"
               />
             </div>
 
-            {/* Information Card */}
+            {/* Consignment Metadata */}
             <div className="p-3 rounded-xl bg-surface-alt border border-border space-y-1 text-xs">
               <div className="font-semibold text-text flex items-center justify-between">
-                <span>Consignment Reference</span>
+                <span>Debit Note Reference</span>
                 <span className="font-mono text-primary font-bold">{debitNoteNo}</span>
               </div>
               <div className="text-text-muted flex justify-between text-[11px]">
-                <span>Total Return Units</span>
+                <span>Total Units</span>
                 <strong className="text-text">{totalUnits} units ({totalBatches} batches)</strong>
               </div>
               <div className="text-text-muted flex justify-between text-[11px]">
-                <span>Target Creditor</span>
+                <span>Target Supplier</span>
                 <strong className="text-text truncate max-w-44">{supplierName}</strong>
               </div>
             </div>
@@ -699,6 +878,9 @@ export const ReturnBoxLabelModal = ({
                   <span className="text-[7.5px] font-bold text-neutral-500 uppercase block mb-0.5">
                     FROM (Origin Facility):
                   </span>
+                  <div className="text-[8px] font-bold text-neutral-700 truncate">
+                    {originCompany?.name || originCompany?.legalName || "Origin Company"}
+                  </div>
                   <div className="font-extrabold text-[10px] text-black leading-tight truncate">
                     {originBranch?.name || "Active Facility"}
                   </div>
@@ -718,8 +900,11 @@ export const ReturnBoxLabelModal = ({
                   <span className="text-[7.5px] font-bold text-neutral-500 uppercase block mb-0.5">
                     TO (Destination Hub):
                   </span>
+                  <div className="text-[8px] font-bold text-neutral-700 truncate">
+                    {selectedDestinationCompany?.name || "Target Company"}
+                  </div>
                   <div className="font-extrabold text-[10px] text-black leading-tight truncate">
-                    {selectedDestinationBranch?.name || "Target Company Branch"}
+                    {selectedDestinationBranch?.name || "Target Branch"}
                   </div>
                   <div className="text-[8px] text-neutral-600 leading-tight truncate mt-0.5">
                     {typeof selectedDestinationBranch?.address === "string"
@@ -782,7 +967,7 @@ export const ReturnBoxLabelModal = ({
       </UIModalBody>
 
       <UIModalFooter className="border-t border-border pt-3">
-        <div className="flex items-center justify-between w-full">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
           <span className="text-xs text-text-muted">
             Format: <strong className="text-text">{printFormat === "THERMAL_4X6" ? "4\" × 6\" Thermal Label" : "A4 Sheet"}</strong> ({boxCount} {boxCount === 1 ? "box" : "boxes"})
           </span>
@@ -790,15 +975,47 @@ export const ReturnBoxLabelModal = ({
             <UIButton variant="outline" size="sm" onClick={onClose}>
               Cancel
             </UIButton>
-            <UIButton
-              variant="primary"
-              size="sm"
-              onClick={handlePrint}
-              startIcon={<Printer className="size-4" />}
-              className="font-bold shadow-xs px-4"
-            >
-              Print {boxCount} {boxCount === 1 ? "Label" : "Labels"}
-            </UIButton>
+
+            {returnRecord?._id ? (
+              <>
+                <UIButton
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePrint}
+                  startIcon={<Printer className="size-4" />}
+                  title="Print labels without updating dispatch status"
+                >
+                  Print Labels Only
+                </UIButton>
+
+                <UIButton
+                  variant="primary"
+                  size="sm"
+                  onClick={handleDispatchAndPrint}
+                  disabled={isDispatching}
+                  startIcon={
+                    isDispatching ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Truck className="size-4" />
+                    )
+                  }
+                  className="font-bold shadow-xs px-4"
+                >
+                  {isDispatching ? "Dispatching..." : `Dispatch & Print ${boxCount} ${boxCount === 1 ? "Label" : "Labels"}`}
+                </UIButton>
+              </>
+            ) : (
+              <UIButton
+                variant="primary"
+                size="sm"
+                onClick={handlePrint}
+                startIcon={<Printer className="size-4" />}
+                className="font-bold shadow-xs px-4"
+              >
+                Print {boxCount} {boxCount === 1 ? "Label" : "Labels"}
+              </UIButton>
+            )}
           </div>
         </div>
       </UIModalFooter>

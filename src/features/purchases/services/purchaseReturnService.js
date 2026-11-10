@@ -20,6 +20,14 @@ const purchaseReturnService = {
   cancelPurchaseReturn(returnId, payload = {}) {
     return apiClient.post(ENDPOINTS.PURCHASE_RETURN.CANCEL(returnId), payload);
   },
+
+  dispatchReturnBox(returnId, payload) {
+    return apiClient.post(ENDPOINTS.PURCHASE_RETURN.DISPATCH(returnId), payload);
+  },
+
+  receiveReturnBox(returnId) {
+    return apiClient.post(ENDPOINTS.PURCHASE_RETURN.RECEIVE_BOX(returnId));
+  },
 };
 
 export default purchaseReturnService;
