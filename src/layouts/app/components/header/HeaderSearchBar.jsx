@@ -15,7 +15,7 @@ import { getAccessibleSearchCommands } from "./accessibleSearchCommands";
 
 const HeaderSearchBar = ({ className = "" }) => {
   const navigate = useNavigate();
-  const { can, canAny, isOwner } = usePermission();
+  const { can, canAny, isOwner, workAccess } = usePermission();
   const { isSetupComplete, companyCompleted } = useSetupStatus();
   const { workMode } = useWorkMode();
   const { currentLevel } = useNavigationPipeline();
@@ -36,8 +36,8 @@ const HeaderSearchBar = ({ className = "" }) => {
 
   // Compute all commands the current user is permitted to see, scoped by currentLevel
   const accessibleCommands = useMemo(() => {
-    return getAccessibleSearchCommands(can, canAny, isOwner, workMode, currentLevel);
-  }, [can, canAny, isOwner, workMode, currentLevel]);
+    return getAccessibleSearchCommands(can, canAny, isOwner, workMode, currentLevel, workAccess);
+  }, [can, canAny, isOwner, workMode, currentLevel, workAccess]);
 
   // Tag commands with setup locked status
   const commandsWithLockStatus = useMemo(() => {

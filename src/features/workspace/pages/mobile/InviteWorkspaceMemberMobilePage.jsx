@@ -30,6 +30,8 @@ import {
   UIAlert,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessBadges } from "@/features/access-control/components";
+import { isWorkAccessPermissionKey } from "@/utils/workAccess";
 
 export default function InviteWorkspaceMemberMobilePage({
   formData = {
@@ -338,10 +340,12 @@ export default function InviteWorkspaceMemberMobilePage({
               >
                 <div>
                   <span className="text-xs font-bold block">{role.name}</span>
+                  <RoleWorkAccessBadges role={role} compact className="mt-1" />
                   <span className="text-[10.5px] text-text-muted block">
-                    {role.permissions?.length || 0} Permissions
+                    {(role.permissions || []).filter((p) => !isWorkAccessPermissionKey(p)).length} Module Permissions
                   </span>
                 </div>
+
                 {isSelected && <Check className="size-4 text-primary" />}
               </div>
             );

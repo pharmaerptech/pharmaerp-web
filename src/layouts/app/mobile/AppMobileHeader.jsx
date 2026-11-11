@@ -107,7 +107,7 @@ const getPageTitle = (pathname) => {
 const AppMobileHeader = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { can, canAny, isOwner } = usePermission();
+  const { can, canAny, isOwner, workAccess, canWorkMode, canWorkLevel } = usePermission();
   const { isSetupComplete } = useSetupStatus();
   const { workMode, isOperationMode } = useWorkMode();
   const { currentLevel, isBranchLevel } = useNavigationPipeline();
@@ -123,8 +123,8 @@ const AppMobileHeader = ({ onMenuClick }) => {
   );
 
   const accessibleCommands = useMemo(() => {
-    return getAccessibleSearchCommands(can, canAny, isOwner, workMode, currentLevel);
-  }, [can, canAny, isOwner, workMode, currentLevel]);
+    return getAccessibleSearchCommands(can, canAny, isOwner, workMode, currentLevel, workAccess);
+  }, [can, canAny, isOwner, workMode, currentLevel, workAccess]);
 
   useEffect(() => {
     if (searchOpen) {
@@ -232,7 +232,10 @@ const AppMobileHeader = ({ onMenuClick }) => {
             </>
           )}
 
-          {isOperationMode && isBranchLevel && (
+          {isOperationMode &&
+            isBranchLevel &&
+            canWorkLevel("branch") &&
+            canWorkMode("operation") && (
             <Link
               to={ROUTES.SALES}
               aria-label="Open POS Billing"

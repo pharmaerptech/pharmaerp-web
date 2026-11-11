@@ -1,34 +1,37 @@
 // src/hooks/usePermission.js
 //
-// Core permission hook for the ERP frontend.
-//
-// Usage:
-//   const { can, canAny, isOwner, isLoaded } = usePermission();
-//   if (can("inventory.view")) { ... }
-//   if (canAny(["finance.view", "finance.create"])) { ... }
-//
-// Owner bypass: workspace owners always have all permissions.
-// Permission format: plain strings matching backend keys, e.g. "inventory.view".
+// Core permission + work-mode/work-level hook for the ERP frontend.
 
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useSelector } from "react-redux";
 
-import { selectMyAccess, selectGetMyAccessStatus } from "@/features/access-control/store/accessControlSelector";
+import {
+  selectMyAccess,
+  selectMyWorkAccess,
+  selectGetMyAccessStatus,
+} from "@/features/access-control/store/accessControlSelector";
 import { selectWorkspaces, selectCurrentWorkspace } from "@/features/workspace/store/workspaceSelector";
 import { selectUserProfile } from "@/features/user/store/userSelector";
 import { API_STATUS } from "@/constants";
+import {
+  WORK_MODES,
+  isWorkLevelAllowed,
+  isWorkModeAllowed,
+  resolveMyWorkAccess,
+} from "@/utils/workAccess";
 
 const usePermission = () => {
   const myAccess = useSelector(selectMyAccess);
+  const storedWorkAccess = useSelector(selectMyWorkAccess);
   const getMyAccessStatus = useSelector(selectGetMyAccessStatus);
   const workspaces = useSelector(selectWorkspaces);
   const currentWorkspace = useSelector(selectCurrentWorkspace);
   const userProfile = useSelector(selectUserProfile);
 
-  // Determine if the current user is the workspace owner.
-  // Checks member.isOwner, myAccess.isOwner, and userProfile.isOwner.
   const isOwner = useMemo(() => {
-    if (userProfile?.isOwner || myAccess?.isOwner || myAccess?.member?.isOwner) return true;
+    if (userProfile?.isOwner || myAccess?.isOwner || myAccess?.member?.isOwner) {
+      return true;
+    }
 
     if (!currentWorkspace?._id || !workspaces?.length) {
       return Boolean(userProfile?.isOwner || myAccess?.isOwner || myAccess?.member?.isOwner);
@@ -47,61 +50,98 @@ const usePermission = () => {
     return Boolean(member?.isOwner || matchingItem?.isOwner || matchingItem?.isOwnerWorkspace);
   }, [workspaces, currentWorkspace, userProfile, myAccess]);
 
-  // Build a Set of the current user's permission keys for O(1) lookup.
-  // myAccess shape from backend: { permissions: [...string], ... }
   const permissionSet = useMemo(() => {
     if (!myAccess) return new Set();
     const perms = myAccess?.permissions || myAccess?.role?.permissions || [];
     return new Set(Array.isArray(perms) ? perms : []);
   }, [myAccess]);
 
-  // Whether permissions have been loaded (or the user is owner — owner needs no load).
+  const workAccess = useMemo(() => {
+    if (isOwner) {
+      return resolveMyWorkAccess(myAccess, { isOwnerOverride: true });
+    }
+    return storedWorkAccess || resolveMyWorkAccess(myAccess, { isOwnerOverride: false });
+  }, [isOwner, myAccess, storedWorkAccess]);
+
+  const allowedWorkModes = useMemo(
+    () => workAccess?.allowedWorkModes || null,
+    [workAccess],
+  );
+
+  const allowedWorkLevels = useMemo(
+    () => workAccess?.allowedWorkLevels || null,
+    [workAccess],
+  );
+
+  const highestWorkLevel = workAccess?.highestWorkLevel || null;
+
   const isLoaded =
     isOwner ||
     getMyAccessStatus === API_STATUS.SUCCESS ||
     getMyAccessStatus === API_STATUS.ERROR;
 
-  /**
-   * Check if the current user has a specific permission.
-   * Workspace owners always return true.
-   * @param {string} permissionKey - e.g. "inventory.view"
-   */
-  const can = (permissionKey) => {
-    if (isOwner) return true;
-    if (!permissionKey) return true; // no restriction = always visible
-    return permissionSet.has(permissionKey);
-  };
+  const can = useCallback(
+    (permissionKey) => {
+      if (isOwner) return true;
+      if (!permissionKey) return true;
+      return permissionSet.has(permissionKey);
+    },
+    [isOwner, permissionSet],
+  );
 
-  /**
-   * Check if the current user has ANY of the given permissions.
-   * Workspace owners always return true.
-   * @param {string[]} permissionKeys
-   */
-  const canAny = (permissionKeys) => {
-    if (isOwner) return true;
-    if (!permissionKeys?.length) return true;
-    return permissionKeys.some((key) => permissionSet.has(key));
-  };
+  const canAny = useCallback(
+    (permissionKeys) => {
+      if (isOwner) return true;
+      if (!permissionKeys?.length) return true;
+      return permissionKeys.some((key) => permissionSet.has(key));
+    },
+    [isOwner, permissionSet],
+  );
 
-  /**
-   * Check if the current user has ALL of the given permissions.
-   * Workspace owners always return true.
-   * @param {string[]} permissionKeys
-   */
-  const canAll = (permissionKeys) => {
-    if (isOwner) return true;
-    if (!permissionKeys?.length) return true;
-    return permissionKeys.every((key) => permissionSet.has(key));
-  };
+  const canAll = useCallback(
+    (permissionKeys) => {
+      if (isOwner) return true;
+      if (!permissionKeys?.length) return true;
+      return permissionKeys.every((key) => permissionSet.has(key));
+    },
+    [isOwner, permissionSet],
+  );
+
+  const canWorkMode = useCallback(
+    (mode) => {
+      if (isOwner) return true;
+      if (!workAccess) return false;
+      return isWorkModeAllowed(workAccess, mode);
+    },
+    [isOwner, workAccess],
+  );
+
+  const canWorkLevel = useCallback(
+    (level) => {
+      if (isOwner) return true;
+      if (!workAccess) return false;
+      return isWorkLevelAllowed(workAccess, level);
+    },
+    [isOwner, workAccess],
+  );
 
   return {
     can,
     canAny,
     canAll,
+    canWorkMode,
+    canWorkLevel,
+    canViewMode: canWorkMode(WORK_MODES.VIEW),
+    canOperationMode: canWorkMode(WORK_MODES.OPERATION),
+    canSwitchWorkMode: Boolean(isOwner || (allowedWorkModes && allowedWorkModes.length > 1)),
     isOwner,
     isLoaded,
     myAccess,
     permissionSet,
+    workAccess,
+    allowedWorkModes,
+    allowedWorkLevels,
+    highestWorkLevel,
   };
 };
 

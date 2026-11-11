@@ -743,9 +743,11 @@ export const SalesDesktopPage = () => {
     };
   };
 
+  const activeShiftId = activeShift?._id || activeShift?.id || null;
+
   // Auto-load priority automatic hold on return / refresh (or resolve explicit resume from Billing)
   useEffect(() => {
-    if (isEditMode || !branchId || !activeShift || hasInitializedAutoHoldRef.current) {
+    if (isEditMode || !branchId || !activeShiftId || hasInitializedAutoHoldRef.current) {
       return;
     }
     hasInitializedAutoHoldRef.current = true;
@@ -769,21 +771,17 @@ export const SalesDesktopPage = () => {
         }
         setPendingResumeBill(pendingResume);
         setIsResumeConflictOpen(true);
-        return;
-      }
-
-      if (existingAuto && existingAuto.id === pendingResume.id) {
-        consumeAutoHold();
       } else {
-        resumeBill(pendingResume.id);
+        if (existingAuto && existingAuto.id === pendingResume.id) {
+          consumeAutoHold();
+        } else {
+          resumeBill(pendingResume.id);
+        }
+        hydrateFormFromHeldBill(pendingResume);
+        setToastMessage(`▶️ Resumed held bill ${pendingResume.holdNumber || ""}.`);
+        setTimeout(() => setToastMessage(null), 3500);
       }
-      hydrateFormFromHeldBill(pendingResume);
-      setToastMessage(`▶️ Resumed held bill ${pendingResume.holdNumber || ""}.`);
-      setTimeout(() => setToastMessage(null), 3500);
-      return;
-    }
-
-    if (existingAuto) {
+    } else if (existingAuto) {
       const restoredAuto = consumeAutoHold();
       if (restoredAuto) {
         hydrateFormFromHeldBill(restoredAuto);
@@ -791,7 +789,11 @@ export const SalesDesktopPage = () => {
         setTimeout(() => setToastMessage(null), 3000);
       }
     }
-  }, [branchId, activeShift, isEditMode, getAutoHold, consumeAutoHold, resumeBill]);
+
+    return () => {
+      hasInitializedAutoHoldRef.current = false;
+    };
+  }, [branchId, activeShiftId, isEditMode, getAutoHold, consumeAutoHold, resumeBill]);
 
   // Persist current POS work as an automatic hold on route leave or browser refresh/unload
   useEffect(() => {
@@ -2068,7 +2070,9 @@ export const SalesDesktopPage = () => {
                   <PauseCircle
                     className={cn(
                       "size-4 transition-colors",
-                      cart.length > 0 || heldBillsCount > 0
+                      heldBillsCount > 0
+                        ? "text-warning group-hover:text-white"
+                        : cart.length > 0
                         ? "text-warning"
                         : "text-text-muted"
                     )}

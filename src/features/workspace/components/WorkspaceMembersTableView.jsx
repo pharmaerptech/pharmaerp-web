@@ -1,6 +1,5 @@
 // src/features/workspace/components/WorkspaceMembersTableView.jsx
 
-import React from "react";
 import {
   MoreHorizontal,
   Mail,
@@ -31,6 +30,7 @@ import {
   UIIconButton,
 } from "@/components/ui";
 import { usePermission } from "@/hooks";
+import { RoleWorkAccessBadges } from "@/features/access-control/components";
 
 const STATUS_COLOR_MAP = {
   active: "success",
@@ -65,7 +65,7 @@ export const WorkspaceMembersTableView = ({
           <UITableHeader>
             <UITableRow className="bg-surface-alt/60">
               <UITableHead className="min-w-[240px]">Member</UITableHead>
-              <UITableHead className="min-w-[130px]">Role</UITableHead>
+              <UITableHead className="min-w-[200px]">Role &amp; Work Access</UITableHead>
               <UITableHead className="min-w-[140px]">Company Access</UITableHead>
               <UITableHead className="min-w-[140px]">Branch Access</UITableHead>
               <UITableHead className="min-w-[140px]">Contact</UITableHead>
@@ -86,31 +86,34 @@ export const WorkspaceMembersTableView = ({
               const companyAccessLabel = isOwner
                 ? "All Companies"
                 : member?.accessAllCompanies
-                ? "All Companies"
-                : (member?.companyCount === 0 || member?.companies?.length === 0 || member?.companyIds?.length === 0)
-                ? "No Companies"
-                : member?.companyCount !== undefined
-                ? `${member.companyCount} ${member.companyCount === 1 ? "Company" : "Companies"}`
-                : member?.companies?.length !== undefined
-                ? `${member.companies.length} ${member.companies.length === 1 ? "Company" : "Companies"}`
-                : member?.companyIds?.length !== undefined
-                ? `${member.companyIds.length} ${member.companyIds.length === 1 ? "Company" : "Companies"}`
-                : "No Companies";
+                  ? "All Companies"
+                  : member?.companyCount === 0 ||
+                      member?.companies?.length === 0 ||
+                      member?.companyIds?.length === 0
+                    ? "No Companies"
+                    : member?.companyCount !== undefined
+                      ? `${member.companyCount} ${member.companyCount === 1 ? "Company" : "Companies"}`
+                      : member?.companies?.length !== undefined
+                        ? `${member.companies.length} ${member.companies.length === 1 ? "Company" : "Companies"}`
+                        : member?.companyIds?.length !== undefined
+                          ? `${member.companyIds.length} ${member.companyIds.length === 1 ? "Company" : "Companies"}`
+                          : "No Companies";
 
               const branchAccessLabel = isOwner
                 ? "All Branches"
                 : member?.accessAllBranches
-                ? "All Branches"
-                : (member?.branchCount === 0 || member?.branches?.length === 0 || member?.branchIds?.length === 0)
-                ? "No Branches"
-                : member?.branchCount !== undefined
-                ? `${member.branchCount} ${member.branchCount === 1 ? "Branch" : "Branches"}`
-                : member?.branches?.length !== undefined
-                ? `${member.branches.length} ${member.branches.length === 1 ? "Branch" : "Branches"}`
-                : member?.branchIds?.length !== undefined
-                ? `${member.branchIds.length} ${member.branchIds.length === 1 ? "Branch" : "Branches"}`
-                : "No Branches";
-
+                  ? "All Branches"
+                  : member?.branchCount === 0 ||
+                      member?.branches?.length === 0 ||
+                      member?.branchIds?.length === 0
+                    ? "No Branches"
+                    : member?.branchCount !== undefined
+                      ? `${member.branchCount} ${member.branchCount === 1 ? "Branch" : "Branches"}`
+                      : member?.branches?.length !== undefined
+                        ? `${member.branches.length} ${member.branches.length === 1 ? "Branch" : "Branches"}`
+                        : member?.branchIds?.length !== undefined
+                          ? `${member.branchIds.length} ${member.branchIds.length === 1 ? "Branch" : "Branches"}`
+                          : "No Branches";
 
               return (
                 <UITableRow
@@ -147,17 +150,24 @@ export const WorkspaceMembersTableView = ({
                     </div>
                   </UITableCell>
 
-                  {/* Role */}
+                  {/* Role & Work Access */}
                   <UITableCell>
-                    <UIBadge
-                      variant="soft"
-                      color={isOwner ? "primary" : "neutral"}
-                      size="sm"
-                      icon={<Shield className="size-3.5 shrink-0" />}
-                      className="whitespace-nowrap font-semibold capitalize"
-                    >
-                      {roleName}
-                    </UIBadge>
+                    <div className="space-y-1.5">
+                      <UIBadge
+                        variant="soft"
+                        color={isOwner ? "primary" : "neutral"}
+                        size="sm"
+                        icon={<Shield className="size-3.5 shrink-0" />}
+                        className="whitespace-nowrap font-semibold capitalize"
+                      >
+                        {roleName}
+                      </UIBadge>
+                      <RoleWorkAccessBadges
+                        workAccess={member?.workAccess}
+                        role={member?.role || member?.roleId}
+                        compact
+                      />
+                    </div>
                   </UITableCell>
 
                   {/* Company Access */}
@@ -226,7 +236,7 @@ export const WorkspaceMembersTableView = ({
                           icon={<MapPin className="size-4" />}
                           onClick={() => onManageAccess?.(member)}
                         >
-                          Manage Access & Roles
+                          Manage Access &amp; Roles
                         </UIDropdownItem>
                         <UIDropdownItem
                           icon={<Key className="size-4" />}

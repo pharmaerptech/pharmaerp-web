@@ -5,8 +5,13 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import {
+  isWorkAccessPermissionKey,
+  resolveRoleWorkAccess,
+} from "@/utils/workAccess";
 
 import useAccessControl from "../hooks/useAccessControl";
+import { isRoleEditableByPolicy } from "../utils/roleForm.helper";
 
 import RoleDetailsDesktopPage from "./desktop/RoleDetailsDesktopPage";
 import RoleDetailsMobilePage from "./mobile/RoleDetailsMobilePage";
@@ -62,12 +67,18 @@ const mapRoleForView = (role, availablePermissions = []) => {
   if (!role?._id) return null;
 
   const permissions = Array.isArray(role.permissions) ? role.permissions : [];
+  const modulePermissions = permissions.filter(
+    (perm) => !isWorkAccessPermissionKey(perm),
+  );
+  const workAccess = resolveRoleWorkAccess(role);
   const status = String(role.status || "active").toLowerCase();
   const isSystem = Boolean(role.isSystem);
-  const isEditable = role.isEditable !== false && !isSystem;
+  const isOwnerRole = String(role.code || "").trim().toLowerCase() === "owner";
+  const isEditable = isRoleEditableByPolicy(role);
 
   const totalPermissionCount = Array.isArray(availablePermissions)
-    ? availablePermissions.length
+    ? availablePermissions.filter((perm) => !isWorkAccessPermissionKey(perm))
+        .length
     : 0;
 
   return {
@@ -80,11 +91,14 @@ const mapRoleForView = (role, availablePermissions = []) => {
     code: role.code || "-",
     description: role.description || "No description added.",
 
-    permissions,
-    permissionCount: permissions.length,
+    permissions: modulePermissions,
+    rawPermissions: permissions,
+    permissionCount: modulePermissions.length,
     totalPermissionCount,
+    workAccess,
 
     isSystem,
+    isOwnerRole,
     isEditable,
     status,
 

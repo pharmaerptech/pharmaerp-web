@@ -195,8 +195,10 @@ export const SalesMobilePage = () => {
     };
   };
 
+  const activeShiftId = activeShift?._id || activeShift?.id || null;
+
   useEffect(() => {
-    if (isEditMode || !branchId || !activeShift || hasInitializedAutoHoldRef.current) {
+    if (isEditMode || !branchId || !activeShiftId || hasInitializedAutoHoldRef.current) {
       return;
     }
     hasInitializedAutoHoldRef.current = true;
@@ -220,21 +222,17 @@ export const SalesMobilePage = () => {
         }
         setPendingResumeBill(pendingResume);
         setIsResumeConflictOpen(true);
-        return;
-      }
-
-      if (existingAuto && existingAuto.id === pendingResume.id) {
-        consumeAutoHold();
       } else {
-        resumeBill(pendingResume.id);
+        if (existingAuto && existingAuto.id === pendingResume.id) {
+          consumeAutoHold();
+        } else {
+          resumeBill(pendingResume.id);
+        }
+        hydrateMobileDraft(pendingResume);
+        setToastMessage(`▶️ Resumed held bill ${pendingResume.holdNumber || ""}.`);
+        setTimeout(() => setToastMessage(null), 3500);
       }
-      hydrateMobileDraft(pendingResume);
-      setToastMessage(`▶️ Resumed held bill ${pendingResume.holdNumber || ""}.`);
-      setTimeout(() => setToastMessage(null), 3500);
-      return;
-    }
-
-    if (existingAuto) {
+    } else if (existingAuto) {
       const restoredAuto = consumeAutoHold();
       if (restoredAuto) {
         hydrateMobileDraft(restoredAuto);
@@ -242,7 +240,11 @@ export const SalesMobilePage = () => {
         setTimeout(() => setToastMessage(null), 3000);
       }
     }
-  }, [branchId, activeShift, isEditMode, getAutoHold, consumeAutoHold, resumeBill]);
+
+    return () => {
+      hasInitializedAutoHoldRef.current = false;
+    };
+  }, [branchId, activeShiftId, isEditMode, getAutoHold, consumeAutoHold, resumeBill]);
 
   useEffect(() => {
     const persistAutoHoldIfEligible = () => {

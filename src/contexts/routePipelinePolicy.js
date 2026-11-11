@@ -1,6 +1,12 @@
 // src/contexts/routePipelinePolicy.js
 //
 // Pure, zero-dependency route policy engine defining which routes belong to each
+// (pipelineLevel, workMode) pair, prerequisite reconciliation, and role/permission enforcement.
+
+import {
+  clampWorkLevelToAllowed,
+  clampWorkModeToAllowed,
+} from "../utils/workAccess.js";
 // (pipelineLevel, workMode) pair, prerequisite reconciliation, and canonical redirects.
 
 export const PIPELINE_LEVELS = {
@@ -40,10 +46,19 @@ const normalizePathname = (pathname = "") => {
 /**
  * Returns default landing route for any (level, mode) combination.
  */
-export const getPipelineDefaultRoute = (level, workMode) => {
-  const isOp = workMode === WORK_MODES.OPERATION;
+export const getPipelineDefaultRoute = (level, workMode, workAccess = null) => {
+  const safeLevel =
+    workAccess?.allowedWorkLevels?.length > 0
+      ? clampWorkLevelToAllowed(level, workAccess.allowedWorkLevels)
+      : level;
+  const safeMode =
+    workAccess?.allowedWorkModes?.length > 0
+      ? clampWorkModeToAllowed(workMode, workAccess.allowedWorkModes)
+      : workMode;
 
-  switch (level) {
+  const isOp = safeMode === WORK_MODES.OPERATION;
+
+  switch (safeLevel) {
     case PIPELINE_LEVELS.WORKSPACE:
       return isOp ? "/companies" : "/dashboard/workspace";
     case PIPELINE_LEVELS.COMPANY:
@@ -55,23 +70,44 @@ export const getPipelineDefaultRoute = (level, workMode) => {
 };
 
 /**
- * Reconciles a requested pipeline level against actual Redux/session prerequisites.
- * Never descends to a level whose entity prerequisite is missing.
+ * Reconciles a requested pipeline level against actual Redux/session prerequisites
+ * and role-allowed levels (strictly never promoting above allowedLevels).
  */
 export const reconcilePipelineLevel = (
   level,
-  { hasActiveCompany = false, hasActiveBranch = false } = {}
+  { hasActiveCompany = false, hasActiveBranch = false, allowedLevels = null } = {},
 ) => {
-  if (level === PIPELINE_LEVELS.BRANCH) {
-    if (!hasActiveCompany) return PIPELINE_LEVELS.WORKSPACE;
-    if (!hasActiveBranch) return PIPELINE_LEVELS.COMPANY;
+  const hasAllowedList = Array.isArray(allowedLevels) && allowedLevels.length > 0;
+  const isAllowed = (target) => !hasAllowedList || allowedLevels.includes(target);
+
+  const candidate = hasAllowedList
+    ? clampWorkLevelToAllowed(level, allowedLevels)
+    : level;
+
+  if (candidate === PIPELINE_LEVELS.BRANCH) {
+    if (!hasActiveCompany) {
+      if (isAllowed(PIPELINE_LEVELS.WORKSPACE)) return PIPELINE_LEVELS.WORKSPACE;
+      if (isAllowed(PIPELINE_LEVELS.COMPANY)) return PIPELINE_LEVELS.COMPANY;
+      return PIPELINE_LEVELS.BRANCH;
+    }
+    if (!hasActiveBranch) {
+      if (isAllowed(PIPELINE_LEVELS.COMPANY)) return PIPELINE_LEVELS.COMPANY;
+      return PIPELINE_LEVELS.BRANCH;
+    }
     return PIPELINE_LEVELS.BRANCH;
   }
-  if (level === PIPELINE_LEVELS.COMPANY) {
-    if (!hasActiveCompany) return PIPELINE_LEVELS.WORKSPACE;
+
+  if (candidate === PIPELINE_LEVELS.COMPANY) {
+    if (!hasActiveCompany) {
+      if (isAllowed(PIPELINE_LEVELS.WORKSPACE)) return PIPELINE_LEVELS.WORKSPACE;
+      return PIPELINE_LEVELS.COMPANY;
+    }
     return PIPELINE_LEVELS.COMPANY;
   }
-  return PIPELINE_LEVELS.WORKSPACE;
+
+  return isAllowed(PIPELINE_LEVELS.WORKSPACE)
+    ? PIPELINE_LEVELS.WORKSPACE
+    : clampWorkLevelToAllowed(candidate, allowedLevels);
 };
 
 /**
@@ -408,7 +444,9 @@ export const isRouteAllowedForPipeline = (
     companyCompleted = false,
     hasActiveCompany = false,
     hasActiveBranch = false,
-  } = {}
+    allowedWorkLevels = null,
+    allowedWorkModes = null,
+  } = {},
 ) => {
   const path = normalizePathname(pathname);
 
@@ -427,17 +465,32 @@ export const isRouteAllowedForPipeline = (
     return { allowed: true, redirectTo: null, reason: null };
   }
 
+  const effectiveMode =
+    Array.isArray(allowedWorkModes) && allowedWorkModes.length > 0
+      ? clampWorkModeToAllowed(workMode, allowedWorkModes)
+      : workMode;
+
   const effectiveLevel = reconcilePipelineLevel(currentLevel, {
     hasActiveCompany,
     hasActiveBranch,
+    allowedLevels: allowedWorkLevels,
   });
-  const fallbackRoute = getPipelineDefaultRoute(effectiveLevel, workMode);
+
+  const fallbackRoute = getPipelineDefaultRoute(effectiveLevel, effectiveMode, {
+    allowedWorkLevels,
+    allowedWorkModes,
+  });
 
   // Generic root /dashboard always resolves to the current (level, mode) landing route
   if (path === "/" || path === "/dashboard") {
+    const canWorkspaceSetup =
+      !Array.isArray(allowedWorkLevels) ||
+      allowedWorkLevels.length === 0 ||
+      allowedWorkLevels.includes(PIPELINE_LEVELS.WORKSPACE);
+
     return {
       allowed: false,
-      redirectTo: isSetupComplete ? fallbackRoute : "/setup",
+      redirectTo: isSetupComplete || !canWorkspaceSetup ? fallbackRoute : "/setup",
       reason: "canonical-dashboard",
     };
   }
@@ -454,6 +507,34 @@ export const isRouteAllowedForPipeline = (
     return { allowed: true, redirectTo: null, reason: null };
   }
 
+  // Enforce Role Work Level ceiling first
+  if (
+    Array.isArray(allowedWorkLevels) &&
+    allowedWorkLevels.length > 0 &&
+    !rule.levels.some((lvl) => allowedWorkLevels.includes(lvl))
+  ) {
+    return {
+      allowed: false,
+      redirectTo: fallbackRoute,
+      reason: "role-level-denied",
+      requiredLevels: rule.levels,
+    };
+  }
+
+  // Enforce Role Work Mode assignment (strict — no hierarchy)
+  if (
+    Array.isArray(allowedWorkModes) &&
+    allowedWorkModes.length > 0 &&
+    !rule.modes.some((mode) => allowedWorkModes.includes(mode))
+  ) {
+    return {
+      allowed: false,
+      redirectTo: fallbackRoute,
+      reason: "role-mode-denied",
+      requiredModes: rule.modes,
+    };
+  }
+
   // During initial setup onboarding, allow setup-exempt routes cleanly
   if (!isSetupComplete) {
     if (rule.allowDuringIncompleteSetup) {
@@ -462,9 +543,13 @@ export const isRouteAllowedForPipeline = (
     if (rule.allowDuringCompanySetup && companyCompleted) {
       return { allowed: true, redirectTo: null, reason: null };
     }
+    const canWorkspaceSetup =
+      !Array.isArray(allowedWorkLevels) ||
+      allowedWorkLevels.length === 0 ||
+      allowedWorkLevels.includes(PIPELINE_LEVELS.WORKSPACE);
     return {
       allowed: false,
-      redirectTo: "/setup",
+      redirectTo: canWorkspaceSetup ? "/setup" : fallbackRoute,
       reason: "setup-incomplete",
     };
   }
@@ -480,7 +565,7 @@ export const isRouteAllowedForPipeline = (
   }
 
   // Mode restriction check
-  if (!rule.modes.includes(workMode)) {
+  if (!rule.modes.includes(effectiveMode)) {
     return {
       allowed: false,
       redirectTo: fallbackRoute,

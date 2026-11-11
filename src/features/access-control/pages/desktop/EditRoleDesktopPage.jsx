@@ -1,17 +1,11 @@
 // src/features/access-control/pages/desktop/EditRoleDesktopPage.jsx
 
-import React from "react";
 import {
   Shield,
   ArrowLeft,
   Check,
-  RotateCcw,
-  Search,
-  CheckCircle2,
-  Lock,
   Layers,
   Sparkles,
-  Sliders,
   FileKey,
 } from "lucide-react";
 
@@ -27,6 +21,11 @@ import {
   UIAlert,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import {
+  RoleWorkAccessBadges,
+  RoleWorkAccessFields,
+} from "@/features/access-control/components";
+import { buildWorkAccessDisplaySummary } from "../../utils/roleForm.helper";
 
 const statusOptions = [
   { label: "Active", value: "active" },
@@ -34,7 +33,15 @@ const statusOptions = [
 ];
 
 export default function EditRoleDesktopPage({
-  formData = { name: "", code: "", description: "", permissions: [], status: "active" },
+  formData = {
+    name: "",
+    code: "",
+    description: "",
+    workModes: ["view"],
+    workLevel: "branch",
+    permissions: [],
+    status: "active",
+  },
   formErrors = {},
 
   permissionModules = [],
@@ -42,37 +49,34 @@ export default function EditRoleDesktopPage({
   moduleFilter = "all",
   permissionSearch = "",
   permissionSummary = { total: 0, selected: 0, groups: 0, remaining: 0 },
-  previewRole,
-  currentStep = 1,
 
-  isLoading = false,
+  actorAllowedWorkModes = null,
+  actorHighestWorkLevel = null,
+  isRoleLocked = false,
+  isOwnerRole = false,
+
   isUpdating = false,
-  isLoadingRole = false,
   isLoadingPermissions = false,
-  hasRoleError = false,
-  hasPermissionError = false,
-  error = null,
-  message = null,
 
   handleChange,
-  handlePermissionsChange,
+  handleWorkModesChange,
+  handleWorkLevelChange,
   handleTogglePermission,
   handleToggleModule,
   handleSelectAllPermissions,
   handleClearPermissions,
   handleSubmit,
-  handleReset,
   handleBack,
   handleCancel,
-  handleContinue,
-  handleStepChange,
-  handleViewPermissions,
-  handleRefreshPermissions,
-  handleRefreshRole,
 
   setPermissionSearch,
   setModuleFilter,
 }) {
+  const workAccessSummary = buildWorkAccessDisplaySummary({
+    workModes: formData.workModes,
+    workLevel: formData.workLevel,
+  });
+
   return (
     <div className="min-h-screen bg-bg text-text p-3 sm:p-4 lg:p-5 max-w-[1440px] mx-auto space-y-4">
       {/* Feedback Alert */}
@@ -81,6 +85,18 @@ export default function EditRoleDesktopPage({
           intent="danger"
           title="Role Update Error"
           description={formErrors.submit}
+        />
+      )}
+
+      {isRoleLocked && (
+        <UIAlert
+          intent="warning"
+          title={isOwnerRole ? "Protected Owner Role" : "Role Editing Locked"}
+          description={
+            isOwnerRole
+              ? "The workspace Owner role automatically holds full View & Operation access at Workspace level and cannot be restricted."
+              : "This role is locked from modification."
+          }
         />
       )}
 
@@ -110,7 +126,7 @@ export default function EditRoleDesktopPage({
               </UIBadge>
             </div>
             <p className="text-xs text-text-muted mt-0.5">
-              Update role attributes, operational scopes, and assigned permissions.
+              Update role attributes, Work Modes, Work Level hierarchy, and assigned permissions.
             </p>
           </div>
         </div>
@@ -130,6 +146,7 @@ export default function EditRoleDesktopPage({
             size="sm"
             onClick={handleSubmit}
             isLoading={isUpdating}
+            disabled={isRoleLocked}
             startIcon={<Check className="size-4" />}
           >
             Save Changes
@@ -139,7 +156,7 @@ export default function EditRoleDesktopPage({
 
       {/* Dual Column Layout: Form & Matrix (Left) + Live Blueprint (Right) */}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left Column (8 cols): Basics & Permission Matrix */}
+        {/* Left Column (8 cols): Identity, Work Access & Permission Matrix */}
         <div className="lg:col-span-8 space-y-4">
           {/* Card 1: Role Identity & Basics */}
           <div className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs space-y-4">
@@ -159,6 +176,7 @@ export default function EditRoleDesktopPage({
                   value={formData.name}
                   onChange={handleChange}
                   error={formErrors.name}
+                  disabled={isRoleLocked}
                   size="sm"
                 />
               </div>
@@ -173,6 +191,7 @@ export default function EditRoleDesktopPage({
                   value={formData.status || "active"}
                   onChange={handleChange}
                   options={statusOptions}
+                  disabled={isRoleLocked}
                 />
               </div>
             </div>
@@ -187,44 +206,75 @@ export default function EditRoleDesktopPage({
                 placeholder="Describe role responsibilities..."
                 value={formData.description}
                 onChange={handleChange}
+                disabled={isRoleLocked}
                 className={cn(
-                  "w-full rounded-xl border bg-surface px-3 py-2 text-xs text-text placeholder:text-text-muted/60 transition-colors focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary",
-                  formErrors.description ? "border-destructive" : "border-border"
+                  "w-full rounded-xl border bg-surface px-3 py-2 text-xs text-text placeholder:text-text-muted/60 transition-colors focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-60",
+                  formErrors.description ? "border-destructive" : "border-border",
                 )}
               />
             </div>
           </div>
 
-          {/* Card 2: Permissions Matrix & Allocation */}
+          {/* Card 2: Work Modes & Level Hierarchy */}
+          <div className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-border/40">
+              <Layers className="size-4 text-primary shrink-0" />
+              <div>
+                <h2 className="text-sm font-bold text-text">
+                  2. Work Modes & Level Hierarchy
+                </h2>
+                <p className="text-[11px] text-text-muted">
+                  Assign explicit modes (View / Operation) and hierarchical level ceiling (Workspace &gt; Company &gt; Branch).
+                </p>
+              </div>
+            </div>
+
+            <RoleWorkAccessFields
+              workModes={formData.workModes}
+              workLevel={formData.workLevel}
+              onChangeWorkModes={handleWorkModesChange}
+              onChangeWorkLevel={handleWorkLevelChange}
+              allowedActorWorkModes={actorAllowedWorkModes}
+              maxActorWorkLevel={actorHighestWorkLevel}
+              disabled={isRoleLocked}
+              error={formErrors.workAccess}
+            />
+          </div>
+
+          {/* Card 3: Permissions Matrix & Allocation */}
           <div className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-border/40">
               <div className="flex items-center gap-2">
                 <FileKey className="size-4 text-primary shrink-0" />
                 <div>
-                  <h2 className="text-sm font-bold text-text">2. Allocate Permissions</h2>
+                  <h2 className="text-sm font-bold text-text">
+                    3. Allocate Module Permissions
+                  </h2>
                   <p className="text-[11px] text-text-muted">
                     {permissionSummary.selected} of {permissionSummary.total} capabilities assigned
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSelectAllPermissions}
-                  className="text-xs text-primary font-semibold hover:underline"
-                >
-                  Select All
-                </button>
-                <span className="text-border">|</span>
-                <button
-                  type="button"
-                  onClick={handleClearPermissions}
-                  className="text-xs text-text-muted hover:text-text font-semibold hover:underline"
-                >
-                  Clear All
-                </button>
-              </div>
+              {!isRoleLocked && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSelectAllPermissions}
+                    className="text-xs text-primary font-semibold hover:underline"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-border">|</span>
+                  <button
+                    type="button"
+                    onClick={handleClearPermissions}
+                    className="text-xs text-text-muted hover:text-text font-semibold hover:underline"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Matrix Filter & Search Toolbar */}
@@ -263,7 +313,7 @@ export default function EditRoleDesktopPage({
                 {permissionModules.map((mod) => {
                   const modPermissionValues = mod.permissions.map((p) => p.value);
                   const selectedCount = modPermissionValues.filter((v) =>
-                    formData.permissions.includes(v)
+                    formData.permissions.includes(v),
                   ).length;
                   const isAllSelected =
                     modPermissionValues.length > 0 &&
@@ -288,7 +338,8 @@ export default function EditRoleDesktopPage({
 
                         <UISwitch
                           checked={isAllSelected}
-                          onChange={() => handleToggleModule(mod)}
+                          onChange={() => !isRoleLocked && handleToggleModule(mod)}
+                          disabled={isRoleLocked}
                           size="sm"
                           label={isAllSelected ? "Enabled" : "Toggle All"}
                         />
@@ -302,12 +353,13 @@ export default function EditRoleDesktopPage({
                             <button
                               key={perm.value}
                               type="button"
-                              onClick={() => handleTogglePermission(perm.value)}
+                              disabled={isRoleLocked}
+                              onClick={() => !isRoleLocked && handleTogglePermission(perm.value)}
                               className={cn(
-                                "p-2 rounded-lg border text-left transition-all flex items-center justify-between gap-1.5 select-none text-xs",
+                                "p-2 rounded-lg border text-left transition-all flex items-center justify-between gap-1.5 select-none text-xs disabled:opacity-70",
                                 isChecked
                                   ? "bg-surface border-primary/50 text-primary font-semibold shadow-2xs ring-1 ring-primary/20"
-                                  : "bg-surface/60 border-border/60 text-text-muted hover:bg-surface hover:text-text"
+                                  : "bg-surface/60 border-border/60 text-text-muted hover:bg-surface hover:text-text",
                               )}
                             >
                               <span className="truncate">
@@ -318,7 +370,7 @@ export default function EditRoleDesktopPage({
                                   "size-3.5 rounded-full border flex items-center justify-center shrink-0 text-[9px]",
                                   isChecked
                                     ? "bg-primary text-text-inverse border-primary"
-                                    : "border-border"
+                                    : "border-border",
                                 )}
                               >
                                 {isChecked && <Check className="size-2.5 stroke-[3]" />}
@@ -354,7 +406,7 @@ export default function EditRoleDesktopPage({
               </div>
 
               {/* Role Capsule */}
-              <div className="p-3.5 rounded-xl bg-surface-alt/60 border border-border/60 space-y-2">
+              <div className="p-3.5 rounded-xl bg-surface-alt/60 border border-border/60 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-text">
                     {formData.name || "Untitled Role"}
@@ -370,6 +422,11 @@ export default function EditRoleDesktopPage({
                 <div className="text-[11px] font-mono text-text-muted truncate">
                   code: {formData.code || "-"}
                 </div>
+                <RoleWorkAccessBadges
+                  workModes={formData.workModes}
+                  workLevel={formData.workLevel}
+                  compact
+                />
                 <p className="text-xs text-text-muted line-clamp-2">
                   {formData.description || "No description provided."}
                 </p>
@@ -377,6 +434,18 @@ export default function EditRoleDesktopPage({
 
               {/* Permission Metrics Breakdown */}
               <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-border/30">
+                  <span className="text-text-muted">Allowed Work Modes</span>
+                  <span className="font-semibold text-text">
+                    {workAccessSummary.modeShortText || "None"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-border/30">
+                  <span className="text-text-muted">Level Hierarchy</span>
+                  <span className="font-semibold text-text">
+                    {workAccessSummary.hierarchyLabel}
+                  </span>
+                </div>
                 <div className="flex items-center justify-between py-1 border-b border-border/30">
                   <span className="text-text-muted">Total Assigned</span>
                   <span className="font-bold text-text font-mono">
@@ -386,9 +455,11 @@ export default function EditRoleDesktopPage({
                 <div className="flex items-center justify-between py-1 border-b border-border/30">
                   <span className="text-text-muted">Modules Covered</span>
                   <span className="font-bold text-text font-mono">
-                    {permissionModules.filter((m) =>
-                      m.permissions.some((p) => formData.permissions.includes(p.value))
-                    ).length}{" "}
+                    {
+                      permissionModules.filter((m) =>
+                        m.permissions.some((p) => formData.permissions.includes(p.value)),
+                      ).length
+                    }{" "}
                     Modules
                   </span>
                 </div>
@@ -402,6 +473,7 @@ export default function EditRoleDesktopPage({
                   size="md"
                   className="w-full"
                   isLoading={isUpdating}
+                  disabled={isRoleLocked}
                   startIcon={<Check className="size-4" />}
                 >
                   Save Role Changes

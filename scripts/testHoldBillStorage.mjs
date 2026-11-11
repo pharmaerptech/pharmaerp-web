@@ -188,6 +188,27 @@ const run = () => {
   assert.equal(getHeldBills(TENANT_A.workspaceId, TENANT_A.companyId, TENANT_A.branchId).length, 0);
   assert.equal(getHeldBills(TENANT_B.workspaceId, TENANT_B.companyId, TENANT_B.branchId).length, 0);
 
+  // 10. StrictMode double-mount simulation: consume -> unmount save -> remount consume leaves 0 auto holds
+  saveAutoHeldBill({
+    ...TENANT_A,
+    customerName: "StrictMode Draft",
+    cart: [{ id: "sm1", name: "Dolo 650", price: 30, qty: 2 }],
+  });
+  const mount1 = consumeAutoHeldBill(TENANT_A.workspaceId, TENANT_A.companyId, TENANT_A.branchId);
+  assert.ok(mount1);
+  // Simulated unmount re-persists draft
+  saveAutoHeldBill({
+    ...TENANT_A,
+    customerName: mount1.customerName,
+    cart: mount1.cart,
+  });
+  assert.equal(getHeldBills(TENANT_A.workspaceId, TENANT_A.companyId, TENANT_A.branchId).length, 1);
+  // Simulated remount consumes again so heldBills array is completely empty
+  const mount2 = consumeAutoHeldBill(TENANT_A.workspaceId, TENANT_A.companyId, TENANT_A.branchId);
+  assert.ok(mount2);
+  assert.equal(getAutoHeldBill(TENANT_A.workspaceId, TENANT_A.companyId, TENANT_A.branchId), null);
+  assert.equal(getHeldBills(TENANT_A.workspaceId, TENANT_A.companyId, TENANT_A.branchId).length, 0);
+
   console.log("All holdBillStorage tests passed!");
 };
 

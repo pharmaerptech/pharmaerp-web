@@ -9,6 +9,7 @@ import { ROUTES } from "@/constants";
 import { useWorkMode } from "@/contexts";
 import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
+import usePermission from "@/hooks/usePermission";
 import {
   HeaderSearchBar,
   HeaderNotifications,
@@ -233,6 +234,13 @@ export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240 }) => {
   const { isSetupComplete, completedCount } = useSetupStatus();
   const { workMode, isOperationMode } = useWorkMode();
   const { isBranchLevel } = useNavigationPipeline();
+  const { canWorkLevel, canWorkMode } = usePermission();
+  const canOpenWorkspaceSetup = canWorkLevel("workspace");
+  const canQuickPosLaunch =
+    isOperationMode &&
+    isBranchLevel &&
+    canWorkLevel("branch") &&
+    canWorkMode("operation");
 
   const pageTitle = useMemo(() => getPageTitle(location.pathname), [location.pathname]);
   const breadcrumbs = useMemo(
@@ -329,7 +337,7 @@ export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240 }) => {
             <div className="w-[240px] lg:w-[360px]">
               <HeaderSearchBar />
             </div>
-          ) : (
+          ) : canOpenWorkspaceSetup ? (
             <Link
               to={ROUTES.SETUP_CENTER}
               className="inline-flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 px-4 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15 transition-all shadow-xs"
@@ -337,11 +345,11 @@ export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240 }) => {
               <Sparkles className="size-3.5" />
               <span>Workspace Setup ({completedCount}/2)</span>
             </Link>
-          )}
+          ) : null}
 
           {isSetupComplete && <HeaderNotifications />}
 
-          {isOperationMode && isBranchLevel && (
+          {canQuickPosLaunch && (
             <Link
               to={ROUTES.SALES}
               className="flex items-center justify-center size-9 rounded-full bg-primary hover:bg-primary/90 transition-all hover:scale-105 active:scale-95 shadow-sm ring-2 ring-primary/20 shrink-0"

@@ -25,7 +25,13 @@ export const FOCUS_SEARCH_EVENT = "pharma-erp:focus-desktop-search";
 export const useMargShortcuts = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { can, canAny, isOwner } = usePermission();
+  const {
+    can,
+    canAny,
+    isOwner,
+    allowedWorkLevels,
+    allowedWorkModes,
+  } = usePermission();
   const { isSetupComplete, companyCompleted } = useSetupStatus();
   const { workMode } = useWorkMode();
   const { currentLevel } = useNavigationPipeline();
@@ -123,14 +129,18 @@ export const useMargShortcuts = () => {
         companyCompleted,
         hasActiveCompany: Boolean(currentCompany?._id),
         hasActiveBranch: Boolean(currentBranch?._id),
+        allowedWorkLevels: !isOwner ? allowedWorkLevels : null,
+        allowedWorkModes: !isOwner ? allowedWorkModes : null,
       });
 
       if (!policyCheck.allowed) {
         uiToast.info(
           "Shortcut Unavailable",
-          policyCheck.reason === "mode-mismatch"
-            ? `${shortcut.label} requires switching Work Mode in the sidebar.`
-            : `${shortcut.label} is not available at your current level.`
+          policyCheck.reason === "role-mode-denied" || policyCheck.reason === "role-level-denied"
+            ? `${shortcut.label} is restricted by your assigned role.`
+            : policyCheck.reason === "mode-mismatch"
+              ? `${shortcut.label} requires switching Work Mode in the sidebar.`
+              : `${shortcut.label} is not available at your current level.`,
         );
         return;
       }
@@ -151,6 +161,9 @@ export const useMargShortcuts = () => {
       companyCompleted,
       currentCompany?._id,
       currentBranch?._id,
+      isOwner,
+      allowedWorkLevels,
+      allowedWorkModes,
       location.pathname,
       navigate,
       toggleShortcutsModal,

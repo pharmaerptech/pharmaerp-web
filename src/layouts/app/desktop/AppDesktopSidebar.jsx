@@ -47,7 +47,7 @@ const AppDesktopSidebar = ({
   const { currentCompany } = useCompany();
   const { currentBranch } = useBranch();
   const { isSetupComplete, companyCompleted, branchCompleted } = useSetupStatus();
-  const { can, canAny, isOwner } = usePermission();
+  const { can, canAny, isOwner, workAccess } = usePermission();
   const { workMode } = useWorkMode();
   const { currentLevel } = useNavigationPipeline();
 
@@ -112,6 +112,7 @@ const AppDesktopSidebar = ({
         branchCompleted,
         hasActiveCompany: !!currentCompany,
         hasActiveBranch: !!currentBranch,
+        workAccess,
       },
     );
     return collapsed
@@ -124,6 +125,7 @@ const AppDesktopSidebar = ({
     can,
     canAny,
     isOwner,
+    workAccess,
     isSetupComplete,
     companyCompleted,
     branchCompleted,

@@ -16,6 +16,7 @@ import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useUser from "@/features/user/hooks/useUser";
 import { usePermission } from "@/hooks";
+import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
 import { UITabs } from "@/components/ui";
 
 const getWorkspaceFromItem = (item) => {
@@ -24,8 +25,14 @@ const getWorkspaceFromItem = (item) => {
 
 const AppMobileContextSheet = ({ isOpen, onClose }) => {
   const { updateActiveContext } = useUser();
-  const { isOwner, can } = usePermission();
+  const { isOwner, can, canWorkLevel, canWorkMode } = usePermission();
   const { workspaces, currentWorkspace, setCurrentWorkspace } = useWorkspace();
+  const { ascendToWorkspace, enterCompany, enterBranch } = useNavigationPipeline();
+
+  const canWorkspace = isOwner || canWorkLevel("workspace");
+  const canCompany = isOwner || canWorkLevel("company");
+  const canBranch = isOwner || canWorkLevel("branch");
+  const canOperation = isOwner || canWorkMode("operation");
 
   const {
     companies,
@@ -42,21 +49,23 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
     clearCurrentBranch,
   } = useBranch();
 
-  // Active sub-view tab within the mobile sheet: 'workspace' | 'company' | 'branch'
-  const [activeTab, setActiveTab] = useState("company");
+  const [activeTab, setActiveTab] = useState("branch");
 
-  // Keep tab in sync with current level of selection depth when opening
   useEffect(() => {
     if (isOpen) {
-      if (!currentWorkspace?._id) setActiveTab("workspace");
-      else if (!currentCompany?._id) setActiveTab("company");
-      else setActiveTab("branch");
+      if (!currentWorkspace?._id && canWorkspace) setActiveTab("workspace");
+      else if ((!currentCompany?._id || !currentBranch?._id) && canCompany) {
+        setActiveTab("company");
+      } else {
+        setActiveTab("branch");
+      }
     }
-  }, [isOpen, currentWorkspace, currentCompany]);
+  }, [isOpen, currentWorkspace, currentCompany, currentBranch, canWorkspace, canCompany]);
 
   if (!isOpen) return null;
 
   const handleWorkspaceSelect = async (workspaceItem) => {
+    if (!canWorkspace) return;
     const workspace = getWorkspaceFromItem(workspaceItem);
     if (!workspace?._id) return;
 
@@ -72,6 +81,7 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
       });
 
       await getWorkspaceCompanies();
+      ascendToWorkspace();
       setActiveTab("company");
     } catch (error) {
       console.error("Failed to update mobile workspace context:", error);
@@ -79,7 +89,7 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
   };
 
   const handleCompanySelect = async (company) => {
-    if (!company?._id || !currentWorkspace?._id) return;
+    if (!canCompany || !company?._id || !currentWorkspace?._id) return;
 
     setCurrentCompany(company);
     clearCurrentBranch();
@@ -91,7 +101,8 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
         branchId: null,
       });
 
-      await getCompanyBranches();
+      await getCompanyBranches(company._id);
+      enterCompany(company);
       setActiveTab("branch");
     } catch (error) {
       console.error("Failed to transition mobile company context:", error);
@@ -99,7 +110,7 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
   };
 
   const handleBranchSelect = async (branch) => {
-    if (!branch?._id || !currentWorkspace?._id || !currentCompany?._id) return;
+    if (!canBranch || !branch?._id || !currentWorkspace?._id || !currentCompany?._id) return;
 
     setCurrentBranch(branch);
 
@@ -109,6 +120,7 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
         companyId: currentCompany._id,
         branchId: branch._id,
       });
+      enterBranch(branch);
       onClose();
     } catch (error) {
       console.error("Failed to finalize mobile branch context:", error);
@@ -117,12 +129,9 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-      {/* Clickable Backdrop Overlay */}
       <div className="absolute inset-0 -z-10" onClick={onClose} />
 
-      {/* Main Bottom Sheet Area */}
       <div className="flex max-h-[85vh] w-full flex-col rounded-t-[24px] bg-surface text-text shadow-2xl animate-in slide-in-from-bottom duration-300 ease-out">
-        {/* Top Header Control Segment */}
         <div className="flex flex-col items-center px-5 pt-3 pb-2 shrink-0">
           <div className="h-1 w-12 rounded-full bg-divider/60 mb-4" />
 
@@ -132,7 +141,7 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
                 Switch Context
               </h3>
               <p className="text-[11px] font-normal text-text-muted mt-0.5">
-                Navigate across your business infrastructure
+                Navigate across your permitted infrastructure
               </p>
             </div>
 
@@ -146,22 +155,26 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Segmented Navigation Tab-Bar using UITabs */}
         <div className="mx-5 my-2.5 shrink-0">
           <UITabs
             tabs={[
-              { id: "workspace", label: "Workspace", icon: <FiShoppingBag className="text-xs" /> },
+              {
+                id: "workspace",
+                label: "Workspace",
+                icon: <FiShoppingBag className="text-xs" />,
+                disabled: !canWorkspace,
+              },
               {
                 id: "company",
                 label: "Company",
                 icon: <FiBriefcase className="text-xs" />,
-                disabled: !currentWorkspace?._id,
+                disabled: !currentWorkspace?._id || !canCompany,
               },
               {
                 id: "branch",
                 label: "Branch",
                 icon: <FiMapPin className="text-xs" />,
-                disabled: !currentCompany?._id,
+                disabled: !currentCompany?._id || !canBranch,
               },
             ]}
             activeTab={activeTab}
@@ -172,10 +185,8 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
           />
         </div>
 
-        {/* Dynamic Context Lists Content viewport */}
         <div className="flex-1 overflow-y-auto px-5 pb-8 pt-2">
-          {/* TAB 1: WORKSPACES */}
-          {activeTab === "workspace" && (
+          {activeTab === "workspace" && canWorkspace && (
             <div className="space-y-2.5 animate-in fade-in duration-200">
               {workspaces?.map((item) => {
                 const ws = getWorkspaceFromItem(item);
@@ -225,14 +236,13 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          {/* TAB 2: COMPANIES */}
-          {activeTab === "company" && (
+          {activeTab === "company" && canCompany && (
             <div className="space-y-2.5 animate-in fade-in duration-200">
               <div className="flex justify-between items-center mb-1 pl-1">
                 <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                  Available Operations
+                  Available Companies
                 </span>
-                {(isOwner || can("company:create")) && (
+                {canWorkspace && canOperation && (isOwner || can("company:create")) && (
                   <Link
                     to={ROUTES.CREATE_COMPANY}
                     onClick={onClose}
@@ -306,14 +316,13 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
             </div>
           )}
 
-          {/* TAB 3: BRANCHES */}
-          {activeTab === "branch" && (
+          {activeTab === "branch" && canBranch && (
             <div className="space-y-2.5 animate-in fade-in duration-200">
               <div className="flex justify-between items-center mb-1 pl-1">
                 <span className="text-[11px] font-bold text-text-muted uppercase tracking-wider">
-                  Select Hub Location
+                  Select Branch Location
                 </span>
-                {(isOwner || can("branch:create")) && (
+                {canCompany && canOperation && (isOwner || can("branch:create")) && (
                   <Link
                     to={ROUTES.CREATE_BRANCH}
                     onClick={onClose}
@@ -382,7 +391,6 @@ const AppMobileContextSheet = ({ isOpen, onClose }) => {
               )}
             </div>
           )}
-
         </div>
       </div>
     </div>

@@ -1,4 +1,14 @@
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+} from "react";
+import usePermission from "@/hooks/usePermission";
+import { clampWorkModeToAllowed } from "@/utils/workAccess";
+import { uiToast } from "@/components/ui";
 
 export const WORK_MODES = {
   OPERATION: "operation",
@@ -19,10 +29,13 @@ export const getSafeWorkMode = (mode) => {
 };
 
 export const WorkModeProvider = ({ children }) => {
+  const { allowedWorkModes, isOwner, isLoaded } = usePermission();
+
   const [workMode, setWorkModeState] = useState(() => {
     try {
       const savedMode = localStorage.getItem(WORK_MODE_STORAGE_KEYS.WORK_MODE);
-      const isSelected = localStorage.getItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED) === "true";
+      const isSelected =
+        localStorage.getItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED) === "true";
       if (isSelected && savedMode) {
         return getSafeWorkMode(savedMode);
       }
@@ -35,7 +48,8 @@ export const WorkModeProvider = ({ children }) => {
   const [hasSelectedMode, setHasSelectedMode] = useState(() => {
     try {
       const savedMode = localStorage.getItem(WORK_MODE_STORAGE_KEYS.WORK_MODE);
-      const isSelected = localStorage.getItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED) === "true";
+      const isSelected =
+        localStorage.getItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED) === "true";
       return Boolean(isSelected && savedMode);
     } catch {
       return false;
@@ -44,24 +58,80 @@ export const WorkModeProvider = ({ children }) => {
 
   const [isModeModalOpen, setIsModeModalOpen] = useState(false);
 
-  const setWorkMode = useCallback((newMode, markSelected = true) => {
-    const safeMode = getSafeWorkMode(newMode);
-    if (!safeMode) return;
+  const canSwitchWorkMode = useMemo(() => {
+    if (isOwner) return true;
+    if (!isLoaded || !Array.isArray(allowedWorkModes)) return true;
+    return allowedWorkModes.length > 1;
+  }, [isOwner, isLoaded, allowedWorkModes]);
 
-    try {
-      localStorage.setItem(WORK_MODE_STORAGE_KEYS.WORK_MODE, safeMode);
-      if (markSelected) {
-        localStorage.setItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED, "true");
-        setHasSelectedMode(true);
-      }
-    } catch (err) {
-      console.warn("Unable to save work mode to localStorage:", err);
+  // Enforce strict Work Mode permissions once access profile loads
+  useEffect(() => {
+    if (!isLoaded || isOwner || !Array.isArray(allowedWorkModes) || allowedWorkModes.length === 0) {
+      return;
     }
 
-    setWorkModeState(safeMode);
-    document.documentElement.dataset.workMode = safeMode;
-    setIsModeModalOpen(false);
-  }, []);
+    if (allowedWorkModes.length === 1) {
+      const soleMode = allowedWorkModes[0];
+      if (workMode !== soleMode || !hasSelectedMode) {
+        try {
+          localStorage.setItem(WORK_MODE_STORAGE_KEYS.WORK_MODE, soleMode);
+          localStorage.setItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED, "true");
+        } catch {}
+        setWorkModeState(soleMode);
+        setHasSelectedMode(true);
+        document.documentElement.dataset.workMode = soleMode;
+      }
+      return;
+    }
+
+    if (workMode && !allowedWorkModes.includes(workMode)) {
+      const clamped = clampWorkModeToAllowed(workMode, allowedWorkModes);
+      try {
+        localStorage.setItem(WORK_MODE_STORAGE_KEYS.WORK_MODE, clamped);
+        localStorage.setItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED, "true");
+      } catch {}
+      setWorkModeState(clamped);
+      setHasSelectedMode(true);
+      document.documentElement.dataset.workMode = clamped;
+    }
+  }, [isLoaded, isOwner, allowedWorkModes, workMode, hasSelectedMode]);
+
+  const setWorkMode = useCallback(
+    (newMode, markSelected = true) => {
+      const safeMode = getSafeWorkMode(newMode);
+      if (!safeMode) return false;
+
+      if (
+        isLoaded &&
+        !isOwner &&
+        Array.isArray(allowedWorkModes) &&
+        allowedWorkModes.length > 0 &&
+        !allowedWorkModes.includes(safeMode)
+      ) {
+        uiToast.warning(
+          "Work Mode Restricted",
+          `Your role does not permit ${safeMode === WORK_MODES.OPERATION ? "Operation" : "View"} Mode.`,
+        );
+        return false;
+      }
+
+      try {
+        localStorage.setItem(WORK_MODE_STORAGE_KEYS.WORK_MODE, safeMode);
+        if (markSelected) {
+          localStorage.setItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED, "true");
+          setHasSelectedMode(true);
+        }
+      } catch (err) {
+        console.warn("Unable to save work mode to localStorage:", err);
+      }
+
+      setWorkModeState(safeMode);
+      document.documentElement.dataset.workMode = safeMode;
+      setIsModeModalOpen(false);
+      return true;
+    },
+    [isLoaded, isOwner, allowedWorkModes],
+  );
 
   const clearWorkMode = useCallback(() => {
     try {
@@ -76,8 +146,22 @@ export const WorkModeProvider = ({ children }) => {
   }, []);
 
   const toggleWorkMode = useCallback(() => {
+    if (
+      isLoaded &&
+      !isOwner &&
+      Array.isArray(allowedWorkModes) &&
+      allowedWorkModes.length <= 1
+    ) {
+      uiToast.warning(
+        "Work Mode Locked",
+        "Your role is restricted to a single Work Mode.",
+      );
+      return;
+    }
+
     setWorkModeState((prev) => {
-      const nextMode = prev === WORK_MODES.VIEW ? WORK_MODES.OPERATION : WORK_MODES.VIEW;
+      const nextMode =
+        prev === WORK_MODES.VIEW ? WORK_MODES.OPERATION : WORK_MODES.VIEW;
       try {
         localStorage.setItem(WORK_MODE_STORAGE_KEYS.WORK_MODE, nextMode);
         localStorage.setItem(WORK_MODE_STORAGE_KEYS.MODE_SELECTED, "true");
@@ -88,11 +172,18 @@ export const WorkModeProvider = ({ children }) => {
       document.documentElement.dataset.workMode = nextMode;
       return nextMode;
     });
-  }, []);
+  }, [isLoaded, isOwner, allowedWorkModes]);
 
   const openModeModal = useCallback(() => {
+    if (!canSwitchWorkMode) {
+      uiToast.info(
+        "Single Mode Role",
+        "Your role only grants access to your current Work Mode.",
+      );
+      return;
+    }
     setIsModeModalOpen(true);
-  }, []);
+  }, [canSwitchWorkMode]);
 
   const closeModeModal = useCallback(() => {
     setIsModeModalOpen(false);
@@ -102,7 +193,6 @@ export const WorkModeProvider = ({ children }) => {
     clearWorkMode();
   }, [clearWorkMode]);
 
-  // Sync dataset on document root
   useEffect(() => {
     if (workMode) {
       document.documentElement.dataset.workMode = workMode;
@@ -111,14 +201,17 @@ export const WorkModeProvider = ({ children }) => {
     }
   }, [workMode]);
 
-  // Synchronize across tabs
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === WORK_MODE_STORAGE_KEYS.WORK_MODE) {
         const safeMode = getSafeWorkMode(e.newValue);
-        setWorkModeState(safeMode);
-        if (safeMode) {
-          document.documentElement.dataset.workMode = safeMode;
+        const clamped =
+          isLoaded && !isOwner && Array.isArray(allowedWorkModes) && safeMode
+            ? clampWorkModeToAllowed(safeMode, allowedWorkModes)
+            : safeMode;
+        setWorkModeState(clamped);
+        if (clamped) {
+          document.documentElement.dataset.workMode = clamped;
         } else {
           delete document.documentElement.dataset.workMode;
         }
@@ -130,7 +223,7 @@ export const WorkModeProvider = ({ children }) => {
 
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+  }, [isLoaded, isOwner, allowedWorkModes]);
 
   const value = useMemo(
     () => ({
@@ -139,6 +232,8 @@ export const WorkModeProvider = ({ children }) => {
       isViewMode: workMode === WORK_MODES.VIEW,
       hasSelectedMode,
       isModeModalOpen,
+      allowedWorkModes,
+      canSwitchWorkMode,
       setWorkMode,
       clearWorkMode,
       toggleWorkMode,
@@ -150,16 +245,22 @@ export const WorkModeProvider = ({ children }) => {
       workMode,
       hasSelectedMode,
       isModeModalOpen,
+      allowedWorkModes,
+      canSwitchWorkMode,
       setWorkMode,
       clearWorkMode,
       toggleWorkMode,
       openModeModal,
       closeModeModal,
       resetModeSelection,
-    ]
+    ],
   );
 
-  return <WorkModeContext.Provider value={value}>{children}</WorkModeContext.Provider>;
+  return (
+    <WorkModeContext.Provider value={value}>
+      {children}
+    </WorkModeContext.Provider>
+  );
 };
 
 export const useWorkMode = () => {

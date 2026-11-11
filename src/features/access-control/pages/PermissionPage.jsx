@@ -1,12 +1,14 @@
 // src/features/access-control/pages/PermissionPage.jsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import { parsePermissionKey } from "@/utils/workAccess";
 
 import useAccessControl from "../hooks/useAccessControl";
+import { formatTitle, getActionTypeFromKey } from "../utils/roleForm.helper";
 
 import PermissionDesktopPage from "./desktop/PermissionDesktopPage";
 import PermissionMobilePage from "./mobile/PermissionMobilePage";
@@ -18,75 +20,21 @@ const initialFilters = {
   module: "all",
 };
 
+const PRIORITY_MODULE_DESCRIPTIONS = {
+  "work-mode":
+    "Strict explicit Work Mode access (View Mode & Operation Mode — no hierarchy)",
+  "work-level":
+    "Hierarchical Work Level clearance (Workspace > Company > Branch)",
+};
+
 const normalizeText = (value) =>
   String(value || "")
     .trim()
     .toLowerCase();
 
-const splitPermission = (permission) => {
-  const value = normalizeText(permission);
-  if (!value) {
-    return { moduleKey: "general", actionKey: "access" };
-  }
-
-  const parts = value
-    .split(/[.:/]/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (parts.length >= 2) {
-    return {
-      moduleKey: parts[0],
-      actionKey: parts.slice(1).join("_"),
-    };
-  }
-
-  const underscoreParts = value.split("_").filter(Boolean);
-  if (underscoreParts.length >= 2) {
-    return {
-      moduleKey: underscoreParts[0],
-      actionKey: underscoreParts.slice(1).join("_"),
-    };
-  }
-
-  return { moduleKey: "general", actionKey: value };
-};
-
-const formatLabel = (value) => {
-  if (!value) return "-";
-  return String(value)
-    .replace(/[.:/]/g, " ")
-    .replace(/_/g, " ")
-    .replace(/-/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-};
-
-const inferActionType = (actionKey) => {
-  const action = normalizeText(actionKey);
-  if (["create", "add", "invite"].some((item) => action.includes(item))) {
-    return "create";
-  }
-  if (["update", "edit", "manage", "assign", "set"].some((item) => action.includes(item))) {
-    return "manage";
-  }
-  if (["delete", "remove", "cancel", "revoke"].some((item) => action.includes(item))) {
-    return "delete";
-  }
-  if (["view", "read", "list", "get"].some((item) => action.includes(item))) {
-    return "view";
-  }
-  if (["export", "download", "print"].some((item) => action.includes(item))) {
-    return "export";
-  }
-  return "other";
-};
-
 const mapPermissionForView = (permission, index) => {
-  const { moduleKey, actionKey } = splitPermission(permission);
-  const actionType = inferActionType(actionKey);
+  const { module: moduleKey, action: actionKey } = parsePermissionKey(permission);
+  const actionType = getActionTypeFromKey(actionKey);
 
   return {
     id: `${permission}-${index}`,
@@ -94,9 +42,10 @@ const mapPermissionForView = (permission, index) => {
     moduleKey,
     actionKey,
     actionType,
-    displayModule: formatLabel(moduleKey),
-    displayAction: formatLabel(actionKey),
-    displayPermission: formatLabel(permission),
+    isAccessPolicy: moduleKey === "work-mode" || moduleKey === "work-level",
+    displayModule: formatTitle(moduleKey) || "General",
+    displayAction: formatTitle(actionKey) || permission,
+    displayPermission: formatTitle(permission) || permission,
   };
 };
 
@@ -109,7 +58,12 @@ const buildPermissionGroups = (permissions) => {
         id: permission.moduleKey,
         moduleKey: permission.moduleKey,
         displayModule: permission.displayModule,
-        description: `Operational clearance for ${permission.displayModule} services`,
+        isAccessPolicy:
+          permission.moduleKey === "work-mode" ||
+          permission.moduleKey === "work-level",
+        description:
+          PRIORITY_MODULE_DESCRIPTIONS[permission.moduleKey] ||
+          `Operational clearance for ${permission.displayModule} services`,
         permissions: [],
         items: [],
         totalPermissions: 0,
@@ -122,9 +76,14 @@ const buildPermissionGroups = (permissions) => {
     group.totalPermissions += 1;
   });
 
-  return Array.from(groupMap.values()).sort((a, b) =>
-    a.displayModule.localeCompare(b.displayModule)
-  );
+  const priorityOrder = { "work-mode": 0, "work-level": 1 };
+
+  return Array.from(groupMap.values()).sort((a, b) => {
+    const prioA = priorityOrder[a.moduleKey] ?? 99;
+    const prioB = priorityOrder[b.moduleKey] ?? 99;
+    if (prioA !== prioB) return prioA - prioB;
+    return a.displayModule.localeCompare(b.displayModule);
+  });
 };
 
 const PermissionPage = () => {
@@ -150,7 +109,9 @@ const PermissionPage = () => {
   const fetchPermissions = useCallback(async () => {
     try {
       await getAvailablePermissions();
-    } catch {}
+    } catch {
+      // Error is stored in slice
+    }
   }, [getAvailablePermissions]);
 
   useEffect(() => {
@@ -205,7 +166,7 @@ const PermissionPage = () => {
         const filteredItems = module.items.filter(
           (p) =>
             normalizeText(p.value).includes(search) ||
-            normalizeText(p.displayAction).includes(search)
+            normalizeText(p.displayAction).includes(search),
         );
 
         if (moduleMatches) {
@@ -254,7 +215,7 @@ const PermissionPage = () => {
         id: "modules",
         title: "System Modules",
         value: totalModules,
-        description: "Domain feature groups",
+        description: "Work policy + domain groups",
         colorVariant: "purple",
       },
       {

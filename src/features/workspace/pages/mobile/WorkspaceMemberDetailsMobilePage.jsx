@@ -31,6 +31,7 @@ import {
   uiToast,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessFields } from "@/features/access-control/components";
 
 export default function WorkspaceMemberDetailsMobilePage({
   member,
@@ -42,6 +43,7 @@ export default function WorkspaceMemberDetailsMobilePage({
   phoneVerified,
   displayRole,
   roleDescription,
+  workAccess,
   userCode,
   isOwner,
   isPrimary,
@@ -370,6 +372,16 @@ export default function WorkspaceMemberDetailsMobilePage({
               </div>
 
               <div className="pt-2 space-y-1">
+                {workAccess && (
+                  <div className="pb-2.5">
+                    <RoleWorkAccessFields
+                      workModes={workAccess.allowedWorkModes}
+                      workLevel={workAccess.highestWorkLevel}
+                      viewOnly
+                      compact
+                    />
+                  </div>
+                )}
                 <span className="text-text-muted block">Role Description</span>
                 <p className="text-text font-normal leading-relaxed text-[11.5px]">
                   {roleDescription ||

@@ -102,12 +102,15 @@ const useCompany = () => {
     (payload) => {
       dispatch(setCurrentCompany(payload));
       try {
-        if (payload?._id) {
-          localStorage.setItem("pahuch_active_company_id", payload._id);
+        const companyId = payload?._id || payload?.id;
+        if (companyId) {
+          localStorage.setItem("pahuch_active_company_id", String(companyId));
         } else {
           localStorage.removeItem("pahuch_active_company_id");
         }
-      } catch {}
+      } catch {
+        // ignore storage errors
+      }
     },
     [dispatch],
   );
@@ -116,7 +119,9 @@ const useCompany = () => {
     dispatch(clearCurrentCompany());
     try {
       localStorage.removeItem("pahuch_active_company_id");
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
   }, [dispatch]);
 
   const removeCompanies = useCallback(() => {

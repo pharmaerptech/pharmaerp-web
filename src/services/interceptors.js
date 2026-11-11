@@ -21,7 +21,6 @@ const isPublicAuthRequest = (url = "") =>
   PUBLIC_AUTH_PATHS.some((path) => url.includes(path));
 
 export const setupInterceptors = (apiClient, store) => {
-  // Eject previously attached interceptors for this client (e.g. when store is injected)
   const existing = activeInterceptors.get(apiClient);
   if (existing) {
     apiClient.interceptors.request.eject(existing.requestId);
@@ -30,7 +29,6 @@ export const setupInterceptors = (apiClient, store) => {
 
   const requestId = apiClient.interceptors.request.use(
     (config) => {
-      // 1. Authentication remains safely handled via tokens
       const token = storage.get(TOKEN_KEY);
 
       config.headers = config.headers || {};
@@ -39,7 +37,6 @@ export const setupInterceptors = (apiClient, store) => {
         config.headers.Authorization = `Bearer ${token}`;
       }
 
-      // 2. FIXED: Extract runtime active contexts straight out of global Redux memory state tree
       if (store) {
         const state = store.getState();
 
@@ -77,7 +74,18 @@ export const setupInterceptors = (apiClient, store) => {
         }
       }
 
-      // 3. Client Local Date for timezone-safe operations (YYYY-MM-DD)
+      // Attach fast localStorage active work mode & work level headers
+      try {
+        const workMode = localStorage.getItem("pahuch_work_mode");
+        const workLevel = localStorage.getItem("pahuch_pipeline_level");
+        if (workMode) {
+          config.headers["x-work-mode"] = workMode;
+        }
+        if (workLevel) {
+          config.headers["x-work-level"] = workLevel;
+        }
+      } catch {}
+
       const now = new Date();
       const localDateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       config.headers["x-client-date"] = localDateStr;
@@ -100,6 +108,10 @@ export const setupInterceptors = (apiClient, store) => {
         if (store && store.getState()?.auth?.isAuthenticated) {
           store.dispatch({ type: "auth/clearCredentials" });
         }
+      }
+
+      if (error?.response?.data?.code) {
+        error.code = error.response.data.code;
       }
 
       error.message = getErrorMessage(error);

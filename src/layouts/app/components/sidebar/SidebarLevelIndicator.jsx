@@ -15,6 +15,7 @@ import {
   X,
   ArrowUp,
   ArrowRight,
+  Lock,
 } from "lucide-react";
 
 import { API_STATUS, TOKEN_KEY } from "@/constants";
@@ -131,6 +132,8 @@ export const SidebarLevelIndicator = ({
     isWorkspaceLevel,
     isCompanyLevel,
     isBranchLevel,
+    canAscendToWorkspace,
+    canAscendToCompany,
     ascendToWorkspace,
     ascendToCompany,
     enterCompany,
@@ -713,19 +716,31 @@ export const SidebarLevelIndicator = ({
         {/* ── LEVEL 2: COMPANY ───────────────────────────────────────── */}
         {isCompanyLevel && (
           <div className="flex flex-col gap-1.5 p-2.5">
-            {/* Top: Go Up to Workspace + Collapse */}
+            {/* Top: Go Up to Workspace (Locked if role lacks workspace level) + Collapse */}
             <div className="flex items-center justify-between gap-2 min-w-0">
-              <button
-                type="button"
-                onClick={ascendToWorkspace}
-                title="Ascend to Workspace"
-                className="flex items-center gap-1.5 px-1.5 py-0.5 -ml-1 rounded-md text-[11px] font-semibold text-text-muted hover:text-primary hover:bg-surface-hover transition-all cursor-pointer group"
-              >
-                <ArrowUp className="size-3 text-purple-500 group-hover:-translate-y-0.5 transition-transform" />
-                <span className="truncate max-w-[155px]">
-                  {currentWorkspace?.name || "Workspace"}
+              {canAscendToWorkspace ? (
+                <button
+                  type="button"
+                  onClick={ascendToWorkspace}
+                  title="Ascend to Workspace"
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 -ml-1 rounded-md text-[11px] font-semibold text-text-muted hover:text-primary hover:bg-surface-hover transition-all cursor-pointer group"
+                >
+                  <ArrowUp className="size-3 text-purple-500 group-hover:-translate-y-0.5 transition-transform" />
+                  <span className="truncate max-w-[155px]">
+                    {currentWorkspace?.name || "Workspace"}
+                  </span>
+                </button>
+              ) : (
+                <span
+                  title="Workspace level restricted by your role"
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 -ml-1 rounded-md text-[11px] font-medium text-text-muted/75"
+                >
+                  <Lock className="size-3 shrink-0" />
+                  <span className="truncate max-w-[155px]">
+                    {currentWorkspace?.name || "Workspace"}
+                  </span>
                 </span>
-              </button>
+              )}
 
               {collapseOrCloseButton}
             </div>
@@ -778,19 +793,31 @@ export const SidebarLevelIndicator = ({
         {/* ── LEVEL 3: BRANCH ────────────────────────────────────────── */}
         {isBranchLevel && (
           <div className="flex flex-col gap-1.5 p-2.5">
-            {/* Top: Go Up to Company + Collapse */}
+            {/* Top: Go Up to Company (Locked if role is branch-only) + Collapse */}
             <div className="flex items-center justify-between gap-2 min-w-0">
-              <button
-                type="button"
-                onClick={ascendToCompany}
-                title="Ascend to Company"
-                className="flex items-center gap-1.5 px-1.5 py-0.5 -ml-1 rounded-md text-[11px] font-semibold text-text-muted hover:text-primary hover:bg-surface-hover transition-all cursor-pointer group"
-              >
-                <ArrowUp className="size-3 text-blue-500 group-hover:-translate-y-0.5 transition-transform" />
-                <span className="truncate max-w-[155px]">
-                  {currentCompany?.name || "Company"}
+              {canAscendToCompany ? (
+                <button
+                  type="button"
+                  onClick={ascendToCompany}
+                  title="Ascend to Company"
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 -ml-1 rounded-md text-[11px] font-semibold text-text-muted hover:text-primary hover:bg-surface-hover transition-all cursor-pointer group"
+                >
+                  <ArrowUp className="size-3 text-blue-500 group-hover:-translate-y-0.5 transition-transform" />
+                  <span className="truncate max-w-[155px]">
+                    {currentCompany?.name || "Company"}
+                  </span>
+                </button>
+              ) : (
+                <span
+                  title="Branch-only access granted by your role"
+                  className="flex items-center gap-1.5 px-1.5 py-0.5 -ml-1 rounded-md text-[11px] font-medium text-text-muted/75"
+                >
+                  <Lock className="size-3 shrink-0" />
+                  <span className="truncate max-w-[155px]">
+                    {currentCompany?.name || "Branch Scope"}
+                  </span>
                 </span>
-              </button>
+              )}
 
               {collapseOrCloseButton}
             </div>

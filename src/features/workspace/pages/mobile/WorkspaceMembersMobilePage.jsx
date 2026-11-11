@@ -42,6 +42,7 @@ import {
 } from "@/components/ui";
 import { WorkspaceMembersTableView } from "../../components";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessBadges } from "@/features/access-control/components";
 
 export default function WorkspaceMembersMobilePage({
   workspace,
@@ -661,6 +662,18 @@ function MemberCard({
 
       {/* Bottom Section: Theme-Native Elevated Strip (Adapts cleanly to all color themes and dark mode) */}
       <div className="bg-surface-alt/60 border-t border-border/70 p-3 space-y-2 text-left">
+        {/* Work Modes & Level Ceiling */}
+        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/50">
+          <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider shrink-0">
+            Access
+          </span>
+          <RoleWorkAccessBadges
+            workAccess={member?.workAccess}
+            role={member?.role || member?.roleId}
+            compact
+          />
+        </div>
+
         {/* 2-Column Metadata Grid: Company & Branch Tiles */}
         <div className="w-full grid grid-cols-2 gap-2 text-left">
           <div className="rounded-xl bg-surface/90 border border-border/70 p-2 shadow-2xs transition-colors">

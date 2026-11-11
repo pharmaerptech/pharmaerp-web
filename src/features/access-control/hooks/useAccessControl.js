@@ -23,6 +23,7 @@ import {
   clearCurrentRole,
   clearCurrentMemberAccess,
   clearMemberAccessCheck,
+  clearMyAccess,
 } from "../store/accessControlSlice";
 
 import {
@@ -49,6 +50,10 @@ import {
   selectCheckCompanyAccessStatus,
   selectCheckBranchAccessStatus,
   selectMyAccess,
+  selectMyWorkAccess,
+  selectAllowedWorkModes,
+  selectAllowedWorkLevels,
+  selectHighestWorkLevel,
   selectGetMyAccessStatus,
 } from "../store/accessControlSelector";
 
@@ -89,6 +94,10 @@ const useAccessControl = () => {
   const checkBranchAccessStatus = useSelector(selectCheckBranchAccessStatus);
 
   const myAccess = useSelector(selectMyAccess);
+  const myWorkAccess = useSelector(selectMyWorkAccess);
+  const allowedWorkModes = useSelector(selectAllowedWorkModes);
+  const allowedWorkLevels = useSelector(selectAllowedWorkLevels);
+  const highestWorkLevel = useSelector(selectHighestWorkLevel);
   const getMyAccessStatus = useSelector(selectGetMyAccessStatus);
 
   const submitCreateRole = useCallback(
@@ -178,6 +187,10 @@ const useAccessControl = () => {
     dispatch(clearMemberAccessCheck());
   }, [dispatch]);
 
+  const resetMyAccess = useCallback(() => {
+    dispatch(clearMyAccess());
+  }, [dispatch]);
+
   return {
     roles,
     currentRole,
@@ -208,6 +221,10 @@ const useAccessControl = () => {
     checkBranchAccessStatus,
 
     myAccess,
+    myWorkAccess,
+    allowedWorkModes,
+    allowedWorkLevels,
+    highestWorkLevel,
     getMyAccessStatus,
 
     createRole: submitCreateRole,
@@ -231,6 +248,7 @@ const useAccessControl = () => {
     clearCurrentRole: removeCurrentRole,
     clearCurrentMemberAccess: removeCurrentMemberAccess,
     clearMemberAccessCheck: removeMemberAccessCheck,
+    clearMyAccess: resetMyAccess,
   };
 };
 

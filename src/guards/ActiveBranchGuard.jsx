@@ -27,7 +27,7 @@ export const ActiveBranchGuard = ({ children }) => {
 
   if (!currentBranch) {
     const safeLevel = reconcilePipelineLevel(currentLevel, {
-      hasActiveCompany: Boolean(currentCompany?._id),
+      hasActiveCompany: Boolean(currentCompany?._id || currentCompany?.id),
       hasActiveBranch: false,
     });
     const fallbackRoute = getPipelineDefaultRoute(

@@ -193,9 +193,7 @@ export const useHoldBills = () => {
     (billId) => {
       if (!billId) return null;
       const freshBills = getHeldBills(workspaceId, companyId, branchId);
-      const target =
-        freshBills.find((b) => b.id === billId) ||
-        heldBills.find((b) => b.id === billId);
+      const target = freshBills.find((b) => b.id === billId);
       if (target) {
         removeHeldBill(billId);
         refetch();
@@ -203,7 +201,7 @@ export const useHoldBills = () => {
       }
       return null;
     },
-    [workspaceId, companyId, branchId, heldBills, refetch]
+    [workspaceId, companyId, branchId, refetch]
   );
 
   /**

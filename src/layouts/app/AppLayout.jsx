@@ -1,6 +1,6 @@
 // src/layouts/app/AppLayout.jsx
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { TOKEN_KEY } from "@/constants";
 import { storage } from "@/utils";
@@ -13,8 +13,9 @@ import {
   NavigationPipelineProvider,
   PIPELINE_LEVELS,
   PIPELINE_STORAGE_KEYS,
-  getLevelFromPathname,
+  useWorkMode,
 } from "@/contexts";
+import { resolveMyWorkAccess } from "@/utils/workAccess";
 import { ScrollToTop } from "@/components";
 import { UIToastContainer } from "@/components/ui";
 import { AnimatePresence } from "framer-motion";
@@ -22,10 +23,14 @@ import { AnimatePresence } from "framer-motion";
 import AppDesktopLayout from "./desktop/AppDesktopLayout";
 import AppMobileLayout from "./mobile/AppMobileLayout";
 import PremiumAppLoader from "./components/loader/PremiumAppLoader";
-
-const getWorkspaceFromItem = (item) => {
-  return item?.workspace || item || null;
-};
+import {
+  hydrateBootContext,
+  needsContextHydration,
+  normalizeArrayPayload,
+  normalizeStoredId,
+  resolveBootWorkMode,
+  resolveRequestedBootLevel,
+} from "./bootContextPolicy";
 
 const safeGetStorage = (key) => {
   try {
@@ -72,140 +77,196 @@ const AppLayoutContent = ({ isSyncComplete }) => {
   );
 };
 
+const readBootStorage = () => ({
+  savedLevel: safeGetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL),
+  savedCompanyId: safeGetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID),
+  savedBranchId: safeGetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID),
+});
+
+const applyBootStorageUpdates = ({
+  activeLevel,
+  activeCompanyId,
+  activeBranchId,
+}) => {
+  safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, activeLevel);
+
+  if (activeCompanyId) {
+    safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID, activeCompanyId);
+  } else {
+    safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+  }
+
+  if (activeBranchId) {
+    safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID, activeBranchId);
+  } else {
+    safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+  }
+};
+
 const AppLayout = () => {
   const { workspaces, currentWorkspace, getMyWorkspaces, setCurrentWorkspace } =
     useWorkspace();
-  const { getWorkspaceCompanies, setCurrentCompany, clearCurrentCompany } =
-    useCompany();
-  const { getCompanyBranches, setCurrentBranch, clearCurrentBranch } =
-    useBranch();
+  const {
+    currentCompany,
+    getWorkspaceCompanies,
+    getCompanyById,
+    setCurrentCompany,
+    clearCurrentCompany,
+  } = useCompany();
+  const {
+    currentBranch,
+    getCompanyBranches,
+    getBranchById,
+    setCurrentBranch,
+    clearCurrentBranch,
+  } = useBranch();
   const { getMyAccess } = useAccessControl();
+  const { setWorkMode } = useWorkMode();
 
-  const isHardRefresh = !currentWorkspace?._id;
-  const [isSyncComplete, setIsSyncComplete] = useState(!isHardRefresh);
-
-  const initializedRef = useRef(false);
+  const [isSyncComplete, setIsSyncComplete] = useState(() => {
+    if (!storage.get(TOKEN_KEY)) return true;
+    return false;
+  });
 
   useEffect(() => {
-    if (!isHardRefresh || initializedRef.current) {
-      setIsSyncComplete(true);
-      return;
-    }
-
-    initializedRef.current = true;
+    let isCancelled = false;
 
     const bootApplicationContext = async () => {
       try {
         if (!storage.get(TOKEN_KEY)) {
-          setIsSyncComplete(true);
+          if (!isCancelled) setIsSyncComplete(true);
           return;
         }
 
-        const savedLevel = safeGetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL);
-        const savedCompanyId = safeGetStorage(
-          PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID,
-        );
-        const savedBranchId = safeGetStorage(
-          PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID,
-        );
-
-        const validLevels = Object.values(PIPELINE_LEVELS);
-        let effectiveLevel = validLevels.includes(savedLevel)
-          ? savedLevel
-          : getLevelFromPathname(window.location.pathname);
-
-        if (!effectiveLevel || !validLevels.includes(effectiveLevel)) {
-          effectiveLevel = PIPELINE_LEVELS.WORKSPACE;
-        }
-
-        const workspaceItems = workspaces?.length
-          ? workspaces
-          : await getMyWorkspaces().catch(() => []);
-        const selectedWorkspaceItem = workspaceItems?.[0];
-        const selectedWorkspace = getWorkspaceFromItem(selectedWorkspaceItem);
-
-        if (selectedWorkspace?._id) {
-          setCurrentWorkspace(selectedWorkspace);
-        }
-
-        let companyItems = [];
-        if (selectedWorkspace?._id) {
-          companyItems = await getWorkspaceCompanies().catch(() => []);
-        }
-
-        if (effectiveLevel === PIPELINE_LEVELS.WORKSPACE) {
-          clearCurrentCompany();
-          clearCurrentBranch();
-          safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
-          safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-        } else if (effectiveLevel === PIPELINE_LEVELS.COMPANY) {
-          clearCurrentBranch();
-          safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-
-          const selectedCompany =
-            companyItems?.find((company) => company?._id === savedCompanyId) ||
-            null;
-
-          if (selectedCompany?._id) {
-            setCurrentCompany(selectedCompany);
-            await getCompanyBranches(selectedCompany._id).catch(() => null);
-          } else {
-            effectiveLevel = PIPELINE_LEVELS.WORKSPACE;
-            clearCurrentCompany();
-            safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
-          }
-        } else if (effectiveLevel === PIPELINE_LEVELS.BRANCH) {
-          const selectedCompany =
-            companyItems?.find((company) => company?._id === savedCompanyId) ||
-            companyItems?.[0] ||
-            null;
-
-          if (selectedCompany?._id) {
-            setCurrentCompany(selectedCompany);
-            safeSetStorage(
-              PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID,
-              selectedCompany._id,
+        // Ensure currentWorkspace exists before querying workspace-scoped access
+        let activeWorkspace = currentWorkspace;
+        if (!normalizeStoredId(activeWorkspace)) {
+          const existingItem = Array.isArray(workspaces) ? workspaces[0] : null;
+          activeWorkspace = existingItem?.workspace || existingItem || null;
+          if (!normalizeStoredId(activeWorkspace)) {
+            const fetchedWs = normalizeArrayPayload(
+              await getMyWorkspaces().catch(() => []),
             );
-
-            const branchItems = await getCompanyBranches(
-              selectedCompany._id,
-            ).catch(() => []);
-            const selectedBranch =
-              branchItems?.find((branch) => branch?._id === savedBranchId) ||
-              null;
-
-            if (selectedBranch?._id) {
-              setCurrentBranch(selectedBranch);
-            } else {
-              effectiveLevel = PIPELINE_LEVELS.COMPANY;
-              clearCurrentBranch();
-              safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-            }
-          } else {
-            effectiveLevel = PIPELINE_LEVELS.WORKSPACE;
-            clearCurrentCompany();
-            clearCurrentBranch();
-            safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
-            safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+            activeWorkspace =
+              fetchedWs[0]?.workspace || fetchedWs[0] || null;
+          }
+          if (normalizeStoredId(activeWorkspace)) {
+            setCurrentWorkspace(activeWorkspace);
           }
         }
 
-        safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, effectiveLevel);
+        if (isCancelled) return;
 
-        getMyAccess().catch(() => null);
-        setIsSyncComplete(true);
+        // Await authoritative backend permissions BEFORE resolving boot level or mode
+        const myAccessPayload = await getMyAccess().catch(() => null);
+        if (isCancelled) return;
+
+        const resolvedWorkAccess = resolveMyWorkAccess(myAccessPayload);
+        const allowedWorkLevels = resolvedWorkAccess?.allowedWorkLevels || null;
+        const allowedWorkModes = resolvedWorkAccess?.allowedWorkModes || null;
+
+        // Clamp/auto-resolve Work Mode according to role
+        const bootMode = resolveBootWorkMode({
+          storedMode: safeGetStorage("pahuch_work_mode"),
+          wasSelected: safeGetStorage("pahuch_work_mode_selected") === "true",
+          allowedWorkModes,
+        });
+        if (bootMode.workMode && (bootMode.autoSelected || bootMode.hasSelectedMode)) {
+          setWorkMode(bootMode.workMode, true);
+        }
+
+        const { savedLevel, savedCompanyId, savedBranchId } = readBootStorage();
+        const requestedLevel = resolveRequestedBootLevel({
+          savedLevel,
+          pathname: window.location.pathname,
+          savedCompanyId,
+          savedBranchId,
+          allowedWorkLevels,
+        });
+
+        const shouldHydrate = needsContextHydration({
+          requestedLevel,
+          savedCompanyId,
+          savedBranchId,
+          currentCompany,
+          currentBranch,
+        });
+
+        if (!shouldHydrate) {
+          applyBootStorageUpdates({
+            activeLevel: requestedLevel,
+            activeCompanyId:
+              requestedLevel === PIPELINE_LEVELS.WORKSPACE
+                ? null
+                : normalizeStoredId(currentCompany),
+            activeBranchId:
+              requestedLevel === PIPELINE_LEVELS.BRANCH
+                ? normalizeStoredId(currentBranch)
+                : null,
+          });
+          if (requestedLevel === PIPELINE_LEVELS.WORKSPACE) {
+            getWorkspaceCompanies().catch(() => null);
+          }
+          if (!isCancelled) setIsSyncComplete(true);
+          return;
+        }
+
+        const result = await hydrateBootContext({
+          savedLevel,
+          savedCompanyId,
+          savedBranchId,
+          pathname: window.location.pathname,
+          workspaces,
+          currentWorkspace: activeWorkspace,
+          allowedWorkLevels,
+          fetchWorkspaces: getMyWorkspaces,
+          fetchCompanies: getWorkspaceCompanies,
+          fetchBranches: getCompanyBranches,
+          fetchCompanyById: getCompanyById,
+          fetchBranchById: getBranchById,
+        });
+
+        if (isCancelled) return;
+
+        if (
+          normalizeStoredId(result.workspace) &&
+          !normalizeStoredId(currentWorkspace)
+        ) {
+          setCurrentWorkspace(result.workspace);
+        }
+
+        if (result.company) {
+          setCurrentCompany(result.company);
+        } else {
+          clearCurrentCompany();
+        }
+
+        if (result.branch) {
+          setCurrentBranch(result.branch);
+        } else {
+          clearCurrentBranch();
+        }
+
+        applyBootStorageUpdates(result.storageUpdates);
+
+        if (!isCancelled) setIsSyncComplete(true);
       } catch (error) {
         console.error(
           "Critical failure during layout initialization sync:",
           error,
         );
-        setIsSyncComplete(true);
+        if (!isCancelled) setIsSyncComplete(true);
       }
     };
 
     bootApplicationContext();
+
+    return () => {
+      isCancelled = true;
+    };
+    // Run once per AppLayout mount; StrictMode cleanup cancels Mount #1 so Mount #2 commits cleanly
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHardRefresh]);
+  }, []);
 
   return (
     <NavigationPipelineProvider

@@ -13,10 +13,12 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 
 import { useWorkMode, WORK_MODES } from "./WorkModeContext";
+import usePermission from "@/hooks/usePermission";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
-import { ContextSwitchLoader } from "@/components/ui";
+import { ContextSwitchLoader, uiToast } from "@/components/ui";
+import { clampWorkLevelToAllowed, clampWorkModeToAllowed } from "@/utils/workAccess";
 import {
   PIPELINE_LEVELS,
   PIPELINE_STORAGE_KEYS,
@@ -83,6 +85,16 @@ export const NavigationPipelineProvider = ({
   const location = useLocation();
   const navigate = useNavigate();
   const { workMode, setWorkMode } = useWorkMode();
+  const {
+    isOwner,
+    isLoaded: isPermissionsLoaded,
+    allowedWorkLevels,
+    allowedWorkModes,
+    highestWorkLevel,
+    canWorkLevel,
+    canWorkMode,
+    workAccess,
+  } = usePermission();
 
   const { currentWorkspace } = useWorkspace();
   const { currentCompany, setCurrentCompany, clearCurrentCompany } = useCompany();
@@ -101,34 +113,51 @@ export const NavigationPipelineProvider = ({
     toName: "",
   });
 
-  // Explicit user-controlled level state (never mutated passively on route changes)
   const [activeLevel, setActiveLevelState] = useState(() =>
-    readStoredLevel(location.pathname)
+    readStoredLevel(location.pathname),
   );
 
-  // Derive safe currentLevel once boot hydration completes
+  // Clamp activeLevel once boot hydration & role permissions settle
   const currentLevel = useMemo(() => {
     if (!isSyncComplete) return activeLevel;
-    return reconcilePipelineLevel(activeLevel, {
-      hasActiveCompany: Boolean(currentCompany?._id),
-      hasActiveBranch: Boolean(currentBranch?._id),
-    });
-  }, [isSyncComplete, activeLevel, currentCompany?._id, currentBranch?._id]);
+    const enforcedLevels =
+      isPermissionsLoaded && !isOwner ? allowedWorkLevels : null;
 
-  // Persist currentLevel to localStorage cleanly
+    return reconcilePipelineLevel(activeLevel, {
+      hasActiveCompany: Boolean(currentCompany?._id || currentCompany?.id),
+      hasActiveBranch: Boolean(currentBranch?._id || currentBranch?.id),
+      allowedLevels: enforcedLevels,
+    });
+  }, [
+    isSyncComplete,
+    activeLevel,
+    isPermissionsLoaded,
+    isOwner,
+    allowedWorkLevels,
+    currentCompany?._id,
+    currentCompany?.id,
+    currentBranch?._id,
+    currentBranch?.id,
+  ]);
+
   useEffect(() => {
     if (!isSyncComplete) return;
     safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, currentLevel);
   }, [isSyncComplete, currentLevel]);
 
-  // Explicit Level Setter
-  const setLevel = useCallback((newLevel) => {
-    if (!Object.values(PIPELINE_LEVELS).includes(newLevel)) return;
-    setActiveLevelState(newLevel);
-    safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, newLevel);
-  }, []);
+  const setLevel = useCallback(
+    (newLevel) => {
+      if (!Object.values(PIPELINE_LEVELS).includes(newLevel)) return;
+      const safeLevel =
+        isPermissionsLoaded && !isOwner && Array.isArray(allowedWorkLevels)
+          ? clampWorkLevelToAllowed(newLevel, allowedWorkLevels)
+          : newLevel;
+      setActiveLevelState(safeLevel);
+      safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, safeLevel);
+    },
+    [isPermissionsLoaded, isOwner, allowedWorkLevels],
+  );
 
-  // Programmatic Transition Trigger helper
   const triggerTransition = useCallback(
     ({
       type = "company",
@@ -152,11 +181,29 @@ export const NavigationPipelineProvider = ({
         }, duration);
       });
     },
-    []
+    [],
   );
 
-  // Ascend to Workspace Level (Floor 1)
+  const resolvePermittedMode = useCallback(
+    (requestedMode, fallbackDefault = WORK_MODES.VIEW) => {
+      const candidate = requestedMode || workMode || fallbackDefault;
+      if (isPermissionsLoaded && !isOwner && Array.isArray(allowedWorkModes)) {
+        return clampWorkModeToAllowed(candidate, allowedWorkModes);
+      }
+      return candidate;
+    },
+    [workMode, isPermissionsLoaded, isOwner, allowedWorkModes],
+  );
+
   const ascendToWorkspace = useCallback(() => {
+    if (isPermissionsLoaded && !canWorkLevel(PIPELINE_LEVELS.WORKSPACE)) {
+      uiToast.warning(
+        "Workspace Level Restricted",
+        "Your role does not permit Workspace level access.",
+      );
+      return;
+    }
+
     const from =
       currentCompany?.name || currentBranch?.name || "Company Level";
     const to = currentWorkspace?.name || "Workspace Level";
@@ -177,9 +224,11 @@ export const NavigationPipelineProvider = ({
     safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
 
     setLevel(PIPELINE_LEVELS.WORKSPACE);
+    const effectiveMode = resolvePermittedMode(workMode, WORK_MODES.VIEW);
     const targetRoute = getPipelineDefaultRoute(
       PIPELINE_LEVELS.WORKSPACE,
-      workMode || WORK_MODES.VIEW
+      effectiveMode,
+      isPermissionsLoaded && !isOwner ? workAccess : null,
     );
     navigate(targetRoute);
 
@@ -187,6 +236,8 @@ export const NavigationPipelineProvider = ({
       setTransitionState((prev) => ({ ...prev, isOpen: false }));
     }, 650);
   }, [
+    isPermissionsLoaded,
+    canWorkLevel,
     currentCompany,
     currentBranch,
     currentWorkspace,
@@ -194,12 +245,22 @@ export const NavigationPipelineProvider = ({
     clearCurrentBranch,
     clearCurrentCompany,
     setLevel,
+    resolvePermittedMode,
     workMode,
+    isOwner,
+    workAccess,
     navigate,
   ]);
 
-  // Ascend to Company Level (Floor 2)
   const ascendToCompany = useCallback(() => {
+    if (isPermissionsLoaded && !canWorkLevel(PIPELINE_LEVELS.COMPANY)) {
+      uiToast.warning(
+        "Company Level Restricted",
+        "Your role is restricted to Branch level only.",
+      );
+      return;
+    }
+
     const from = currentBranch?.name || "Branch Level";
     const to = currentCompany?.name || "Company Level";
 
@@ -217,9 +278,11 @@ export const NavigationPipelineProvider = ({
     safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
 
     setLevel(PIPELINE_LEVELS.COMPANY);
+    const effectiveMode = resolvePermittedMode(workMode, WORK_MODES.VIEW);
     const targetRoute = getPipelineDefaultRoute(
       PIPELINE_LEVELS.COMPANY,
-      workMode || WORK_MODES.VIEW
+      effectiveMode,
+      isPermissionsLoaded && !isOwner ? workAccess : null,
     );
     navigate(targetRoute);
 
@@ -227,18 +290,38 @@ export const NavigationPipelineProvider = ({
       setTransitionState((prev) => ({ ...prev, isOpen: false }));
     }, 650);
   }, [
+    isPermissionsLoaded,
+    canWorkLevel,
     currentBranch,
     currentCompany,
     dispatch,
     clearCurrentBranch,
     setLevel,
+    resolvePermittedMode,
     workMode,
+    isOwner,
+    workAccess,
     navigate,
   ]);
 
-  // Enter a specific company (Floor 1 -> Floor 2)
   const enterCompany = useCallback(
     (company, targetMode = null) => {
+      if (isPermissionsLoaded && !canWorkLevel(PIPELINE_LEVELS.COMPANY)) {
+        uiToast.warning(
+          "Company Level Restricted",
+          "Your role does not permit Company level access.",
+        );
+        return;
+      }
+
+      if (targetMode && isPermissionsLoaded && !canWorkMode(targetMode)) {
+        uiToast.warning(
+          "Work Mode Restricted",
+          `Your role does not permit ${targetMode === WORK_MODES.OPERATION ? "Operation" : "View"} Mode.`,
+        );
+        targetMode = null;
+      }
+
       const from = currentWorkspace?.name || "Workspace Level";
       const to = company?.name || currentCompany?.name || "Company Level";
 
@@ -250,21 +333,23 @@ export const NavigationPipelineProvider = ({
         toName: to,
       });
 
-      if (company?._id) {
+      const companyId = company?._id || company?.id;
+      if (companyId) {
         setCurrentCompany(company);
         clearCurrentBranch();
-        safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID, company._id);
+        safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID, String(companyId));
         safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-        getCompanyBranches(company._id).catch(() => null);
+        getCompanyBranches(companyId).catch(() => null);
       }
       setLevel(PIPELINE_LEVELS.COMPANY);
-      const effectiveMode = targetMode || workMode || WORK_MODES.VIEW;
-      if (targetMode && targetMode !== workMode) {
-        setWorkMode(targetMode, true);
+      const effectiveMode = resolvePermittedMode(targetMode || workMode, WORK_MODES.VIEW);
+      if (effectiveMode && effectiveMode !== workMode) {
+        setWorkMode(effectiveMode, true);
       }
       const targetRoute = getPipelineDefaultRoute(
         PIPELINE_LEVELS.COMPANY,
-        effectiveMode
+        effectiveMode,
+        isPermissionsLoaded && !isOwner ? workAccess : null,
       );
       navigate(targetRoute);
 
@@ -273,21 +358,42 @@ export const NavigationPipelineProvider = ({
       }, 650);
     },
     [
+      isPermissionsLoaded,
+      canWorkLevel,
+      canWorkMode,
       currentWorkspace,
       currentCompany,
       setCurrentCompany,
       clearCurrentBranch,
       getCompanyBranches,
       setLevel,
+      resolvePermittedMode,
       workMode,
       setWorkMode,
+      isOwner,
+      workAccess,
       navigate,
-    ]
+    ],
   );
 
-  // Enter a specific branch (Floor 2 -> Floor 3)
   const enterBranch = useCallback(
     (branch, targetMode = null) => {
+      if (isPermissionsLoaded && !canWorkLevel(PIPELINE_LEVELS.BRANCH)) {
+        uiToast.warning(
+          "Branch Level Restricted",
+          "Your role does not permit Branch level access.",
+        );
+        return;
+      }
+
+      if (targetMode && isPermissionsLoaded && !canWorkMode(targetMode)) {
+        uiToast.warning(
+          "Work Mode Restricted",
+          `Your role does not permit ${targetMode === WORK_MODES.OPERATION ? "Operation" : "View"} Mode.`,
+        );
+        targetMode = null;
+      }
+
       const from = currentCompany?.name || "Company Level";
       const to = branch?.name || currentBranch?.name || "Branch Level";
 
@@ -299,18 +405,35 @@ export const NavigationPipelineProvider = ({
         toName: to,
       });
 
-      if (branch?._id) {
+      const activeCompanyId =
+        currentCompany?._id ||
+        currentCompany?.id ||
+        branch?.companyId?._id ||
+        branch?.companyId;
+      if (activeCompanyId) {
+        safeSetStorage(
+          PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID,
+          String(activeCompanyId),
+        );
+      }
+
+      const branchId = branch?._id || branch?.id;
+      if (branchId) {
         setCurrentBranch(branch);
-        safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID, branch._id);
+        safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID, String(branchId));
       }
       setLevel(PIPELINE_LEVELS.BRANCH);
-      const effectiveMode = targetMode || workMode || WORK_MODES.OPERATION;
-      if (targetMode && targetMode !== workMode) {
-        setWorkMode(targetMode, true);
+      const effectiveMode = resolvePermittedMode(
+        targetMode || workMode,
+        WORK_MODES.OPERATION,
+      );
+      if (effectiveMode && effectiveMode !== workMode) {
+        setWorkMode(effectiveMode, true);
       }
       const targetRoute = getPipelineDefaultRoute(
         PIPELINE_LEVELS.BRANCH,
-        effectiveMode
+        effectiveMode,
+        isPermissionsLoaded && !isOwner ? workAccess : null,
       );
       navigate(targetRoute);
 
@@ -319,32 +442,61 @@ export const NavigationPipelineProvider = ({
       }, 650);
     },
     [
+      isPermissionsLoaded,
+      canWorkLevel,
+      canWorkMode,
       currentCompany,
       currentBranch,
       setCurrentBranch,
       setLevel,
+      resolvePermittedMode,
       workMode,
       setWorkMode,
+      isOwner,
+      workAccess,
       navigate,
-    ]
+    ],
   );
 
-  // Level-aware Mode Switcher: Strictly preserves active level
   const switchLevelMode = useCallback(
     (newMode, targetLevel = null) => {
-      const isOp = newMode === WORK_MODES.OPERATION;
+      if (isPermissionsLoaded && !canWorkMode(newMode)) {
+        uiToast.warning(
+          "Work Mode Restricted",
+          `Your role does not allow switching to ${newMode === WORK_MODES.OPERATION ? "Operation" : "View"} Mode.`,
+        );
+        return;
+      }
+
+      const effectiveMode = resolvePermittedMode(newMode, WORK_MODES.VIEW);
+      const requestedTargetLevel =
+        targetLevel || currentLevel || PIPELINE_LEVELS.WORKSPACE;
+
+      if (
+        isPermissionsLoaded &&
+        !isOwner &&
+        !canWorkLevel(requestedTargetLevel)
+      ) {
+        uiToast.warning(
+          "Level Restricted",
+          `Your role does not permit "${requestedTargetLevel}" level access.`,
+        );
+      }
+
+      const enforcedLevels =
+        isPermissionsLoaded && !isOwner ? allowedWorkLevels : null;
+
+      const effectiveLevel = reconcilePipelineLevel(requestedTargetLevel, {
+        hasActiveCompany: Boolean(currentCompany?._id || currentCompany?.id),
+        hasActiveBranch: Boolean(currentBranch?._id || currentBranch?.id),
+        allowedLevels: enforcedLevels,
+      });
+
+      const isOp = effectiveMode === WORK_MODES.OPERATION;
       const prevName =
         workMode === WORK_MODES.OPERATION ? "Operation Mode" : "View Mode";
       const newName = isOp ? "Operation Mode" : "View Mode";
       const modeType = isOp ? "mode-operation" : "mode-view";
-
-      const effectiveLevel = reconcilePipelineLevel(
-        targetLevel || currentLevel || PIPELINE_LEVELS.WORKSPACE,
-        {
-          hasActiveCompany: Boolean(currentCompany?._id),
-          hasActiveBranch: Boolean(currentBranch?._id),
-        }
-      );
 
       setLevel(effectiveLevel);
 
@@ -356,8 +508,12 @@ export const NavigationPipelineProvider = ({
         toName: newName,
       });
 
-      setWorkMode(newMode, true);
-      const targetRoute = getPipelineDefaultRoute(effectiveLevel, newMode);
+      setWorkMode(effectiveMode, true);
+      const targetRoute = getPipelineDefaultRoute(
+        effectiveLevel,
+        effectiveMode,
+        isPermissionsLoaded && !isOwner ? workAccess : null,
+      );
       navigate(targetRoute);
 
       setTimeout(() => {
@@ -365,15 +521,31 @@ export const NavigationPipelineProvider = ({
       }, 700);
     },
     [
+      isPermissionsLoaded,
+      canWorkMode,
+      canWorkLevel,
+      resolvePermittedMode,
       currentLevel,
-      workMode,
+      isOwner,
+      allowedWorkLevels,
       currentCompany?._id,
+      currentCompany?.id,
       currentBranch?._id,
+      currentBranch?.id,
+      workMode,
       setLevel,
       setWorkMode,
+      workAccess,
       navigate,
-    ]
+    ],
   );
+
+  const canAscendToWorkspace = isPermissionsLoaded
+    ? canWorkLevel(PIPELINE_LEVELS.WORKSPACE)
+    : true;
+  const canAscendToCompany = isPermissionsLoaded
+    ? canWorkLevel(PIPELINE_LEVELS.COMPANY)
+    : true;
 
   const value = useMemo(
     () => ({
@@ -383,8 +555,14 @@ export const NavigationPipelineProvider = ({
       isCompanyLevel: currentLevel === PIPELINE_LEVELS.COMPANY,
       isBranchLevel: currentLevel === PIPELINE_LEVELS.BRANCH,
 
-      canDescendToCompany: Boolean(currentCompany?._id),
-      canDescendToBranch: Boolean(currentBranch?._id),
+      canDescendToCompany: Boolean(currentCompany?._id || currentCompany?.id),
+      canDescendToBranch: Boolean(currentBranch?._id || currentBranch?.id),
+
+      canAscendToWorkspace,
+      canAscendToCompany,
+      allowedWorkLevels,
+      allowedWorkModes,
+      highestWorkLevel,
 
       ascendToWorkspace,
       ascendToCompany,
@@ -399,13 +577,18 @@ export const NavigationPipelineProvider = ({
       setLevel,
       currentCompany,
       currentBranch,
+      canAscendToWorkspace,
+      canAscendToCompany,
+      allowedWorkLevels,
+      allowedWorkModes,
+      highestWorkLevel,
       ascendToWorkspace,
       ascendToCompany,
       enterCompany,
       enterBranch,
       switchLevelMode,
       triggerTransition,
-    ]
+    ],
   );
 
   return (
@@ -426,7 +609,7 @@ export const useNavigationPipeline = () => {
   const context = useContext(NavigationPipelineContext);
   if (!context) {
     throw new Error(
-      "useNavigationPipeline must be used within a NavigationPipelineProvider"
+      "useNavigationPipeline must be used within a NavigationPipelineProvider",
     );
   }
   return context;

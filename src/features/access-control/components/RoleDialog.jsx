@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { FiCheck, FiArrowRight, FiRotateCcw, FiLock, FiShield } from "react-icons/fi";
+import { useState, useEffect, useMemo } from "react";
+import { FiCheck, FiArrowRight, FiRotateCcw } from "react-icons/fi";
 import {
   UIModal,
   UIModalHeader,
@@ -15,31 +15,32 @@ import {
   UIAlert,
   UIKeyValueList,
   UIBadge,
-  UISkeleton,
 } from "@/components/ui";
+import { usePermission } from "@/hooks";
+import {
+  WORK_LEVELS,
+  WORK_MODES,
+  clampWorkLevelToAllowed,
+  clampWorkModeToAllowed,
+  isWorkAccessPermissionKey,
+  normalizeWorkLevel,
+  normalizeWorkModes,
+  resolveRoleWorkAccess,
+  syncPermissionsWithWorkAccess,
+} from "@/utils/workAccess";
 
 import { PHARMACY_ROLE_TEMPLATES } from "../constants/pharmacyRoleTemplates.constant";
+import {
+  extractPermissionOptions,
+  formatTitle,
+  groupPermissionOptionsByModule,
+  validateWorkAccessSelection,
+} from "../utils/roleForm.helper";
+import { RoleWorkAccessBadges, RoleWorkAccessFields } from "./RoleWorkAccessFields";
 
 const formatPermissionLabel = (permission) => {
   if (!permission) return "Permission";
-  return String(permission)
-    .replace(/\bedit\b/gi, "update")
-    .replace(/[.:_-]+/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-};
-
-const getModuleName = (permission) => {
-  const parts = String(permission || "")
-    .toLowerCase()
-    .replace(/\bedit\b/g, "update")
-    .split(/[.:_-]/)
-    .filter(Boolean);
-
-  const moduleKey = parts[0] || "general";
-  return moduleKey.charAt(0).toUpperCase() + moduleKey.slice(1);
+  return formatTitle(permission) || String(permission);
 };
 
 const statusOptions = [
@@ -52,6 +53,8 @@ const INITIAL_FORM = {
   code: "",
   description: "",
   status: "active",
+  workModes: [WORK_MODES.VIEW],
+  workLevel: WORK_LEVELS.BRANCH,
   permissions: [],
 };
 
@@ -65,6 +68,13 @@ export function RoleDialog({
   onSubmitUpdate,
   onSuccess,
 }) {
+  const {
+    isOwner: isOwnerActor,
+    allowedWorkModes: actorAllowedWorkModes,
+    allowedWorkLevels: actorAllowedWorkLevels,
+    highestWorkLevel: actorHighestWorkLevel,
+  } = usePermission();
+
   const [currentStep, setCurrentStep] = useState(1); // 1 = Template, 2 = Form/Permissions
   const [selectedTemplateKey, setSelectedTemplateKey] = useState("CUSTOM");
   const [formData, setFormData] = useState(INITIAL_FORM);
@@ -73,43 +83,60 @@ export function RoleDialog({
   const [serverError, setServerError] = useState(null);
   const [permissionFilter, setPermissionFilter] = useState("");
 
-  // Clean permission strings list
-  const permissionsList = useMemo(() => {
-    return (Array.isArray(allPermissions) ? allPermissions : []).map((p) =>
-      typeof p === "object" ? p.value || p.name || p.id : String(p)
-    );
-  }, [allPermissions]);
+  // Extract normalized module permission options (work-mode/work-level handled via RoleWorkAccessFields)
+  const permissionOptions = useMemo(
+    () => extractPermissionOptions(allPermissions, { excludeWorkAccess: true }),
+    [allPermissions],
+  );
 
-  // Group available permissions by module
+  const permissionsList = useMemo(
+    () => permissionOptions.map((opt) => opt.value),
+    [permissionOptions],
+  );
+
+  // Group available permissions by parsed module
   const groupedPermissions = useMemo(() => {
     const groups = {};
-    permissionsList.forEach((perm) => {
-      const moduleName = getModuleName(perm);
-      if (!groups[moduleName]) groups[moduleName] = [];
-      groups[moduleName].push(perm);
-    });
+    for (const group of groupPermissionOptionsByModule(permissionOptions)) {
+      groups[group.title] = group.permissions.map((opt) => opt.value);
+    }
     return groups;
-  }, [permissionsList]);
+  }, [permissionOptions]);
 
   useEffect(() => {
     if (isOpen) {
       if ((mode === "edit" || mode === "view") && roleData) {
         setCurrentStep(2);
-        const permList = (roleData.permissions || []).map((p) =>
-          typeof p === "object" ? p.value || p.name || p.id : String(p)
-        );
+        const permList = (roleData.permissions || [])
+          .map((p) => (typeof p === "object" ? p.value || p.name || p.id : String(p)))
+          .filter((p) => p && !isWorkAccessPermissionKey(p));
+
+        const resolvedAccess = resolveRoleWorkAccess(roleData);
 
         setFormData({
           name: roleData.name || roleData.roleName || "",
           code: roleData.code || roleData.roleCode || "",
           description: roleData.description || "",
           status: roleData.status || "active",
+          workModes: resolvedAccess.allowedWorkModes,
+          workLevel: resolvedAccess.highestWorkLevel,
           permissions: permList,
         });
       } else {
         setCurrentStep(1);
         setSelectedTemplateKey("CUSTOM");
-        setFormData(INITIAL_FORM);
+        const defaultModes = isOwnerActor
+          ? [WORK_MODES.VIEW]
+          : [clampWorkModeToAllowed(WORK_MODES.VIEW, actorAllowedWorkModes)];
+        const defaultLevel = isOwnerActor
+          ? WORK_LEVELS.BRANCH
+          : clampWorkLevelToAllowed(WORK_LEVELS.BRANCH, actorAllowedWorkLevels);
+
+        setFormData({
+          ...INITIAL_FORM,
+          workModes: defaultModes,
+          workLevel: normalizeWorkLevel(defaultLevel) || WORK_LEVELS.BRANCH,
+        });
       }
       setFormErrors({});
       setServerError(null);
@@ -119,7 +146,7 @@ export function RoleDialog({
       setFormErrors({});
       setServerError(null);
     }
-  }, [isOpen, mode, roleData]);
+  }, [actorAllowedWorkLevels, actorAllowedWorkModes, isOpen, isOwnerActor, mode, roleData]);
 
   const handleSelectTemplate = (templateKey) => {
     setSelectedTemplateKey(templateKey);
@@ -130,22 +157,38 @@ export function RoleDialog({
     if (tmpl.defaultPermissions.includes("*")) {
       initialPerms = [...permissionsList];
     } else {
-      initialPerms = permissionsList.filter((perm) => {
-        return tmpl.defaultPermissions.some((pattern) => {
+      initialPerms = permissionsList.filter((perm) =>
+        tmpl.defaultPermissions.some((pattern) => {
           if (pattern.endsWith(":*")) {
             const prefix = pattern.replace(":*", "");
-            return perm.startsWith(prefix);
+            return perm.startsWith(`${prefix}:`);
           }
           return perm === pattern;
-        });
-      });
+        }),
+      );
     }
+
+    const templateModes = normalizeWorkModes(tmpl.workModes || [WORK_MODES.VIEW]);
+    const cappedModes = isOwnerActor
+      ? templateModes
+      : templateModes.filter((m) => actorAllowedWorkModes.includes(m));
+    const nextModes =
+      cappedModes.length > 0
+        ? cappedModes
+        : [clampWorkModeToAllowed(WORK_MODES.VIEW, actorAllowedWorkModes)];
+
+    const templateLevel = normalizeWorkLevel(tmpl.workLevel) || WORK_LEVELS.BRANCH;
+    const nextLevel = isOwnerActor
+      ? templateLevel
+      : clampWorkLevelToAllowed(templateLevel, actorAllowedWorkLevels);
 
     setFormData((prev) => ({
       ...prev,
-      name: tmpl.key !== "CUSTOM" ? `${tmpl.label} Role` : prev.name,
-      code: tmpl.key !== "CUSTOM" ? tmpl.key.toLowerCase() : prev.code,
+      name: tmpl.key !== "CUSTOM" ? tmpl.label : prev.name,
+      code: tmpl.key !== "CUSTOM" ? tmpl.defaultCode || tmpl.key.toLowerCase() : prev.code,
       description: tmpl.description,
+      workModes: nextModes,
+      workLevel: nextLevel,
       permissions: initialPerms,
     }));
   };
@@ -153,10 +196,23 @@ export function RoleDialog({
   const handleFieldChange = (name, valueOrEvent) => {
     let val = valueOrEvent;
     if (valueOrEvent && typeof valueOrEvent === "object" && "target" in valueOrEvent) {
-      val = valueOrEvent.target.type === "checkbox" ? valueOrEvent.target.checked : valueOrEvent.target.value;
+      val =
+        valueOrEvent.target.type === "checkbox"
+          ? valueOrEvent.target.checked
+          : valueOrEvent.target.value;
     }
     setFormData((prev) => ({ ...prev, [name]: val }));
     setFormErrors((prev) => ({ ...prev, [name]: "", submit: "" }));
+  };
+
+  const handleWorkModesChange = (nextModes) => {
+    setFormData((prev) => ({ ...prev, workModes: nextModes }));
+    setFormErrors((prev) => ({ ...prev, workAccess: "", submit: "" }));
+  };
+
+  const handleWorkLevelChange = (nextLevel) => {
+    setFormData((prev) => ({ ...prev, workLevel: nextLevel }));
+    setFormErrors((prev) => ({ ...prev, workAccess: "", submit: "" }));
   };
 
   const handleTogglePermission = (perm) => {
@@ -194,6 +250,16 @@ export function RoleDialog({
     const errors = {};
     if (!formData.name.trim()) errors.name = "Role name is required";
     if (!formData.code.trim()) errors.code = "Role code is required";
+
+    const workAccessError = validateWorkAccessSelection({
+      workModes: formData.workModes,
+      workLevel: formData.workLevel,
+      isOwnerActor,
+      actorAllowedWorkModes,
+      actorHighestWorkLevel,
+    });
+    if (workAccessError) errors.workAccess = workAccessError;
+
     return errors;
   };
 
@@ -208,12 +274,20 @@ export function RoleDialog({
     setIsSubmitting(true);
     setServerError(null);
 
+    const synced = syncPermissionsWithWorkAccess({
+      permissions: formData.permissions,
+      workModes: formData.workModes,
+      workLevel: formData.workLevel,
+    });
+
     const payload = {
       name: formData.name.trim(),
       code: formData.code.trim().toLowerCase(),
       description: formData.description.trim(),
       status: formData.status || "active",
-      permissions: formData.permissions,
+      workModes: synced.workModes,
+      workLevel: synced.workLevel,
+      permissions: synced.permissions,
     };
 
     try {
@@ -240,16 +314,16 @@ export function RoleDialog({
       ? "Select Role Template"
       : "Configure New Role"
     : isEdit
-    ? "Edit Role & Permissions"
-    : "Role Details";
+      ? "Edit Role & Permissions"
+      : "Role Details";
 
   const subtitle = isCreate
     ? currentStep === 1
       ? "Pick a pre-configured pharmacy role template or start from scratch."
-      : "Define role details and assign specific module permissions."
+      : "Define role details, Work Modes, Work Level hierarchy, and module permissions."
     : isEdit
-    ? "Update role description and assigned permissions."
-    : "View role information and module permission assignments.";
+      ? "Update role description, Work Modes, Work Level tier, and assigned permissions."
+      : "View role Work Modes, Work Level hierarchy, and module permission assignments.";
 
   const filteredModuleKeys = Object.keys(groupedPermissions).filter((moduleName) => {
     if (!permissionFilter.trim()) return true;
@@ -288,13 +362,13 @@ export function RoleDialog({
                   <div
                     key={tmpl.key}
                     onClick={() => handleSelectTemplate(tmpl.key)}
-                    className={`cursor-pointer p-4 rounded-2xl border transition-all ${
+                    className={`cursor-pointer p-4 rounded-2xl border transition-all space-y-2.5 ${
                       isSelected
                         ? "border-primary bg-primary/5 shadow-md text-primary"
                         : "border-border bg-surface hover:border-primary/50"
                     }`}
                   >
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between">
                       <span className="text-2xl">{tmpl.icon}</span>
                       {isSelected && (
                         <span className="w-5 h-5 rounded-full bg-primary text-white flex items-center justify-center text-xs">
@@ -302,8 +376,15 @@ export function RoleDialog({
                         </span>
                       )}
                     </div>
-                    <h4 className="font-bold text-sm text-text mb-1">{tmpl.label}</h4>
-                    <p className="text-xs text-text-muted line-clamp-2">{tmpl.description}</p>
+                    <div>
+                      <h4 className="font-bold text-sm text-text mb-1">{tmpl.label}</h4>
+                      <p className="text-xs text-text-muted line-clamp-2">{tmpl.description}</p>
+                    </div>
+                    <RoleWorkAccessBadges
+                      workModes={tmpl.workModes}
+                      workLevel={tmpl.workLevel}
+                      compact
+                    />
                   </div>
                 );
               })}
@@ -311,7 +392,7 @@ export function RoleDialog({
           </div>
         )}
 
-        {/* STEP 2: VIEW MODE */}
+        {/* VIEW MODE */}
         {isView && roleData && (
           <div className="space-y-6">
             <UIKeyValueList
@@ -327,11 +408,18 @@ export function RoleDialog({
                   ),
                 },
                 {
-                  label: "Permissions Count",
-                  value: `${(formData.permissions || []).length} assigned permissions`,
+                  label: "Module Permissions",
+                  value: `${(formData.permissions || []).length} assigned module permissions`,
                 },
                 { label: "Description", value: roleData.description || "No description provided" },
               ]}
+            />
+
+            <RoleWorkAccessFields
+              workModes={formData.workModes}
+              workLevel={formData.workLevel}
+              viewOnly
+              compact
             />
 
             <div>
@@ -339,7 +427,7 @@ export function RoleDialog({
               <div className="space-y-3">
                 {Object.keys(groupedPermissions).map((moduleName) => {
                   const assignedInModule = groupedPermissions[moduleName].filter((p) =>
-                    formData.permissions.includes(p)
+                    formData.permissions.includes(p),
                   );
                   if (assignedInModule.length === 0) return null;
 
@@ -361,7 +449,7 @@ export function RoleDialog({
           </div>
         )}
 
-        {/* STEP 2: CREATE / EDIT FORM & PERMISSIONS */}
+        {/* CREATE / EDIT FORM & PERMISSIONS */}
         {!isView && (isEdit || currentStep === 2) && (
           <form id="role-dialog-form" onSubmit={handleSubmit} className="space-y-5">
             <UIFormSection title="Role Details">
@@ -405,6 +493,19 @@ export function RoleDialog({
               </div>
             </UIFormSection>
 
+            <UIFormSection title="Work Mode & Level Hierarchy">
+              <RoleWorkAccessFields
+                workModes={formData.workModes}
+                workLevel={formData.workLevel}
+                onChangeWorkModes={handleWorkModesChange}
+                onChangeWorkLevel={handleWorkLevelChange}
+                allowedActorWorkModes={isOwnerActor ? null : actorAllowedWorkModes}
+                maxActorWorkLevel={isOwnerActor ? null : actorHighestWorkLevel}
+                error={formErrors.workAccess}
+                compact
+              />
+            </UIFormSection>
+
             <UIFormSection title="Module Permissions Checklist">
               <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
                 <UIInput
@@ -424,13 +525,18 @@ export function RoleDialog({
                 </div>
               </div>
 
-              <div className="space-y-3 max-h-[40vh] overflow-y-auto pr-1">
+              <div className="space-y-3 max-h-[36vh] overflow-y-auto pr-1">
                 {filteredModuleKeys.map((moduleName) => {
                   const modulePerms = groupedPermissions[moduleName] || [];
-                  const isAllModuleSelected = modulePerms.every((p) => formData.permissions.includes(p));
+                  const isAllModuleSelected = modulePerms.every((p) =>
+                    formData.permissions.includes(p),
+                  );
 
                   return (
-                    <div key={moduleName} className="p-3.5 border border-border rounded-xl bg-surface-muted/20 space-y-2">
+                    <div
+                      key={moduleName}
+                      className="p-3.5 border border-border rounded-xl bg-surface-muted/20 space-y-2"
+                    >
                       <div className="flex items-center justify-between border-b border-border pb-2">
                         <span className="text-xs font-bold text-text uppercase tracking-wide">
                           {moduleName} ({modulePerms.filter((p) => formData.permissions.includes(p)).length}/{modulePerms.length})

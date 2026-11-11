@@ -1,6 +1,6 @@
 // src/features/access-control/pages/desktop/RoleDetailsDesktopPage.jsx
 
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import {
   Shield,
   ArrowLeft,
@@ -8,17 +8,9 @@ import {
   Users,
   RotateCcw,
   CheckCircle2,
-  Lock,
   Layers,
-  Sparkles,
   FileKey,
-  Calendar,
-  Clock,
-  User,
-  Info,
   Check,
-  Building2,
-  GitBranch,
 } from "lucide-react";
 
 import {
@@ -29,32 +21,18 @@ import {
   UIEmptyState,
   UIAlert,
 } from "@/components/ui";
-import { cn } from "@/lib/utils";
-
-const groupPermissionsByModule = (permissions = []) => {
-  const groups = {};
-
-  permissions.forEach((perm) => {
-    const raw = String(perm || "").toLowerCase();
-    const parts = raw.split(/[.:_-]/).filter(Boolean);
-    const mod = parts[0] || "general";
-
-    if (!groups[mod]) {
-      groups[mod] = [];
-    }
-    groups[mod].push(perm);
-  });
-
-  return Object.entries(groups).map(([modKey, perms]) => ({
-    key: modKey,
-    title: modKey.charAt(0).toUpperCase() + modKey.slice(1).replace(/_/g, " "),
-    permissions: perms,
-  }));
-};
+import { usePermission } from "@/hooks";
+import {
+  RoleWorkAccessBadges,
+  RoleWorkAccessFields,
+} from "@/features/access-control/components";
+import {
+  buildWorkAccessDisplaySummary,
+  groupModulePermissionStrings,
+} from "../../utils/roleForm.helper";
 
 export default function RoleDetailsDesktopPage({
   role = null,
-  roleId,
 
   isLoading = false,
   hasError = false,
@@ -64,19 +42,26 @@ export default function RoleDetailsDesktopPage({
 
   handleRefresh,
   handleBackToRoles,
-  handleBackToAccessControl,
   handleEditRole,
   handleViewPermissions,
 
   clearMessage,
 }) {
+  const { can } = usePermission();
   const isSystem = Boolean(role?.isSystem);
-  const canEdit = Boolean(role?.canEdit);
+  const isOwnerRole = Boolean(role?.isOwnerRole);
+  const canEdit = Boolean(role?.canEdit) && can("role:update");
+
+  const workAccessSummary = useMemo(
+    () => buildWorkAccessDisplaySummary(role?.workAccess || role),
+    [role],
+  );
 
   const permissionGroups = useMemo(() => {
-    if (!role?.permissions) return [];
-    return groupPermissionsByModule(role.permissions);
-  }, [role?.permissions]);
+    const source = role?.rawPermissions || role?.permissions;
+    if (!source) return [];
+    return groupModulePermissionStrings(source);
+  }, [role?.permissions, role?.rawPermissions]);
 
   if (isLoading && !hasRole) {
     return (
@@ -106,7 +91,12 @@ export default function RoleDetailsDesktopPage({
             title="Role Not Found"
             description={error || "Could not retrieve role details. The role may have been deleted."}
             action={
-              <UIButton variant="outline" size="sm" onClick={handleBackToRoles} startIcon={<ArrowLeft className="size-4" />}>
+              <UIButton
+                variant="outline"
+                size="sm"
+                onClick={handleBackToRoles}
+                startIcon={<ArrowLeft className="size-4" />}
+              >
                 Back to Roles
               </UIButton>
             }
@@ -142,8 +132,8 @@ export default function RoleDetailsDesktopPage({
             <ArrowLeft className="size-4" />
           </UIIconButton>
 
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-lg sm:text-xl font-bold tracking-tight text-text">
                 {role?.displayName || "Role Details"}
               </h1>
@@ -156,13 +146,17 @@ export default function RoleDetailsDesktopPage({
               </UIBadge>
               {isSystem && (
                 <UIBadge variant="soft" color="primary" size="xs">
-                  System Protected
+                  System Default
                 </UIBadge>
               )}
             </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Code: <span className="font-mono">{role?.displayCode}</span> • Scope: {isSystem ? "Organization" : "Workspace"}
-            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-xs text-text-muted">
+                Code: <span className="font-mono">{role?.displayCode}</span> • Scope:{" "}
+                {isSystem ? "Organization" : "Workspace"}
+              </p>
+              <RoleWorkAccessBadges workAccess={workAccessSummary} compact />
+            </div>
           </div>
         </div>
 
@@ -204,7 +198,7 @@ export default function RoleDetailsDesktopPage({
 
         <div className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-text-muted text-xs">
-            <span>Permissions</span>
+            <span>Module Permissions</span>
             <FileKey className="size-4 text-emerald-500" />
           </div>
           <div className="text-xl sm:text-2xl font-bold text-text font-mono">
@@ -215,13 +209,15 @@ export default function RoleDetailsDesktopPage({
 
         <div className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-1">
           <div className="flex items-center justify-between text-text-muted text-xs">
-            <span>Security Scope</span>
-            <Shield className="size-4 text-purple-500" />
+            <span>Level Ceiling</span>
+            <Layers className="size-4 text-purple-500" />
           </div>
           <div className="text-base font-bold text-text truncate">
-            {isSystem ? "Organization" : "Custom Role"}
+            {workAccessSummary.levelLabel}
           </div>
-          <span className="text-[11px] text-text-muted">Access tier</span>
+          <span className="text-[11px] text-text-muted">
+            {workAccessSummary.hierarchyLabel}
+          </span>
         </div>
 
         <div className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-1">
@@ -232,13 +228,15 @@ export default function RoleDetailsDesktopPage({
           <div className="text-base font-bold text-success capitalize">
             {role?.displayStatus || "Active"}
           </div>
-          <span className="text-[11px] text-text-muted">Current availability</span>
+          <span className="text-[11px] text-text-muted">
+            Modes: {workAccessSummary.modeShortText}
+          </span>
         </div>
       </div>
 
       {/* 3. Main Dual-Column Blueprint Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Left Column (8 cols): Description & Permissions Matrix */}
+        {/* Left Column (8 cols): Description, Work Access & Permissions Matrix */}
         <div className="lg:col-span-8 space-y-4">
           {/* Card 1: Description & Role Overview */}
           <div className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs space-y-3">
@@ -269,7 +267,26 @@ export default function RoleDetailsDesktopPage({
             </div>
           </div>
 
-          {/* Card 2: Granted Permissions Matrix */}
+          {/* Card 2: Work Modes & Level Hierarchy */}
+          <div className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs space-y-3">
+            <div className="flex items-center justify-between pb-3 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <Layers className="size-4 text-primary" />
+                <h2 className="text-sm font-bold text-text">
+                  Work Modes & Level Hierarchy
+                </h2>
+              </div>
+              <RoleWorkAccessBadges workAccess={workAccessSummary} compact />
+            </div>
+
+            <RoleWorkAccessFields
+              workModes={workAccessSummary.allowedWorkModes}
+              workLevel={workAccessSummary.highestWorkLevel}
+              viewOnly
+            />
+          </div>
+
+          {/* Card 3: Granted Permissions Matrix */}
           <div className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-border/40">
               <div className="flex items-center gap-2">
@@ -321,7 +338,7 @@ export default function RoleDetailsDesktopPage({
               </div>
             ) : (
               <div className="py-6 text-center text-xs text-text-muted bg-surface-alt/30 rounded-xl border border-dashed border-border/80">
-                No individual permissions attached to this role.
+                No individual module permissions attached to this role.
               </div>
             )}
           </div>
@@ -348,7 +365,11 @@ export default function RoleDetailsDesktopPage({
               <div className="flex items-center justify-between py-1 border-b border-border/30">
                 <span className="text-text-muted">Modification Status</span>
                 <span className="font-semibold text-text">
-                  {canEdit ? "Editable by Owner" : "Locked / Protected"}
+                  {isOwnerRole
+                    ? "Locked (Owner Protection)"
+                    : role?.canEdit
+                      ? "Editable"
+                      : "Locked / Protected"}
                 </span>
               </div>
               <div className="flex items-center justify-between py-1 border-b border-border/30">
@@ -360,9 +381,11 @@ export default function RoleDetailsDesktopPage({
             </div>
 
             <p className="text-[11.5px] text-text-muted leading-relaxed pt-1">
-              {isSystem
-                ? "This is a core system role required for base workspace operations. Predefined permissions cannot be modified."
-                : "This custom role can be configured, updated with new permissions, or reassigned across your staff."}
+              {isOwnerRole
+                ? "The Owner role automatically holds full View & Operation access across Workspace, Company, and Branch levels and cannot be restricted."
+                : isSystem
+                  ? "This is a default system role. Owners and permitted admins can customize its Work Modes, Work Level hierarchy, and module permissions, while deletion remains protected."
+                  : "This custom role can be configured, updated with new Work Modes/Levels or permissions, and reassigned across your staff."}
             </p>
           </div>
 

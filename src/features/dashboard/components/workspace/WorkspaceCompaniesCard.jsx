@@ -21,10 +21,13 @@ import {
 } from "@/components/ui";
 import { ROUTES } from "@/constants";
 import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
+import usePermission from "@/hooks/usePermission";
 
 export const WorkspaceCompaniesCard = ({ companies = [], isLoading = false, className }) => {
   const navigate = useNavigate();
   const { enterCompany } = useNavigationPipeline();
+  const { canWorkLevel } = usePermission();
+  const canEnterCompany = canWorkLevel("company");
 
   return (
     <UICard
@@ -176,15 +179,17 @@ export const WorkspaceCompaniesCard = ({ companies = [], isLoading = false, clas
                     </div>
 
                     <div className="flex items-center gap-1.5">
-                      <UIButton
-                        variant="primary"
-                        size="xs"
-                        onClick={() => enterCompany({ _id: comp.id, name: comp.name })}
-                        className="gap-1 text-xs font-semibold shadow-2xs"
-                      >
-                        <span>Enter Company</span>
-                        <ArrowRight className="size-3" />
-                      </UIButton>
+                      {canEnterCompany && (
+                        <UIButton
+                          variant="primary"
+                          size="xs"
+                          onClick={() => enterCompany({ _id: comp.id, name: comp.name })}
+                          className="gap-1 text-xs font-semibold shadow-2xs"
+                        >
+                          <span>Enter Company</span>
+                          <ArrowRight className="size-3" />
+                        </UIButton>
+                      )}
 
                       <UIButton
                         variant="ghost"

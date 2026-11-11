@@ -1,12 +1,24 @@
-// src/features/access-control/pages/EditRolePage.jsx
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, usePermission } from "@/hooks";
+import {
+  WORK_LEVELS,
+  WORK_MODES,
+  isWorkAccessPermissionKey,
+  resolveRoleWorkAccess,
+  syncPermissionsWithWorkAccess,
+} from "@/utils/workAccess";
 
 import useAccessControl from "../hooks/useAccessControl";
+import {
+  buildRoleMatrixViewModel,
+  buildWorkAccessDisplaySummary,
+  normalizeLowerText,
+  normalizeText,
+  validateWorkAccessSelection,
+} from "../utils/roleForm.helper";
 
 import EditRoleDesktopPage from "./desktop/EditRoleDesktopPage";
 import EditRoleMobilePage from "./mobile/EditRoleMobilePage";
@@ -15,62 +27,42 @@ const INITIAL_FORM_DATA = {
   name: "",
   code: "",
   description: "",
+  workModes: [WORK_MODES.VIEW],
+  workLevel: WORK_LEVELS.BRANCH,
   permissions: [],
   status: "active",
 };
 
-const PERMISSION_ACTIONS = ["view", "create", "update", "delete"];
-
-const ACTION_LABELS = {
-  view: "View",
-  create: "Create",
-  update: "Update",
-  delete: "Delete",
-};
-
-const normalizeText = (value) => String(value || "").trim();
-
-const normalizeLowerText = (value) => normalizeText(value).toLowerCase();
-
-const formatPermissionLabel = (permission) => {
-  if (!permission) return "Permission";
-
-  return String(permission)
-    .replace(/\bedit\b/gi, "update")
-    .replace(/[.:_-]+/g, " ")
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-};
-
-const getPermissionParts = (permission) => {
-  const parts = String(permission || "")
-    .toLowerCase()
-    .replace(/\bedit\b/g, "update")
-    .split(/[.:_-]/)
-    .filter(Boolean);
-
-  const action = PERMISSION_ACTIONS.find((item) => parts.includes(item));
-  const module = parts.find((item) => !PERMISSION_ACTIONS.includes(item));
+const hydrateRoleToFormData = (role) => {
+  const workAccess = resolveRoleWorkAccess(role);
+  const modulePermissions = (
+    Array.isArray(role?.permissions) ? role.permissions : []
+  ).filter((permission) => !isWorkAccessPermissionKey(permission));
 
   return {
-    action: action || "other",
-    actionLabel: ACTION_LABELS[action] || "Other",
-    module: module || "general",
+    name: role?.name || "",
+    code: role?.code || "",
+    description: role?.description || "",
+    workModes: workAccess.allowedWorkModes,
+    workLevel: workAccess.highestWorkLevel,
+    permissions: modulePermissions,
+    status: role?.status || "active",
   };
 };
 
-const getPermissionGroup = (permission) =>
-  formatPermissionLabel(getPermissionParts(permission).module || "General");
-
 const buildUpdateRolePayload = (formData) => {
+  const synced = syncPermissionsWithWorkAccess({
+    permissions: formData.permissions,
+    workModes: formData.workModes,
+    workLevel: formData.workLevel,
+  });
+
   const payload = {
     name: normalizeText(formData.name),
     description: normalizeText(formData.description),
-    permissions: Array.isArray(formData.permissions)
-      ? formData.permissions
-      : [],
+    workModes: synced.workModes,
+    workLevel: synced.workLevel,
+    permissions: synced.permissions,
     status: formData.status || "active",
   };
 
@@ -85,6 +77,12 @@ const EditRolePage = () => {
   const navigate = useNavigate();
   const { roleId } = useParams();
   const isMobile = useIsMobile();
+
+  const {
+    isOwner: isOwnerActor,
+    allowedWorkModes: actorAllowedWorkModes,
+    highestWorkLevel: actorHighestWorkLevel,
+  } = usePermission();
 
   const {
     currentRole,
@@ -126,103 +124,32 @@ const EditRolePage = () => {
   const hasRoleError = getRoleStatus === API_STATUS.ERROR;
   const hasPermissionError = getAvailablePermissionsStatus === API_STATUS.ERROR;
 
-  const permissionOptions = useMemo(
-    () =>
-      (Array.isArray(permissions) ? permissions : []).map((permission) => {
-        const parts = getPermissionParts(permission);
+  const isOwnerRole =
+    normalizeLowerText(currentRole?.code || currentRole?.roleCode) === "owner";
+  const isRoleLocked = Boolean(
+    currentRole && (isOwnerRole || currentRole.isEditable === false),
+  );
 
-        return {
-          label: formatPermissionLabel(permission),
-          value: permission,
-          group: getPermissionGroup(permission),
-          action: parts.action,
-          actionLabel: parts.actionLabel,
-          moduleKey: parts.module,
-        };
+  const {
+    permissionOptions,
+    selectedPermissionOptions,
+    permissionModules,
+    moduleOptions,
+    permissionSummary,
+  } = useMemo(
+    () =>
+      buildRoleMatrixViewModel({
+        permissions,
+        selectedPermissions: formData.permissions,
+        permissionSearch,
+        moduleFilter,
       }),
-    [permissions],
+    [formData.permissions, moduleFilter, permissionSearch, permissions],
   );
-
-  const selectedPermissionOptions = useMemo(
-    () =>
-      permissionOptions.filter((option) =>
-        formData.permissions.includes(option.value),
-      ),
-    [formData.permissions, permissionOptions],
-  );
-
-  const permissionModules = useMemo(() => {
-    const grouped = permissionOptions.reduce((acc, option) => {
-      if (!acc[option.group]) {
-        acc[option.group] = {
-          id: option.moduleKey || option.group.toLowerCase(),
-          title: option.group,
-          permissions: [],
-          actions: {},
-        };
-      }
-
-      acc[option.group].permissions.push(option);
-
-      if (PERMISSION_ACTIONS.includes(option.action)) {
-        acc[option.group].actions[option.action] = option;
-      }
-
-      return acc;
-    }, {});
-
-    const query = normalizeLowerText(permissionSearch);
-
-    return Object.values(grouped).filter((module) => {
-      const matchesModule =
-        moduleFilter === "all" || module.id === moduleFilter;
-
-      const matchesSearch =
-        !query ||
-        module.title.toLowerCase().includes(query) ||
-        module.permissions.some((item) =>
-          item.label.toLowerCase().includes(query),
-        );
-
-      return matchesModule && matchesSearch;
-    });
-  }, [moduleFilter, permissionOptions, permissionSearch]);
-
-  const moduleOptions = useMemo(
-    () => [
-      { label: "Module: All", value: "all" },
-      ...Object.values(
-        permissionOptions.reduce((acc, option) => {
-          acc[option.moduleKey] = {
-            label: `Module: ${option.group}`,
-            value: option.moduleKey,
-          };
-
-          return acc;
-        }, {}),
-      ),
-    ],
-    [permissionOptions],
-  );
-
-  const permissionSummary = useMemo(() => {
-    const total = permissionOptions.length;
-    const selected = formData.permissions.length;
-    const groups = new Set(permissionOptions.map((option) => option.group))
-      .size;
-
-    return {
-      total,
-      selected,
-      groups,
-      remaining: Math.max(total - selected, 0),
-    };
-  }, [formData.permissions.length, permissionOptions]);
 
   const previewRole = useMemo(() => {
     const name = normalizeText(formData.name) || "Role";
     const code = normalizeLowerText(formData.code) || "role";
-
     const description =
       normalizeText(formData.description) ||
       "Workspace role with selected permissions.";
@@ -232,13 +159,19 @@ const EditRolePage = () => {
       name,
       code,
       description,
-      permissionsCount: formData.permissions.length,
+      workModes: formData.workModes,
+      workLevel: formData.workLevel,
+      workAccess: buildWorkAccessDisplaySummary({
+        workModes: formData.workModes,
+        workLevel: formData.workLevel,
+      }),
+      permissionsCount: selectedPermissionOptions.length,
       status: formData.status || "active",
       type: currentRole?.isSystem ? "System Role" : "Custom Role",
       isSystem: Boolean(currentRole?.isSystem),
-      isEditable: currentRole?.isEditable !== false,
+      isEditable: currentRole?.isEditable !== false && !isOwnerRole,
     };
-  }, [currentRole, formData]);
+  }, [currentRole, formData, isOwnerRole, selectedPermissionOptions.length]);
 
   const fetchRole = useCallback(async () => {
     if (!roleId) return;
@@ -288,16 +221,7 @@ const EditRolePage = () => {
     if (!currentRole || hasHydratedFormRef.current) return;
 
     hasHydratedFormRef.current = true;
-
-    setFormData({
-      name: currentRole.name || "",
-      code: currentRole.code || "",
-      description: currentRole.description || "",
-      permissions: Array.isArray(currentRole.permissions)
-        ? currentRole.permissions
-        : [],
-      status: currentRole.status || "active",
-    });
+    setFormData(hydrateRoleToFormData(currentRole));
   }, [currentRole]);
 
   useEffect(() => {
@@ -314,9 +238,9 @@ const EditRolePage = () => {
     const name = normalizeText(formData.name);
     const description = normalizeText(formData.description);
 
-    const selectedPermissions = Array.isArray(formData.permissions)
-      ? formData.permissions
-      : [];
+    const selectedPermissions = (
+      Array.isArray(formData.permissions) ? formData.permissions : []
+    ).filter((p) => !isWorkAccessPermissionKey(p));
 
     if (!name) {
       errors.name = "Role name is required";
@@ -334,25 +258,43 @@ const EditRolePage = () => {
       errors.status = "Invalid role status";
     }
 
+    const workAccessError = validateWorkAccessSelection({
+      workModes: formData.workModes,
+      workLevel: formData.workLevel,
+      isOwnerActor,
+      actorAllowedWorkModes,
+      actorHighestWorkLevel,
+    });
+    if (workAccessError) {
+      errors.workAccess = workAccessError;
+    }
+
     const availablePermissionValues = new Set(
       permissionOptions.map((option) => option.value),
     );
 
-    const hasInvalidPermission = selectedPermissions.some(
-      (permission) => !availablePermissionValues.has(permission),
-    );
+    const hasInvalidPermission =
+      availablePermissionValues.size > 0 &&
+      selectedPermissions.some(
+        (permission) => !availablePermissionValues.has(permission),
+      );
 
     if (hasInvalidPermission) {
       errors.permissions = "One or more selected permissions are invalid";
     }
 
     return errors;
-  }, [formData, permissionOptions]);
+  }, [
+    actorAllowedWorkModes,
+    actorHighestWorkLevel,
+    formData,
+    isOwnerActor,
+    permissionOptions,
+  ]);
 
   const validateStepOne = useCallback(() => {
     const errors = validateForm();
     delete errors.permissions;
-
     return errors;
   }, [validateForm]);
 
@@ -390,11 +332,46 @@ const EditRolePage = () => {
     [clearError, error],
   );
 
+  const handleWorkModesChange = useCallback(
+    (nextModes) => {
+      if (error) clearError();
+      setFormErrors((prev) => ({
+        ...prev,
+        workAccess: "",
+        submit: "",
+      }));
+      setFormData((prev) => ({
+        ...prev,
+        workModes: nextModes,
+      }));
+    },
+    [clearError, error],
+  );
+
+  const handleWorkLevelChange = useCallback(
+    (nextLevel) => {
+      if (error) clearError();
+      setFormErrors((prev) => ({
+        ...prev,
+        workAccess: "",
+        submit: "",
+      }));
+      setFormData((prev) => ({
+        ...prev,
+        workLevel: nextLevel,
+      }));
+    },
+    [clearError, error],
+  );
+
   const handlePermissionsChange = useCallback(
     (eventOrValue) => {
       if (error) clearError();
 
       const value = eventOrValue?.target?.value ?? eventOrValue ?? [];
+      const cleanValues = (Array.isArray(value) ? value : []).filter(
+        (p) => !isWorkAccessPermissionKey(p),
+      );
 
       setFormErrors((prev) => ({
         ...prev,
@@ -404,7 +381,7 @@ const EditRolePage = () => {
 
       setFormData((prev) => ({
         ...prev,
-        permissions: Array.isArray(value) ? value : [],
+        permissions: cleanValues,
       }));
     },
     [clearError, error],
@@ -484,16 +461,7 @@ const EditRolePage = () => {
     clearError();
     clearMessage();
 
-    setFormData({
-      name: currentRole.name || "",
-      code: currentRole.code || "",
-      description: currentRole.description || "",
-      permissions: Array.isArray(currentRole.permissions)
-        ? currentRole.permissions
-        : [],
-      status: currentRole.status || "active",
-    });
-
+    setFormData(hydrateRoleToFormData(currentRole));
     setFormErrors({});
     setCurrentStep(1);
     setPermissionSearch("");
@@ -561,6 +529,7 @@ const EditRolePage = () => {
   const handleSubmit = useCallback(
     async (event) => {
       if (event) event.preventDefault();
+      if (isRoleLocked) return;
 
       clearError();
       clearMessage();
@@ -573,7 +542,8 @@ const EditRolePage = () => {
         setCurrentStep(
           validationErrors.name ||
             validationErrors.description ||
-            validationErrors.status
+            validationErrors.status ||
+            validationErrors.workAccess
             ? 1
             : 2,
         );
@@ -595,6 +565,7 @@ const EditRolePage = () => {
       clearError,
       clearMessage,
       formData,
+      isRoleLocked,
       navigate,
       roleId,
       updateRole,
@@ -614,6 +585,11 @@ const EditRolePage = () => {
     permissionSearch,
     permissionSummary,
 
+    actorAllowedWorkModes: isOwnerActor ? null : actorAllowedWorkModes,
+    actorHighestWorkLevel: isOwnerActor ? null : actorHighestWorkLevel,
+    isRoleLocked,
+    isOwnerRole,
+
     previewRole,
     currentStep,
 
@@ -627,6 +603,8 @@ const EditRolePage = () => {
     message,
 
     handleChange,
+    handleWorkModesChange,
+    handleWorkLevelChange,
     handlePermissionsChange,
     handleTogglePermission,
     handleToggleModule,

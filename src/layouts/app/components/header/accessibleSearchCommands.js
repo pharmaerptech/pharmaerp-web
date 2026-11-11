@@ -252,30 +252,42 @@ export const getAccessibleSearchCommands = (
   canAny,
   isOwner = false,
   workMode = null,
-  currentLevel = null
+  currentLevel = null,
+  workAccess = null,
 ) => {
   const activeMode = getSafeWorkMode(workMode);
+  const allowedWorkLevels = !isOwner ? workAccess?.allowedWorkLevels || null : null;
+  const allowedWorkModes = !isOwner ? workAccess?.allowedWorkModes || null : null;
 
-  // Filter sidebar groups according to the current pipeline level & work mode
-  const filteredNavGroups = filterNavByPipeline(SIDEBAR_NAV_GROUPS, currentLevel, activeMode);
-
-  const allNavItems = filteredNavGroups.flatMap((group) =>
-    flattenNavItems(group.items, group.label)
+  const filteredNavGroups = filterNavByPipeline(
+    SIDEBAR_NAV_GROUPS,
+    currentLevel,
+    activeMode,
   );
 
-  // Filter quick actions based on currentLevel and workMode
+  const allNavItems = filteredNavGroups.flatMap((group) =>
+    flattenNavItems(group.items, group.label),
+  );
+
   const filteredQuickActions = QUICK_ACTIONS.filter((action) => {
     if (!activeMode) {
       return action.category === "Settings" || action.workMode === "both";
     }
 
-    // Level check
-    if (currentLevel && action.level && action.level !== "all" && action.level !== currentLevel) {
+    if (
+      currentLevel &&
+      action.level &&
+      action.level !== "all" &&
+      action.level !== currentLevel
+    ) {
       return false;
     }
 
-    // Mode check
-    if (action.workMode && action.workMode !== "both" && action.workMode !== activeMode) {
+    if (
+      action.workMode &&
+      action.workMode !== "both" &&
+      action.workMode !== activeMode
+    ) {
       return false;
     }
 
@@ -283,12 +295,13 @@ export const getAccessibleSearchCommands = (
   });
 
   const existingPaths = new Set(allNavItems.map((n) => n.path));
-  const uniqueQuickActions = filteredQuickActions.filter((a) => !existingPaths.has(a.path));
+  const uniqueQuickActions = filteredQuickActions.filter(
+    (a) => !existingPaths.has(a.path),
+  );
 
   const allItems = [...allNavItems, ...uniqueQuickActions];
   const effectiveLevel = currentLevel || PIPELINE_LEVELS.WORKSPACE;
 
-  // Return only items the user has permission to access and that satisfy current (level, mode) policy
   return allItems.filter((item) => {
     if (activeMode) {
       const check = isRouteAllowedForPipeline(item.path, {
@@ -297,6 +310,8 @@ export const getAccessibleSearchCommands = (
         isSetupComplete: true,
         hasActiveCompany: effectiveLevel !== PIPELINE_LEVELS.WORKSPACE,
         hasActiveBranch: effectiveLevel === PIPELINE_LEVELS.BRANCH,
+        allowedWorkLevels,
+        allowedWorkModes,
       });
       if (!check.allowed) return false;
     }

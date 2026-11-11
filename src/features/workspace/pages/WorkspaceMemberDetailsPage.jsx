@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import { resolveRoleWorkAccess } from "@/utils/workAccess";
 import {
   UIConfirmDialog,
   uiToast,
@@ -194,6 +195,12 @@ export default function WorkspaceMemberDetailsPage() {
     : formatRoleName(member?.roleId || member?.role);
   const userCode = user?.userCode || "";
   const isOwner = Boolean(member?.isOwner);
+  const workAccess = useMemo(
+    () =>
+      member?.workAccess ||
+      resolveRoleWorkAccess(member?.roleId || member?.role, { isOwner }),
+    [isOwner, member],
+  );
   const status = member?.status || "inactive";
   const joinedDate = formatDate(member?.createdAt);
   const lastActiveFormatted = formatDateTime(member?.lastActiveAt || user?.lastLoginAt);
@@ -364,6 +371,7 @@ export default function WorkspaceMemberDetailsPage() {
     phoneVerified,
     displayRole,
     roleDescription,
+    workAccess,
     userCode,
     isOwner,
     isPrimary,

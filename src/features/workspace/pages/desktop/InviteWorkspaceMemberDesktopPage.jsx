@@ -38,6 +38,8 @@ import {
   uiToast,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessBadges } from "@/features/access-control/components";
+import { isWorkAccessPermissionKey } from "@/utils/workAccess";
 
 export default function InviteWorkspaceMemberDesktopPage({
   formData = {
@@ -476,7 +478,7 @@ export default function InviteWorkspaceMemberDesktopPage({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto pr-1">
               {filteredRoles.map((role) => {
                 const isSelected = String(formData.roleId).trim() === String(role._id).trim();
-                const permCount = role.permissionCount || (role.permissions?.length || 0);
+                const permCount = role.permissionCount ?? (Array.isArray(role.permissions) ? role.permissions.filter((p) => !isWorkAccessPermissionKey(p)).length : 0);
 
                 return (
                   <div
@@ -503,7 +505,8 @@ export default function InviteWorkspaceMemberDesktopPage({
                       <p className="text-[11px] text-text-muted line-clamp-1 mt-0.5">
                         {role.description || "Workspace operational role."}
                       </p>
-                      <span className="text-[10.5px] text-primary font-medium block mt-1">
+                      <RoleWorkAccessBadges role={role} compact className="mt-1.5" />
+                      <span className="text-[10.5px] text-primary font-medium block mt-1.5">
                         {permCount} Permissions
                       </span>
                     </div>
@@ -730,6 +733,11 @@ export default function InviteWorkspaceMemberDesktopPage({
                   <div className="text-xs font-semibold text-primary flex items-center gap-1.5 pt-0.5">
                     <Shield className="size-3.5" />
                     <span>{selectedRole.name}</span>
+                  </div>
+                )}
+                {selectedRole && (
+                  <div>
+                    <RoleWorkAccessBadges role={selectedRole} showHierarchy compact className="pt-1" />
                   </div>
                 )}
               </div>

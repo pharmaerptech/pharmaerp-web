@@ -4,7 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, usePermission } from "@/hooks";
+import { canActorAssignRole } from "@/features/access-control/utils/roleForm.helper";
 
 import useWorkspace from "../hooks/useWorkspace";
 import useAccessControl from "@/features/access-control/hooks/useAccessControl";
@@ -44,6 +45,7 @@ const generateRandomPassword = () => {
 const InviteWorkspaceMemberPage = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { isOwner: isOwnerActor, workAccess: actorWorkAccess } = usePermission();
 
   const {
     currentWorkspace,
@@ -105,9 +107,9 @@ const InviteWorkspaceMemberPage = () => {
   const activeRoles = useMemo(
     () =>
       (Array.isArray(roles) ? roles : []).filter(
-        (role) => role?.status === "active" && !role?.isDeleted,
+        (role) => role?.status === "active" && !role?.isDeleted && canActorAssignRole(role, { isOwner: isOwnerActor, actorWorkAccess }),
       ),
-    [roles],
+    [actorWorkAccess, isOwnerActor, roles],
   );
 
   const activeCompanies = useMemo(

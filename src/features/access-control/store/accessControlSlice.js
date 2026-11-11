@@ -1,6 +1,10 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 import { API_STATUS } from "@/constants";
+import {
+  resolveMyWorkAccess,
+  resolveRoleWorkAccess,
+} from "@/utils/workAccess";
 
 import {
   getAvailablePermissions,
@@ -18,6 +22,20 @@ import {
   getMyAccess,
 } from "./accessControlThunk";
 
+const enrichRoleItem = (role) => {
+  if (!role || typeof role !== "object") return role;
+  const workAccess = resolveRoleWorkAccess(role, {
+    isOwner: String(role.code || "").toLowerCase() === "owner",
+  });
+  return {
+    ...role,
+    workModes: workAccess.allowedWorkModes,
+    workLevel: workAccess.highestWorkLevel,
+    allowedWorkLevels: workAccess.allowedWorkLevels,
+    workAccess,
+  };
+};
+
 const initialState = {
   roles: [],
   currentRole: null,
@@ -31,6 +49,7 @@ const initialState = {
   branchAccessCheck: null,
 
   myAccess: null,
+  myWorkAccess: null,
 
   status: API_STATUS.IDLE,
   error: null,
@@ -53,12 +72,6 @@ const initialState = {
   checkBranchAccessStatus: API_STATUS.IDLE,
 
   getMyAccessStatus: API_STATUS.IDLE,
-};
-
-const setPending = (state) => {
-  state.status = API_STATUS.LOADING;
-  state.error = null;
-  state.message = null;
 };
 
 const setRejected = (state, action) => {
@@ -92,6 +105,12 @@ const accessControlSlice = createSlice({
       state.companyAccessCheck = null;
       state.branchAccessCheck = null;
     },
+
+    clearMyAccess(state) {
+      state.myAccess = null;
+      state.myWorkAccess = null;
+      state.getMyAccessStatus = API_STATUS.IDLE;
+    },
   },
 
   extraReducers: (builder) => {
@@ -119,10 +138,11 @@ const accessControlSlice = createSlice({
       })
       .addCase(createRole.fulfilled, (state, action) => {
         state.createRoleStatus = API_STATUS.SUCCESS;
-        state.currentRole = action.payload || null;
+        const enriched = action.payload ? enrichRoleItem(action.payload) : null;
+        state.currentRole = enriched;
 
-        if (action.payload) {
-          state.roles.unshift(action.payload);
+        if (enriched) {
+          state.roles.unshift(enriched);
         }
 
         state.message = "Role created successfully";
@@ -139,7 +159,9 @@ const accessControlSlice = createSlice({
       })
       .addCase(getWorkspaceRoles.fulfilled, (state, action) => {
         state.getWorkspaceRolesStatus = API_STATUS.SUCCESS;
-        state.roles = action.payload || [];
+        state.roles = Array.isArray(action.payload)
+          ? action.payload.map(enrichRoleItem)
+          : [];
       })
       .addCase(getWorkspaceRoles.rejected, (state, action) => {
         state.getWorkspaceRolesStatus = API_STATUS.ERROR;
@@ -155,7 +177,7 @@ const accessControlSlice = createSlice({
       .addCase(getRoleById.fulfilled, (state, action) => {
         state.status = API_STATUS.SUCCESS;
         state.getRoleStatus = API_STATUS.SUCCESS;
-        state.currentRole = action.payload || null;
+        state.currentRole = action.payload ? enrichRoleItem(action.payload) : null;
       })
       .addCase(getRoleById.rejected, (state, action) => {
         setRejected(state, action);
@@ -170,12 +192,15 @@ const accessControlSlice = createSlice({
       })
       .addCase(updateRole.fulfilled, (state, action) => {
         state.updateRoleStatus = API_STATUS.SUCCESS;
+        const enriched = action.payload ? enrichRoleItem(action.payload) : null;
 
-        state.currentRole = action.payload || state.currentRole;
+        state.currentRole = enriched || state.currentRole;
 
-        state.roles = state.roles.map((role) =>
-          role?._id === action.payload?._id ? action.payload : role,
-        );
+        if (enriched) {
+          state.roles = state.roles.map((role) =>
+            role?._id === enriched._id ? enriched : role,
+          );
+        }
 
         state.message = "Role updated successfully";
       })
@@ -216,7 +241,6 @@ const accessControlSlice = createSlice({
       })
       .addCase(assignRoleToMember.fulfilled, (state) => {
         state.assignRoleToMemberStatus = API_STATUS.SUCCESS;
-
         state.message = "Role assigned successfully";
       })
       .addCase(assignRoleToMember.rejected, (state, action) => {
@@ -302,7 +326,7 @@ const accessControlSlice = createSlice({
         state.error = action.payload || "Branch access check failed";
       })
 
-      // GET MY ACCESS (current logged-in user's own permissions)
+      // GET MY ACCESS
       .addCase(getMyAccess.pending, (state) => {
         state.getMyAccessStatus = API_STATUS.LOADING;
         state.error = null;
@@ -310,11 +334,18 @@ const accessControlSlice = createSlice({
       .addCase(getMyAccess.fulfilled, (state, action) => {
         state.getMyAccessStatus = API_STATUS.SUCCESS;
         state.myAccess = action.payload || null;
+        state.myWorkAccess = resolveMyWorkAccess(action.payload || null);
       })
       .addCase(getMyAccess.rejected, (state, action) => {
         state.getMyAccessStatus = API_STATUS.ERROR;
         state.error = action.payload || "Failed to fetch your access permissions";
-      });
+      })
+
+      // Clear access state on logout
+      .addMatcher(
+        (action) => action.type === "auth/clearCredentials",
+        () => initialState,
+      );
   },
 });
 
@@ -324,6 +355,7 @@ export const {
   clearCurrentRole,
   clearCurrentMemberAccess,
   clearMemberAccessCheck,
+  clearMyAccess,
 } = accessControlSlice.actions;
 
 export default accessControlSlice.reducer;

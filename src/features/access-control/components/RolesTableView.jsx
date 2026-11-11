@@ -1,6 +1,5 @@
 // src/features/access-control/components/RolesTableView.jsx
 
-import React from "react";
 import {
   MoreHorizontal,
   Edit2,
@@ -26,7 +25,7 @@ import {
   UIIconButton,
 } from "@/components/ui";
 import { usePermission } from "@/hooks";
-import { cn } from "@/lib/utils";
+import { RoleWorkAccessBadges } from "./RoleWorkAccessFields";
 
 const STATUS_COLOR_MAP = {
   active: "success",
@@ -48,11 +47,12 @@ export const RolesTableView = ({
         <UITable>
           <UITableHeader>
             <UITableRow className="bg-surface-alt/60">
-              <UITableHead className="min-w-[200px]">Role</UITableHead>
-              <UITableHead className="min-w-[130px]">Type</UITableHead>
-              <UITableHead className="min-w-[280px]">Description</UITableHead>
-              <UITableHead className="min-w-[140px]">Permissions</UITableHead>
-              <UITableHead className="min-w-[120px]">Members</UITableHead>
+              <UITableHead className="min-w-[190px]">Role</UITableHead>
+              <UITableHead className="min-w-[110px]">Type</UITableHead>
+              <UITableHead className="min-w-[220px]">Work Mode &amp; Level</UITableHead>
+              <UITableHead className="min-w-[240px]">Description</UITableHead>
+              <UITableHead className="min-w-[120px]">Permissions</UITableHead>
+              <UITableHead className="min-w-[110px]">Members</UITableHead>
               <UITableHead className="min-w-[100px]">Status</UITableHead>
               <UITableHead className="w-16 text-right">Actions</UITableHead>
             </UITableRow>
@@ -63,7 +63,7 @@ export const RolesTableView = ({
               const isSystem = Boolean(role.isSystem);
               const memberCount = role.membersCount || 0;
               const permissionCount =
-                role.permissionCount || role.permissions?.length || 0;
+                role.permissionCount ?? role.permissions?.length ?? 0;
               const status = role.displayStatus || "inactive";
 
               return (
@@ -82,7 +82,7 @@ export const RolesTableView = ({
                         <p className="font-bold text-text text-[13.5px] truncate flex items-center gap-1.5">
                           {role.displayName}
                           {isSystem && (
-                            <Lock className="size-3 text-text-muted" title="System Protected" />
+                            <Lock className="size-3 text-text-muted" title="System Default Role" />
                           )}
                         </p>
                       </div>
@@ -101,9 +101,18 @@ export const RolesTableView = ({
                     </UIBadge>
                   </UITableCell>
 
+                  {/* Work Mode & Level */}
+                  <UITableCell>
+                    <RoleWorkAccessBadges
+                      workAccess={role.workAccess}
+                      role={role}
+                      compact
+                    />
+                  </UITableCell>
+
                   {/* Description */}
                   <UITableCell>
-                    <p className="text-xs text-text-muted truncate max-w-[260px]">
+                    <p className="text-xs text-text-muted truncate max-w-[240px]">
                       {role.displayDescription || "No description provided."}
                     </p>
                   </UITableCell>

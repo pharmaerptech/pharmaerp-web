@@ -33,6 +33,10 @@ import {
   uiToast,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import {
+  RoleWorkAccessBadges,
+  RoleWorkAccessFields,
+} from "@/features/access-control/components";
 
 export default function WorkspaceMemberDetailsDesktopPage({
   member,
@@ -44,6 +48,7 @@ export default function WorkspaceMemberDetailsDesktopPage({
   phoneVerified,
   displayRole,
   roleDescription,
+  workAccess,
   userCode,
   isOwner,
   isPrimary,
@@ -482,6 +487,28 @@ export default function WorkspaceMemberDetailsDesktopPage({
               </div>
             </div>
           </div>
+
+          {/* Card 2B: Work Modes & Level Hierarchy */}
+          {workAccess && (
+            <div className="bg-surface rounded-2xl p-5 sm:p-6 shadow-xs ring-1 ring-black/[0.04] dark:ring-white/[0.06] space-y-4">
+              <div className="flex items-center justify-between border-b border-border/30 pb-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="size-4 text-primary" />
+                  <h2 className="text-sm font-bold text-text tracking-tight">
+                    Work Modes &amp; Level Hierarchy
+                  </h2>
+                </div>
+                <RoleWorkAccessBadges workAccess={workAccess} compact />
+              </div>
+
+              <RoleWorkAccessFields
+                workModes={workAccess.allowedWorkModes}
+                workLevel={workAccess.highestWorkLevel}
+                viewOnly
+                compact
+              />
+            </div>
+          )}
 
           {/* Card 3: Authorized Store Facilities & Branch Access */}
           <div className="bg-surface rounded-2xl p-5 sm:p-6 shadow-xs ring-1 ring-black/[0.04] dark:ring-white/[0.06] space-y-4">

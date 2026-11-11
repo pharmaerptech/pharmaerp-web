@@ -41,6 +41,8 @@ import { cn } from "@/lib/utils";
 
 const moduleIconMap = {
   workspace: Shield,
+  "work-mode": Eye,
+  "work-level": Layers,
   "workspace-member": Users,
   company: Building2,
   branch: GitBranch,
@@ -319,9 +321,12 @@ export default function PermissionDesktopPage({
                     </div>
                   </div>
 
-                  <UIBadge variant="soft" color="primary" size="xs">
-                    {mod.totalPermissions} {mod.totalPermissions === 1 ? "Capability" : "Capabilities"}
+                  
+                  <UIBadge variant="soft" color={mod.isAccessPolicy ? "purple" : "primary"} size="xs">
+                    {mod.isAccessPolicy ? "Access Policy • " : ""}{mod.totalPermissions} {mod.totalPermissions === 1 ? "Capability" : "Capabilities"}
                   </UIBadge>
+                  
+                  
                 </div>
 
                 {/* Permissions List Grid */}

@@ -34,7 +34,7 @@ const AppMobileSidebar = ({ open, onClose }) => {
   const { currentCompany } = useCompany();
   const { currentBranch } = useBranch();
   const { isSetupComplete, companyCompleted, branchCompleted } = useSetupStatus();
-  const { can, canAny, isOwner } = usePermission();
+  const { can, canAny, isOwner, workAccess } = usePermission();
   const { workMode } = useWorkMode();
   const { currentLevel } = useNavigationPipeline();
 
@@ -50,6 +50,7 @@ const AppMobileSidebar = ({ open, onClose }) => {
       branchCompleted,
       hasActiveCompany: !!currentCompany,
       hasActiveBranch: !!currentBranch,
+      workAccess,
     });
   }, [
     currentLevel,
@@ -57,6 +58,7 @@ const AppMobileSidebar = ({ open, onClose }) => {
     can,
     canAny,
     isOwner,
+    workAccess,
     isSetupComplete,
     companyCompleted,
     branchCompleted,

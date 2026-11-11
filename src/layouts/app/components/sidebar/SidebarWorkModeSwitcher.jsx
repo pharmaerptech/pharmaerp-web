@@ -2,11 +2,12 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Eye, Zap } from "lucide-react";
+import { Eye, Lock, Zap } from "lucide-react";
 
 import { UIConfirmDialog } from "@/components/ui";
 import { useWorkMode, WORK_MODES } from "@/contexts/WorkModeContext";
 import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
+import usePermission from "@/hooks/usePermission";
 import { cn } from "@/lib/utils";
 
 export const SidebarWorkModeSwitcher = ({
@@ -16,15 +17,17 @@ export const SidebarWorkModeSwitcher = ({
 }) => {
   const { workMode } = useWorkMode();
   const { currentLevel, switchLevelMode } = useNavigationPipeline();
+  const { canSwitchWorkMode, canWorkMode } = usePermission();
 
   const [tooltipPos, setTooltipPos] = useState(null);
   const [pendingMode, setPendingMode] = useState(null);
   const btnRef = useRef(null);
 
   const isOp = workMode === WORK_MODES.OPERATION;
-  const isConfirmOpen = Boolean(pendingMode && pendingMode !== workMode);
+  const isConfirmOpen = Boolean(
+    canSwitchWorkMode && pendingMode && pendingMode !== workMode,
+  );
 
-  // Notify parent layout while confirmation dialog is open so auto-close pauses
   useEffect(() => {
     onConfirmOpenChange?.(isConfirmOpen);
     return () => {
@@ -36,11 +39,12 @@ export const SidebarWorkModeSwitcher = ({
 
   const handleRequestModeChange = useCallback(
     (nextMode) => {
+      if (!canSwitchWorkMode || !canWorkMode(nextMode)) return;
       if (!workMode || nextMode === workMode) return;
       setTooltipPos(null);
       setPendingMode(nextMode);
     },
-    [workMode]
+    [canSwitchWorkMode, canWorkMode, workMode],
   );
 
   const handleCancelSwitch = useCallback(() => {
@@ -48,7 +52,7 @@ export const SidebarWorkModeSwitcher = ({
   }, []);
 
   const handleConfirmSwitch = useCallback(() => {
-    if (!pendingMode || pendingMode === workMode) {
+    if (!canSwitchWorkMode || !pendingMode || pendingMode === workMode) {
       setPendingMode(null);
       return;
     }
@@ -56,11 +60,10 @@ export const SidebarWorkModeSwitcher = ({
     setPendingMode(null);
     switchLevelMode(targetMode, currentLevel);
     onModeChange?.();
-  }, [pendingMode, workMode, switchLevelMode, currentLevel, onModeChange]);
+  }, [canSwitchWorkMode, pendingMode, workMode, switchLevelMode, currentLevel, onModeChange]);
 
-  // Global Alt + W shortcut prompts confirmation to toggle Work Mode
   useEffect(() => {
-    if (!workMode || isConfirmOpen) return;
+    if (!workMode || isConfirmOpen || !canSwitchWorkMode) return;
 
     const handleKeyDown = (e) => {
       if (e.altKey && (e.key === "w" || e.key === "W")) {
@@ -80,13 +83,13 @@ export const SidebarWorkModeSwitcher = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [workMode, isOp, isConfirmOpen, handleRequestModeChange]);
+  }, [workMode, isOp, isConfirmOpen, canSwitchWorkMode, handleRequestModeChange]);
 
   if (!workMode) return null;
 
   const isSwitchingToOp = pendingMode === WORK_MODES.OPERATION;
   const confirmDialog =
-    typeof document !== "undefined"
+    typeof document !== "undefined" && canSwitchWorkMode
       ? createPortal(
           <UIConfirmDialog
             isOpen={isConfirmOpen}
@@ -115,7 +118,7 @@ export const SidebarWorkModeSwitcher = ({
               )
             }
           />,
-          document.body
+          document.body,
         )
       : null;
 
@@ -127,6 +130,7 @@ export const SidebarWorkModeSwitcher = ({
           <button
             ref={btnRef}
             type="button"
+            disabled={!canSwitchWorkMode}
             onClick={() => handleRequestModeChange(nextMode)}
             onMouseEnter={() => {
               if (!btnRef.current) return;
@@ -137,18 +141,24 @@ export const SidebarWorkModeSwitcher = ({
               });
             }}
             onMouseLeave={() => setTooltipPos(null)}
-            aria-label={`Work Mode: ${isOp ? "Operation" : "View"} (Click to switch)`}
+            aria-label={`Work Mode: ${isOp ? "Operation" : "View"}${canSwitchWorkMode ? " (Click to switch)" : " (Locked by role)"}`}
             className={cn(
-              "flex size-9 cursor-pointer items-center justify-center rounded-[9px] border transition-all active:scale-[0.95] shadow-2xs",
+              "relative flex size-9 items-center justify-center rounded-[9px] border transition-all shadow-2xs",
+              canSwitchWorkMode ? "cursor-pointer active:scale-[0.95]" : "cursor-default opacity-90",
               isOp
-                ? "border-purple-500/35 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20"
-                : "border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+                ? "border-purple-500/35 bg-purple-500/10 text-purple-600 dark:text-purple-400"
+                : "border-emerald-500/35 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+              canSwitchWorkMode &&
+                (isOp ? "hover:bg-purple-500/20" : "hover:bg-emerald-500/20"),
             )}
           >
             {isOp ? (
               <Zap className="size-4 fill-current" />
             ) : (
               <Eye className="size-4 stroke-[2.3]" />
+            )}
+            {!canSwitchWorkMode && (
+              <Lock className="size-2.5 absolute -bottom-0.5 -right-0.5 bg-surface rounded-full p-0.2 text-text-muted" />
             )}
           </button>
 
@@ -167,9 +177,11 @@ export const SidebarWorkModeSwitcher = ({
                 <span className="font-bold">
                   {isOp ? "Operation Mode" : "View Mode"}
                 </span>{" "}
-                <span className="text-text-muted">• Switch (Alt+W)</span>
+                <span className="text-text-muted">
+                  {canSwitchWorkMode ? "• Switch (Alt+W)" : "• Locked by Role"}
+                </span>
               </div>,
-              document.body
+              document.body,
             )}
         </div>
         {confirmDialog}
@@ -184,44 +196,72 @@ export const SidebarWorkModeSwitcher = ({
           <span className="text-[10px] font-semibold uppercase tracking-wider text-text-muted/80">
             Work Mode
           </span>
-          <span className="text-[10px] font-mono text-text-muted/70">Alt+W</span>
+          {canSwitchWorkMode ? (
+            <span className="text-[10px] font-mono text-text-muted/70">Alt+W</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-text-muted/80">
+              <Lock className="size-2.5" />
+              Role Locked
+            </span>
+          )}
         </div>
 
-        <div
-          role="group"
-          aria-label="Work Mode Switcher"
-          className="grid grid-cols-2 gap-1 rounded-[10px] border border-border/80 bg-surface-alt/70 p-1"
-        >
-          <button
-            type="button"
-            onClick={() => handleRequestModeChange(WORK_MODES.VIEW)}
-            aria-pressed={!isOp}
-            className={cn(
-              "flex items-center justify-center gap-1.5 rounded-[7px] px-2 py-1.5 text-[11.5px] font-semibold transition-all cursor-pointer",
-              !isOp
-                ? "bg-emerald-600 text-white shadow-2xs"
-                : "text-text-muted hover:text-text hover:bg-surface-hover/70"
-            )}
+        {canSwitchWorkMode ? (
+          <div
+            role="group"
+            aria-label="Work Mode Switcher"
+            className="grid grid-cols-2 gap-1 rounded-[10px] border border-border/80 bg-surface-alt/70 p-1"
           >
-            <Eye className="size-3.5 shrink-0 stroke-[2.2]" />
-            <span>View</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handleRequestModeChange(WORK_MODES.VIEW)}
+              aria-pressed={!isOp}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-[7px] px-2 py-1.5 text-[11.5px] font-semibold transition-all cursor-pointer",
+                !isOp
+                  ? "bg-emerald-600 text-white shadow-2xs"
+                  : "text-text-muted hover:text-text hover:bg-surface-hover/70",
+              )}
+            >
+              <Eye className="size-3.5 shrink-0 stroke-[2.2]" />
+              <span>View</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handleRequestModeChange(WORK_MODES.OPERATION)}
-            aria-pressed={isOp}
+            <button
+              type="button"
+              onClick={() => handleRequestModeChange(WORK_MODES.OPERATION)}
+              aria-pressed={isOp}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-[7px] px-2 py-1.5 text-[11.5px] font-semibold transition-all cursor-pointer",
+                isOp
+                  ? "bg-purple-600 text-white shadow-2xs"
+                  : "text-text-muted hover:text-text hover:bg-surface-hover/70",
+              )}
+            >
+              <Zap className={cn("size-3.5 shrink-0", isOp && "fill-current")} />
+              <span>Operation</span>
+            </button>
+          </div>
+        ) : (
+          <div
             className={cn(
-              "flex items-center justify-center gap-1.5 rounded-[7px] px-2 py-1.5 text-[11.5px] font-semibold transition-all cursor-pointer",
+              "flex items-center justify-between rounded-[10px] border px-2.5 py-2 text-[11.5px] font-semibold",
               isOp
-                ? "bg-purple-600 text-white shadow-2xs"
-                : "text-text-muted hover:text-text hover:bg-surface-hover/70"
+                ? "border-purple-500/30 bg-purple-500/10 text-purple-700 dark:text-purple-300"
+                : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
             )}
           >
-            <Zap className={cn("size-3.5 shrink-0", isOp && "fill-current")} />
-            <span>Operation</span>
-          </button>
-        </div>
+            <div className="flex items-center gap-1.5">
+              {isOp ? (
+                <Zap className="size-3.5 fill-current shrink-0" />
+              ) : (
+                <Eye className="size-3.5 stroke-[2.2] shrink-0" />
+              )}
+              <span>{isOp ? "Operation Mode" : "View Mode"}</span>
+            </div>
+            <Lock className="size-3 opacity-70" />
+          </div>
+        )}
       </div>
       {confirmDialog}
     </>

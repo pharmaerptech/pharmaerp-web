@@ -1,7 +1,6 @@
 // src/layouts/app/components/sidebar/filterNavByPermission.js
-//
-// Pure utility that recursively filters sidebar nav groups/items
-// based on user permissions, owner status, and workspace setup completion.
+
+import { isWorkLevelAllowed, isWorkModeAllowed } from "@/utils/workAccess";
 
 const SETUP_CENTER_IDS = new Set(["setup-center", "workspace-setup-center"]);
 const COMPANY_SETUP_IDS = new Set([
@@ -15,12 +14,30 @@ const BRANCH_SETUP_IDS = new Set([
   "company-branches-view",
 ]);
 
+const isItemAllowedByRoleWorkScope = (item, workAccess, isOwner) => {
+  if (isOwner || !workAccess) return true;
+
+  if (item.level && item.level !== "all" && !isWorkLevelAllowed(workAccess, item.level)) {
+    return false;
+  }
+
+  if (
+    item.workMode &&
+    item.workMode !== "both" &&
+    !isWorkModeAllowed(workAccess, item.workMode)
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 const filterItem = (
   item,
   canFn,
   canAnyFn,
   isOwner = false,
-  setupOpts = {}
+  setupOpts = {},
 ) => {
   const {
     isSetupComplete = true,
@@ -28,10 +45,15 @@ const filterItem = (
     branchCompleted = false,
     hasActiveCompany = true,
     hasActiveBranch = true,
+    workAccess = null,
   } =
     typeof setupOpts === "boolean"
       ? { isSetupComplete: setupOpts }
       : setupOpts || {};
+
+  if (!isItemAllowedByRoleWorkScope(item, workAccess, isOwner)) {
+    return null;
+  }
 
   // Hide Setup Center completely from sidebar once setup is 100% complete
   if (isSetupComplete && SETUP_CENTER_IDS.has(item.id)) {
@@ -94,12 +116,10 @@ const filterItem = (
     }
   }
 
-  // Check owner-only items
   if (item.requireOwner && !isOwner) {
     return null;
   }
 
-  // Enforce active organization contexts for non-owners
   if (!isOwner) {
     const COMPANY_DEPENDENT_NAV_IDS = new Set([
       "company-dashboard",
@@ -173,7 +193,6 @@ const filterItem = (
     }
   }
 
-  // Check array of permissions (user needs ANY one)
   if (item.permissions?.length) {
     const hasAny =
       typeof canAnyFn === "function"
@@ -187,7 +206,7 @@ const filterItem = (
   if (item.children?.length) {
     const visibleChildren = item.children
       .map((child) =>
-        filterItem(child, canFn, canAnyFn, isOwner, setupOpts)
+        filterItem(child, canFn, canAnyFn, isOwner, setupOpts),
       )
       .filter(Boolean);
 
@@ -206,10 +225,17 @@ export const filterNavByPermission = (
   canFn,
   canAnyFn,
   isOwner = false,
-  setupOpts = true
+  setupOpts = true,
 ) => {
+  const workAccess =
+    typeof setupOpts === "object" ? setupOpts?.workAccess || null : null;
+
   return groups
     .map((group) => {
+      if (!isItemAllowedByRoleWorkScope(group, workAccess, isOwner)) {
+        return null;
+      }
+
       const visibleItems = group.items
         .map((item) => filterItem(item, canFn, canAnyFn, isOwner, setupOpts))
         .filter(Boolean);
