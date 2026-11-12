@@ -115,8 +115,8 @@ export default function PermissionMobilePage({
             >
               <div className="flex items-center justify-between pb-2 border-b border-border/30">
                 <span className="text-xs font-bold text-text">{mod.displayModule}</span>
-                <UIBadge variant="soft" color="primary" size="xs">
-                  {mod.totalPermissions}
+                <UIBadge variant="soft" color={mod.isAccessPolicy ? "purple" : "primary"} size="xs">
+                  {mod.isAccessPolicy ? `Access Policy • ${mod.totalPermissions}` : mod.totalPermissions}
                 </UIBadge>
               </div>
 

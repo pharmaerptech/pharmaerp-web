@@ -144,7 +144,10 @@ const appReducer = combineReducers({
  * to its initial state.
  */
 const rootReducer = (state, action) => {
-  if (action.type === "auth/logout/fulfilled") {
+  if (
+    action.type === "auth/logout/fulfilled" ||
+    action.type === "auth/clearCredentials"
+  ) {
     state = undefined;
   }
 

@@ -6,11 +6,11 @@ import { WorkModeProvider } from "@/contexts";
 export const AppProvider = ({ children }) => {
   return (
     <ThemeProvider>
-      <WorkModeProvider>
-        <ReduxProvider>
+      <ReduxProvider>
+        <WorkModeProvider>
           <ToastProvider>{children}</ToastProvider>
-        </ReduxProvider>
-      </WorkModeProvider>
+        </WorkModeProvider>
+      </ReduxProvider>
     </ThemeProvider>
   );
 };

@@ -1,35 +1,30 @@
 // src/features/access-control/pages/desktop/RolesDesktopPage.jsx
 
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Shield,
   Plus,
-  Search,
   RotateCcw,
   Download,
   MoreHorizontal,
-  ExternalLink,
   Edit2,
   Trash2,
   Users,
   Lock,
-  Sparkles,
   Sliders,
-  CheckCircle2,
-  AlertCircle,
   FileKey,
-  Layers,
 } from "lucide-react";
 
 import { TopBarStats } from "@/layouts/app/components/header";
-import { RolesTableView } from "@/features/access-control/components";
+import {
+  RolesTableView,
+  RoleWorkAccessBadges,
+} from "@/features/access-control/components";
 
 import {
   UIButton,
   UIIconButton,
-  UISearchInput,
   UISelect,
-  UIBadge,
   UISkeleton,
   UIEmptyState,
   UIDropdown,
@@ -50,33 +45,33 @@ import { cn } from "@/lib/utils";
 export default function RolesDesktopPage({
   roles = [],
   stats = [],
-  roleHelp,
 
-  filters = { search: "", status: "all", type: "all" },
+  filters = {
+    search: "",
+    status: "all",
+    type: "all",
+    workMode: "all",
+    workLevel: "all",
+  },
   activeFilterChips = [],
   statusOptions = [],
   typeOptions = [],
+  workModeOptions = [],
+  workLevelOptions = [],
 
   viewMode,
   onViewModeChange,
 
   isLoading = false,
-  hasError = false,
-  error = null,
   message = null,
 
-  totalRoles = 0,
-  filteredRolesCount = 0,
-  hasRoles = false,
   hasFilteredRoles = false,
 
   handleFilterChange,
   handleSearchChange,
-  handleRemoveFilter,
   handleClearFilters,
 
   handleRefresh,
-  handleBackToAccessControl,
   handleCreateRole,
   handleViewPermissions,
   handleExportRoles,
@@ -87,8 +82,13 @@ export default function RolesDesktopPage({
   clearMessage,
 }) {
   const { can } = usePermission();
-  const [activeMenuRoleId, setActiveMenuRoleId] = useState(null);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
+  const hasActiveModalFilters =
+    filters.status !== "all" ||
+    filters.type !== "all" ||
+    filters.workMode !== "all" ||
+    filters.workLevel !== "all";
 
   return (
     <div className="min-h-screen bg-bg text-text p-3 sm:p-4 lg:p-0 max-w-[1440px] mx-auto space-y-2.5">
@@ -111,7 +111,7 @@ export default function RolesDesktopPage({
         searchQuery={filters.search}
         onSearchChange={handleSearchChange}
         onSearchClear={() => handleSearchChange({ target: { value: "" } })}
-        searchPlaceholder="Search roles by title, code or permissions..."
+        searchPlaceholder="Search roles by title, work mode, level or permissions..."
         showViewSwitcher={true}
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
@@ -125,7 +125,7 @@ export default function RolesDesktopPage({
             onClick={() => setIsFilterModalOpen(true)}
             className={cn(
               "w-10 px-0 sm:w-auto sm:px-3 justify-center",
-              (filters.status !== "all" || filters.type !== "all") &&
+              hasActiveModalFilters &&
                 "border-primary/50 text-primary bg-primary/5",
             )}
           >
@@ -199,12 +199,29 @@ export default function RolesDesktopPage({
             onChange={(e) => handleFilterChange({ type: e.target.value })}
             options={typeOptions}
           />
-          {(filters.status !== "all" || filters.type !== "all") && (
+          <UISelect
+            label="Allowed Work Mode"
+            value={filters.workMode}
+            onChange={(e) => handleFilterChange({ workMode: e.target.value })}
+            options={workModeOptions}
+          />
+          <UISelect
+            label="Work Level Ceiling"
+            value={filters.workLevel}
+            onChange={(e) => handleFilterChange({ workLevel: e.target.value })}
+            options={workLevelOptions}
+          />
+          {hasActiveModalFilters && (
             <UIButton
               variant="ghost"
               className="w-full mt-2"
               onClick={() => {
-                handleFilterChange({ status: "all", type: "all" });
+                handleFilterChange({
+                  status: "all",
+                  type: "all",
+                  workMode: "all",
+                  workLevel: "all",
+                });
                 setIsFilterModalOpen(false);
               }}
             >
@@ -214,7 +231,7 @@ export default function RolesDesktopPage({
         </UIModalBody>
       </UIModal>
 
-      {/* 3. Main Role Cards Grid (Crafted 2-Column Blueprint Layout) */}
+      {/* Main Role Cards Grid / Table */}
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -252,7 +269,8 @@ export default function RolesDesktopPage({
                 const isSystem = Boolean(role.isSystem);
                 const memberCount = role.membersCount || 0;
                 const permissionCount =
-                  role.permissionCount || role.permissions?.length || 0;
+                  role.permissionCount ?? role.permissions?.length ?? 0;
+                const canUpdateThisRole = can("role:update") && role.canEdit;
 
                 return (
                   <div
@@ -269,7 +287,7 @@ export default function RolesDesktopPage({
                             </h3>
                             {isSystem ? (
                               <span
-                                title="System Protected Role"
+                                title="System Default Role"
                                 className="inline-flex items-center text-text-muted/70 hover:text-text-muted"
                               >
                                 <Lock className="size-3.5 shrink-0" />
@@ -295,7 +313,7 @@ export default function RolesDesktopPage({
                           </div>
                         </div>
 
-                        {/* Member Count Pill Capsule (matches design image) */}
+                        {/* Member Count Pill Capsule */}
                         <div className="shrink-0">
                           <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-alt border border-border/50 text-text-muted shadow-2xs inline-flex items-center gap-1.5">
                             <Users className="size-3 text-text-muted/80" />
@@ -307,14 +325,22 @@ export default function RolesDesktopPage({
                         </div>
                       </div>
 
+                      {/* Work Mode & Level Pills */}
+                      <RoleWorkAccessBadges
+                        workAccess={role.workAccess}
+                        role={role}
+                        compact
+                        className="mt-2.5"
+                      />
+
                       {/* Role Description */}
-                      <p className="text-xs text-text-muted mt-3 leading-relaxed line-clamp-2 min-h-[36px]">
+                      <p className="text-xs text-text-muted mt-2.5 leading-relaxed line-clamp-2 min-h-[36px]">
                         {role.displayDescription ||
                           "Full access to manage members, billing, and organization-wide settings."}
                       </p>
                     </div>
 
-                    {/* Card Footer: Action Buttons (matches design image) */}
+                    {/* Card Footer: Action Buttons */}
                     <div className="flex items-center justify-between gap-2 pt-4 mt-4 border-t border-border/40">
                       <UIButton
                         variant="outline"
@@ -330,17 +356,19 @@ export default function RolesDesktopPage({
                           variant="outline"
                           size="sm"
                           onClick={() => handleEditRole(role)}
-                          disabled={!role.canEdit}
+                          disabled={!canUpdateThisRole}
                           className={cn(
                             "text-xs font-semibold",
-                            role.canEdit
+                            canUpdateThisRole
                               ? "text-primary hover:text-primary-hover hover:border-primary/40 hover:bg-primary/5"
-                              : "opacity-60 cursor-not-allowed"
+                              : "opacity-60 cursor-not-allowed",
                           )}
                         >
-                          {role.canEdit
+                          {canUpdateThisRole
                             ? `Edit ${role.displayName.split(" ")[0]}`
-                            : "Locked Role"}
+                            : role.canEdit
+                              ? "Read Only"
+                              : "Protected Role"}
                         </UIButton>
 
                         {can("role:delete") && role.canDelete && (
@@ -379,20 +407,22 @@ export default function RolesDesktopPage({
               })}
 
               {/* "Create New Role" Dashed Placeholder Card */}
-              <div
-                onClick={handleCreateRole}
-                className="border-2 border-dashed border-border/80 hover:border-primary/60 bg-surface/30 hover:bg-surface/80 rounded-2xl p-6 flex flex-col items-center justify-center gap-2.5 transition-all min-h-[185px] cursor-pointer group shadow-2xs select-none"
-              >
-                <div className="size-11 rounded-full bg-surface-alt group-hover:bg-primary/10 border border-border/60 group-hover:border-primary/30 flex items-center justify-center text-text-muted group-hover:text-primary transition-all duration-200">
-                  <Plus className="size-5" />
+              <PermissionGate permission="role:create">
+                <div
+                  onClick={handleCreateRole}
+                  className="border-2 border-dashed border-border/80 hover:border-primary/60 bg-surface/30 hover:bg-surface/80 rounded-2xl p-6 flex flex-col items-center justify-center gap-2.5 transition-all min-h-[185px] cursor-pointer group shadow-2xs select-none"
+                >
+                  <div className="size-11 rounded-full bg-surface-alt group-hover:bg-primary/10 border border-border/60 group-hover:border-primary/30 flex items-center justify-center text-text-muted group-hover:text-primary transition-all duration-200">
+                    <Plus className="size-5" />
+                  </div>
+                  <span className="text-xs sm:text-sm font-bold text-text group-hover:text-primary transition-colors">
+                    Create New Role
+                  </span>
+                  <span className="text-[11px] text-text-muted text-center max-w-[220px]">
+                    Define Work Modes, level hierarchy, and module capabilities
+                  </span>
                 </div>
-                <span className="text-xs sm:text-sm font-bold text-text group-hover:text-primary transition-colors">
-                  Create New Role
-                </span>
-                <span className="text-[11px] text-text-muted text-center max-w-[220px]">
-                  Define custom permissions, facility limits, and access scopes
-                </span>
-              </div>
+              </PermissionGate>
             </div>
           )}
         </>
@@ -403,16 +433,12 @@ export default function RolesDesktopPage({
             icon={<Shield className="size-10 text-text-muted/60" />}
             title="No Roles Found"
             description={
-              filters.search ||
-              filters.status !== "all" ||
-              filters.type !== "all"
+              filters.search || hasActiveModalFilters
                 ? "No roles match your current search and filter criteria. Try resetting filters."
                 : "No custom roles created yet in this workspace."
             }
             action={
-              filters.search ||
-              filters.status !== "all" ||
-              filters.type !== "all" ? (
+              filters.search || hasActiveModalFilters ? (
                 <UIButton
                   variant="outline"
                   size="sm"
@@ -421,14 +447,16 @@ export default function RolesDesktopPage({
                   Reset Filters
                 </UIButton>
               ) : (
-                <UIButton
-                  variant="primary"
-                  size="sm"
-                  onClick={handleCreateRole}
-                  startIcon={<Plus className="size-4" />}
-                >
-                  Create First Role
-                </UIButton>
+                <PermissionGate permission="role:create">
+                  <UIButton
+                    variant="primary"
+                    size="sm"
+                    onClick={handleCreateRole}
+                    startIcon={<Plus className="size-4" />}
+                  >
+                    Create First Role
+                  </UIButton>
+                </PermissionGate>
               )
             }
           />

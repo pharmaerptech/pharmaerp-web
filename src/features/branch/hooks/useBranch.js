@@ -112,12 +112,15 @@ const useBranch = () => {
     (payload) => {
       dispatch(setCurrentBranch(payload));
       try {
-        if (payload?._id) {
-          localStorage.setItem("pahuch_active_branch_id", payload._id);
+        const branchId = payload?._id || payload?.id;
+        if (branchId) {
+          localStorage.setItem("pahuch_active_branch_id", String(branchId));
         } else {
           localStorage.removeItem("pahuch_active_branch_id");
         }
-      } catch {}
+      } catch {
+        // ignore storage errors
+      }
     },
     [dispatch],
   );
@@ -126,7 +129,9 @@ const useBranch = () => {
     dispatch(clearCurrentBranch());
     try {
       localStorage.removeItem("pahuch_active_branch_id");
-    } catch {}
+    } catch {
+      // ignore storage errors
+    }
   }, [dispatch]);
 
   const removeBranches = useCallback(() => {

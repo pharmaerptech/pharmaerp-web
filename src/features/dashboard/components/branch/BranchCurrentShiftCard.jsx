@@ -3,6 +3,7 @@
 import { Sun, Moon, ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { UICard, UISkeleton } from "@/components/ui";
+import { ROUTES } from "@/constants";
 import { cn } from "@/lib/utils";
 
 export const BranchCurrentShiftCard = ({ shiftData, className, isLoading = false }) => {
@@ -124,10 +125,10 @@ export const BranchCurrentShiftCard = ({ shiftData, className, isLoading = false
         </span>
         <button
           type="button"
-          onClick={() => navigate("/operations/shifts")}
+          onClick={() => navigate(ROUTES.REPORTS_HUB)}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
-          <span>{isLive ? "View Shift" : "Open Shift"}</span>
+          <span>Shift Reports</span>
           <ArrowRight className="size-3" />
         </button>
       </div>

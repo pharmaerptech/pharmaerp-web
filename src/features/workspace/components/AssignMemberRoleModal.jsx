@@ -1,16 +1,11 @@
 // src/features/workspace/components/AssignMemberRoleModal.jsx
 
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import {
   ShieldCheck,
   Shield,
   Check,
-  Search,
-  Sparkles,
-  Users,
   Lock,
-  ChevronRight,
-  UserCheck,
 } from "lucide-react";
 
 import {
@@ -25,7 +20,11 @@ import {
   UISearchInput,
   UISkeleton,
 } from "@/components/ui";
+import { usePermission } from "@/hooks";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessBadges } from "@/features/access-control/components";
+import { canActorAssignRole } from "@/features/access-control/utils/roleForm.helper";
+import { isWorkAccessPermissionKey } from "@/utils/workAccess";
 
 export default function AssignMemberRoleModal({
   isOpen,
@@ -37,8 +36,31 @@ export default function AssignMemberRoleModal({
   isLoadingRoles = false,
   isSubmitting = false,
 }) {
-  const [selectedRoleId, setSelectedRoleId] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
+  const { isOwner: isOwnerActor, workAccess: actorWorkAccess } = usePermission();
+  const propRoleId = String(
+    currentRoleId ||
+      (typeof member?.roleId === "string" ? member.roleId : member?.roleId?._id) ||
+      (typeof member?.role === "string" ? member.role : member?.role?._id) ||
+      "",
+  );
+  const modalSessionKey = `${isOpen}-${member?._id || ""}-${propRoleId}`;
+  const [draftState, setDraftState] = useState(() => ({
+    key: modalSessionKey,
+    roleId: propRoleId,
+    search: "",
+  }));
+
+  const isSameSession = draftState.key === modalSessionKey;
+  const selectedRoleId = isSameSession ? draftState.roleId : propRoleId;
+  const searchQuery = isSameSession ? draftState.search : "";
+
+  const setSearchQuery = (nextSearch) => {
+    setDraftState({
+      key: modalSessionKey,
+      roleId: selectedRoleId,
+      search: nextSearch,
+    });
+  };
 
   const user = member?.userId || member?.user || null;
   const displayName =
@@ -50,28 +72,16 @@ export default function AssignMemberRoleModal({
   const displayEmail = user?.email || "-";
   const isOwner = Boolean(member?.isOwner);
 
-  // Initialize selected role with current member's roleId
-  useEffect(() => {
-    if (isOpen) {
-      const activeRoleId =
-        currentRoleId ||
-        (typeof member?.roleId === "string" ? member.roleId : member?.roleId?._id) ||
-        (typeof member?.role === "string" ? member.role : member?.role?._id) ||
-        "";
-      setSelectedRoleId(String(activeRoleId || ""));
-      setSearchQuery("");
-    }
-  }, [isOpen, currentRoleId, member]);
 
-  // Filter out Owner role (Owner role cannot be reassigned via regular role selection)
+
+  // Filter out Owner role and roles exceeding the current actor's work mode / level ceiling
   const assignableRoles = useMemo(() => {
     return (roles || []).filter(
       (r) =>
-        r.code?.toUpperCase() !== "OWNER" &&
-        r.name?.toLowerCase() !== "owner" &&
-        r.status !== "inactive"
+        r.status !== "inactive" &&
+        canActorAssignRole(r, { isOwner: isOwnerActor, actorWorkAccess }),
     );
-  }, [roles]);
+  }, [actorWorkAccess, isOwnerActor, roles]);
 
   // Filter roles based on user search
   const filteredRoles = useMemo(() => {
@@ -81,13 +91,23 @@ export default function AssignMemberRoleModal({
       (r) =>
         r.name?.toLowerCase().includes(q) ||
         r.description?.toLowerCase().includes(q) ||
-        r.code?.toLowerCase().includes(q)
+        r.code?.toLowerCase().includes(q),
     );
   }, [assignableRoles, searchQuery]);
 
+  const selectedRoleObject = useMemo(
+    () =>
+      (roles || []).find((r) => String(r._id) === String(selectedRoleId)) || null,
+    [roles, selectedRoleId],
+  );
+
   const handleSelectRole = (roleId) => {
     if (isSubmitting) return;
-    setSelectedRoleId(String(roleId));
+    setDraftState({
+      key: modalSessionKey,
+      roleId: String(roleId),
+      search: searchQuery,
+    });
   };
 
   const handleSave = () => {
@@ -111,8 +131,8 @@ export default function AssignMemberRoleModal({
         String(
           currentRoleId ||
             (typeof member?.roleId === "string" ? member.roleId : member?.roleId?._id) ||
-            ""
-        )
+            "",
+        ),
   );
 
   return (
@@ -120,7 +140,7 @@ export default function AssignMemberRoleModal({
       isOpen={isOpen}
       onClose={onClose}
       size="md"
-      className="max-w-[540px]"
+      className="max-w-[560px]"
     >
       {/* Modal Header */}
       <UIModalHeader className="pb-3 border-b border-border/40">
@@ -133,14 +153,14 @@ export default function AssignMemberRoleModal({
               Assign Member Role
             </UIModalTitle>
             <UIModalDescription className="text-xs mt-0.5">
-              Select a designated access role and permissions profile for this member.
+              Select a role — Work Modes and Work Level hierarchy apply automatically.
             </UIModalDescription>
           </div>
         </div>
       </UIModalHeader>
 
       {/* Modal Body */}
-      <UIModalBody className="space-y-4 py-4 max-h-[66vh] overflow-y-auto">
+      <UIModalBody className="space-y-4 py-4 max-h-[68vh] overflow-y-auto">
         {/* 1. Member Context Pill Card */}
         <div className="bg-surface-alt/70 rounded-2xl p-3 sm:p-3.5 border border-border/60 flex items-center justify-between gap-3 shadow-2xs">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -172,7 +192,7 @@ export default function AssignMemberRoleModal({
           </div>
         </div>
 
-        {/* 2. Skeleton Loading State */}
+        {/* 2. Role Selection Stream */}
         {isLoadingRoles ? (
           <div className="space-y-3 pt-1">
             <UISkeleton className="h-9 w-full rounded-xl" />
@@ -195,7 +215,6 @@ export default function AssignMemberRoleModal({
             </div>
           </div>
         ) : (
-          /* 3. Role Selection Stream */
           <div className="space-y-3">
             {assignableRoles.length > 4 && (
               <UISearchInput
@@ -216,7 +235,7 @@ export default function AssignMemberRoleModal({
                 <span className="text-[11px] text-text-muted block max-w-xs mx-auto">
                   {searchQuery
                     ? "Try adjusting your search keywords."
-                    : "No assignable roles configured in this workspace."}
+                    : "No assignable roles within your permission clearance."}
                 </span>
               </div>
             ) : (
@@ -224,7 +243,7 @@ export default function AssignMemberRoleModal({
                 {filteredRoles.map((role) => {
                   const isSelected = String(role._id) === String(selectedRoleId);
                   const permissionsCount = Array.isArray(role.permissions)
-                    ? role.permissions.length
+                    ? role.permissions.filter((p) => !isWorkAccessPermissionKey(p)).length
                     : 0;
 
                   return (
@@ -235,11 +254,11 @@ export default function AssignMemberRoleModal({
                         "p-3 sm:p-3.5 rounded-xl border transition-all flex items-start justify-between gap-3 cursor-pointer select-none group",
                         isSelected
                           ? "bg-surface border-primary/60 ring-1 ring-primary/30 shadow-xs"
-                          : "bg-surface/75 border-border/60 hover:bg-surface hover:border-border"
+                          : "bg-surface/75 border-border/60 hover:bg-surface hover:border-border",
                       )}
                     >
                       {/* Role Info */}
-                      <div className="min-w-0 flex-1 space-y-1">
+                      <div className="min-w-0 flex-1 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs sm:text-sm font-bold text-text">
                             {role.name}
@@ -251,10 +270,12 @@ export default function AssignMemberRoleModal({
                           )}
                           {permissionsCount > 0 && (
                             <span className="text-[10.5px] font-medium text-text-muted">
-                              • {permissionsCount} permissions
+                              • {permissionsCount} module perms
                             </span>
                           )}
                         </div>
+
+                        <RoleWorkAccessBadges role={role} compact />
 
                         {role.description && (
                           <p className="text-[11.5px] text-text-muted line-clamp-2 leading-relaxed">
@@ -270,7 +291,7 @@ export default function AssignMemberRoleModal({
                             "size-5 rounded-full border flex items-center justify-center transition-all",
                             isSelected
                               ? "bg-primary border-primary text-primary-contrast shadow-2xs"
-                              : "border-border/80 group-hover:border-primary/50 bg-surface"
+                              : "border-border/80 group-hover:border-primary/50 bg-surface",
                           )}
                         >
                           {isSelected && <Check className="size-3 stroke-[3]" />}
@@ -279,6 +300,24 @@ export default function AssignMemberRoleModal({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {selectedRoleObject && (
+              <div className="p-3 rounded-xl border border-border/60 bg-surface-alt/50 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-text-muted">
+                  <span>Selected Role Hierarchy Preview</span>
+                  {!isOwnerActor && (
+                    <span className="inline-flex items-center gap-1">
+                      <Lock className="size-3" /> Clamped to your clearance
+                    </span>
+                  )}
+                </div>
+                <RoleWorkAccessBadges
+                  role={selectedRoleObject}
+                  showHierarchy
+                  compact
+                />
               </div>
             )}
           </div>

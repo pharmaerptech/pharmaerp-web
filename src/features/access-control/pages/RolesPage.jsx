@@ -3,13 +3,19 @@ import { useNavigate } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
-import { UIConfirmDialog, uiToast, UI_TOOLBAR_VIEWS } from "@/components/ui";
+import { UIConfirmDialog, UI_TOOLBAR_VIEWS } from "@/components/ui";
+import {
+  WORK_LEVELS,
+  WORK_MODES,
+  isWorkAccessPermissionKey,
+  resolveRoleWorkAccess,
+} from "@/utils/workAccess";
 
 import useAccessControl from "../hooks/useAccessControl";
+import { isRoleEditableByPolicy } from "../utils/roleForm.helper";
 
 import RolesDesktopPage from "./desktop/RolesDesktopPage";
 import RolesMobilePage from "./mobile/RolesMobilePage";
-
 
 const statusOptions = [
   { label: "Status: All", value: "all" },
@@ -23,100 +29,83 @@ const typeOptions = [
   { label: "Custom", value: "custom" },
 ];
 
+const workModeOptions = [
+  { label: "Work Mode: All", value: "all" },
+  { label: "View Mode", value: WORK_MODES.VIEW },
+  { label: "Operation Mode", value: WORK_MODES.OPERATION },
+];
+
+const workLevelOptions = [
+  { label: "Work Level: All", value: "all" },
+  { label: "Workspace Level", value: WORK_LEVELS.WORKSPACE },
+  { label: "Company Level", value: WORK_LEVELS.COMPANY },
+  { label: "Branch Level", value: WORK_LEVELS.BRANCH },
+];
+
 const initialFilters = {
   search: "",
   status: "all",
   type: "all",
+  workMode: "all",
+  workLevel: "all",
 };
 
 const dummyRoles = [
   {
     _id: "dummy-pharmacist",
     name: "Pharmacist",
+    code: "pharmacist",
     description: "Full access to pharmacy operations and inventory",
     subtitle: "Manage medicines, prescriptions and inventory",
     status: "active",
     isSystem: true,
-    isEditable: false,
+    isEditable: true,
+    workModes: [WORK_MODES.VIEW, WORK_MODES.OPERATION],
+    workLevel: WORK_LEVELS.BRANCH,
     membersCount: 4,
-    permissions: ["inventory.view", "sales.create", "purchase.manage"],
+    permissions: ["inventory:view", "sale:create", "purchase:view"],
   },
   {
     _id: "dummy-manager",
     name: "Manager",
+    code: "manager",
     description: "Access to reports, billing, users and settings",
     subtitle: "Manage overall operations and reports",
     status: "active",
     isSystem: true,
-    isEditable: false,
+    isEditable: true,
+    workModes: [WORK_MODES.VIEW, WORK_MODES.OPERATION],
+    workLevel: WORK_LEVELS.COMPANY,
     membersCount: 2,
-    permissions: ["reports.view", "billing.manage", "users.manage"],
+    permissions: ["report:view", "bill:create", "workspace-member:view"],
   },
   {
     _id: "dummy-cashier",
     name: "Cashier",
+    code: "cashier",
     description: "Process sales, returns and payments",
     subtitle: "Handle sales and billing",
     status: "active",
     isSystem: true,
-    isEditable: false,
+    isEditable: true,
+    workModes: [WORK_MODES.OPERATION],
+    workLevel: WORK_LEVELS.BRANCH,
     membersCount: 5,
-    permissions: ["sales.create", "sales.return", "payments.manage"],
+    permissions: ["sale:create", "sales-return:create", "pos:create"],
   },
   {
-    _id: "dummy-store-incharge",
-    name: "Store Incharge",
-    description: "Handle stock, purchases and suppliers",
-    subtitle: "Manage inventory and purchases",
+    _id: "dummy-staff",
+    name: "Staff",
+    code: "staff",
+    description: "View-only access to assigned branch operations",
+    subtitle: "Read-only branch visibility",
     status: "active",
-    isSystem: false,
+    isSystem: true,
     isEditable: true,
+    workModes: [WORK_MODES.VIEW],
+    workLevel: WORK_LEVELS.BRANCH,
     membersCount: 3,
-    permissions: ["stock.manage", "purchase.manage", "supplier.manage"],
-  },
-  {
-    _id: "dummy-stock-viewer",
-    name: "Stock Viewer",
-    description: "Read-only access to inventory data",
-    subtitle: "View inventory and stock reports",
-    status: "active",
-    isSystem: false,
-    isEditable: true,
-    membersCount: 2,
-    permissions: ["inventory.view", "stock.view"],
-  },
-  {
-    _id: "dummy-accountant",
-    name: "Accountant",
-    description: "Manage expenses, payments and financial reports",
-    subtitle: "Manage accounts and finances",
-    status: "active",
-    isSystem: false,
-    isEditable: true,
-    membersCount: 1,
-    permissions: ["expenses.manage", "payments.view", "reports.finance"],
-  },
-  {
-    _id: "dummy-delivery-boy",
-    name: "Delivery Boy",
-    description: "Access to delivery and customer information",
-    subtitle: "Delivery and customer related access",
-    status: "inactive",
-    isSystem: false,
-    isEditable: true,
-    membersCount: 2,
-    permissions: ["delivery.view", "customers.view"],
-  },
-  {
-    _id: "dummy-support-staff",
-    name: "Support Staff",
-    description: "Limited access for customer support",
-    subtitle: "Customer support and basic operations",
-    status: "inactive",
-    isSystem: false,
-    isEditable: true,
-    membersCount: 0,
-    permissions: ["customers.view", "tickets.manage"],
+    permissions: ["product:view", "inventory:view", "sale:view"],
   },
 ];
 
@@ -149,11 +138,18 @@ const getMembersCount = (role) => {
 
 const mapRoleForView = (role) => {
   const permissions = Array.isArray(role?.permissions) ? role.permissions : [];
+  const modulePermissions = permissions.filter(
+    (p) => !isWorkAccessPermissionKey(p),
+  );
+  const workAccess = resolveRoleWorkAccess(role);
   const createdBy = role?.createdBy || null;
+  const isEditable = isRoleEditableByPolicy(role);
 
   return {
     ...role,
     permissions,
+    modulePermissions,
+    workAccess,
     createdBy,
     displayName: role?.name || formatRoleName(role?.code) || "Role",
     displayCode: role?.code || "-",
@@ -165,11 +161,11 @@ const mapRoleForView = (role) => {
       "Role access and permission management",
     displayStatus: role?.status || "inactive",
     displayType: role?.isSystem ? "System" : "Custom",
-    displayEditable: role?.isEditable ? "Editable" : "Locked",
+    displayEditable: isEditable ? "Editable" : "Locked",
     displayCreatedBy: getUserName(createdBy),
     membersCount: getMembersCount(role),
-    permissionCount: permissions.length,
-    canEdit: Boolean(role?.isEditable),
+    permissionCount: modulePermissions.length,
+    canEdit: isEditable,
     canDelete: !role?.isSystem,
   };
 };
@@ -181,10 +177,7 @@ const RolesPage = () => {
   const {
     roles,
     getWorkspaceRoles,
-    permissions,
     getAvailablePermissions,
-    createRole,
-    updateRole,
     deleteRole,
 
     getWorkspaceRolesStatus,
@@ -204,7 +197,6 @@ const RolesPage = () => {
   const [viewMode, setViewMode] = useState(UI_TOOLBAR_VIEWS.GRID);
   const [selectedRole, setSelectedRole] = useState(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-
 
   const isLoadingRoles = getWorkspaceRolesStatus === API_STATUS.LOADING;
   const isDeletingRole = deleteRoleStatus === API_STATUS.LOADING;
@@ -275,6 +267,10 @@ const RolesPage = () => {
         normalizeText(role.displaySubtitle).includes(search) ||
         normalizeText(role.displayStatus).includes(search) ||
         normalizeText(role.displayType).includes(search) ||
+        normalizeText(role.workAccess?.highestWorkLevel).includes(search) ||
+        (role.workAccess?.allowedWorkModes || []).some((m) =>
+          normalizeText(m).includes(search),
+        ) ||
         role.permissions.some((permission) =>
           normalizeText(permission).includes(search),
         );
@@ -287,7 +283,21 @@ const RolesPage = () => {
         (filters.type === "system" && role.isSystem) ||
         (filters.type === "custom" && !role.isSystem);
 
-      return matchesSearch && matchesStatus && matchesType;
+      const matchesWorkMode =
+        filters.workMode === "all" ||
+        (role.workAccess?.allowedWorkModes || []).includes(filters.workMode);
+
+      const matchesWorkLevel =
+        filters.workLevel === "all" ||
+        role.workAccess?.highestWorkLevel === filters.workLevel;
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesType &&
+        matchesWorkMode &&
+        matchesWorkLevel
+      );
     });
   }, [filters, mappedRoles]);
 
@@ -352,6 +362,24 @@ const RolesPage = () => {
       });
     }
 
+    if (filters.workMode !== "all") {
+      chips.push({
+        key: "workMode",
+        label:
+          workModeOptions.find((option) => option.value === filters.workMode)
+            ?.label || filters.workMode,
+      });
+    }
+
+    if (filters.workLevel !== "all") {
+      chips.push({
+        key: "workLevel",
+        label:
+          workLevelOptions.find((option) => option.value === filters.workLevel)
+            ?.label || filters.workLevel,
+      });
+    }
+
     return chips;
   }, [filters]);
 
@@ -359,12 +387,12 @@ const RolesPage = () => {
     () => ({
       aboutPoints: [
         "Create custom roles for your team",
-        "Assign permissions to each role",
+        "Configure explicit Work Modes (View / Operation) & Work Level tiers",
         "Add members and assign roles",
-        "Manage access across workspace",
+        "Manage access across workspace, company & branch",
       ],
       systemDescription:
-        "Default roles created by the system. These roles have predefined permissions that cannot be deleted.",
+        "Default roles created by the system. Non-Owner default roles can be tuned while deletion remains protected.",
       customDescription:
         "Custom roles created for your workspace. You can edit, update or delete these roles as per your requirements.",
     }),
@@ -481,7 +509,9 @@ const RolesPage = () => {
     activeFilterChips,
     statusOptions,
     typeOptions,
-    
+    workModeOptions,
+    workLevelOptions,
+
     viewMode,
     onViewModeChange: setViewMode,
 
@@ -520,7 +550,6 @@ const RolesPage = () => {
         <RolesDesktopPage {...pageProps} />
       )}
 
-
       <UIConfirmDialog
         isOpen={isDeleteModalOpen}
         onClose={closeDeleteModal}
@@ -539,4 +568,3 @@ const RolesPage = () => {
 };
 
 export default RolesPage;
-

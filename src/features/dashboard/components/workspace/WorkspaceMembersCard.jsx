@@ -11,7 +11,7 @@ import {
 } from "@/components/ui";
 import { ROUTES } from "@/constants";
 
-export const WorkspaceMembersCard = ({ members = [], isLoading = false, className }) => {
+export const WorkspaceMembersCard = ({ members = [], isLoading = false }) => {
   const navigate = useNavigate();
 
   const getInitials = (name) => {
@@ -79,7 +79,7 @@ export const WorkspaceMembersCard = ({ members = [], isLoading = false, classNam
             description="Invite pharmacists, cashiers, and managers to join your workspace."
             icon={<Users className="size-6 text-sky-600 dark:text-sky-400" />}
             actionText="Invite Member"
-            onAction={() => navigate(ROUTES.INVITE_WORKSPACE_MEMBER || ROUTES.WORKSPACE_MEMBERS)}
+            onAction={() => navigate(ROUTES.WORKSPACE_MEMBERS)}
             className="py-8"
           />
         ) : (

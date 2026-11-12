@@ -8,6 +8,7 @@ import {
   UISkeleton,
 } from "@/components/ui";
 import { useBranchCash } from "../hooks/useBranchCash";
+import { deriveBranchCashViewState } from "../utils/branchCashViewState";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useActiveShift from "@/features/operations/shifts/hooks/useActiveShift";
 import { getOpenBusinessDay } from "@/features/operations/business-days/store/businessDayThunk";
@@ -83,16 +84,24 @@ export const BranchCashPage = () => {
     }
   }, [currentBranch?._id, fetchBranchCash, dispatch, refetchActiveShift]);
 
-  const isLoading =
-    fetchStatus === "loading" ||
-    (!currentBranchCash && fetchStatus !== "succeeded" && fetchStatus !== "failed" && !error);
+  const {
+    activeBranchCash,
+    isLoading,
+    isInitialized,
+    hasError,
+  } = deriveBranchCashViewState({
+    branchId: currentBranch?._id,
+    currentBranchCash,
+    fetchStatus,
+    error,
+  });
 
   // Denominations lists
   const runningDenominations =
-    currentBranchCash?.denominationBalance?.runningDenominations || [];
+    activeBranchCash?.denominationBalance?.runningDenominations || [];
   const frozenDenominations =
-    currentBranchCash?.denominationBalance?.frozenDenominations ||
-    currentBranchCash?.balance?.frozenDenominations ||
+    activeBranchCash?.denominationBalance?.frozenDenominations ||
+    activeBranchCash?.balance?.frozenDenominations ||
     [];
 
   const runningTotal = sumDenominations(runningDenominations);
@@ -110,14 +119,7 @@ export const BranchCashPage = () => {
     (d) => (Number(d.quantity) || Number(d.count) || 0) > 0
   ).length;
 
-  // Determine if branch cash is initialized
-  const isInitialized = Boolean(
-    currentBranchCash &&
-      (currentBranchCash.isInitialized === true ||
-        runningTotal > 0 ||
-        frozenTotal > 0 ||
-        (currentBranchCash.createdAt && !currentBranchCash.isUninitialized))
-  );
+  // Initialization state is derived safely in deriveBranchCashViewState
 
   // Real Shift & Business Day Info (No hardcoded dummy fallbacks)
   const effectiveShift = activeShift || openBusinessDay?.currentOpenShift || null;
@@ -427,7 +429,7 @@ export const BranchCashPage = () => {
       </div>
 
       {/* Main Content Area */}
-      {isLoading && !currentBranchCash ? (
+      {isLoading && !activeBranchCash ? (
         activeTab === "drawers" ? (
           /* SKELETON FOR TAB 1: VISUAL DRAWERS */
           <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-12 gap-3 items-stretch overflow-hidden animate-pulse">
@@ -583,6 +585,32 @@ export const BranchCashPage = () => {
             </div>
           </div>
         )
+      ) : hasError && !activeBranchCash ? (
+        <div className="flex-1 min-h-0 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg space-y-3">
+            <UIAlert
+              intent="danger"
+              title="Unable to Load Branch Cash"
+              description={
+                typeof error === "string"
+                  ? error
+                  : "Failed to load branch cash details. Please try refreshing."
+              }
+            />
+            <div className="flex justify-end">
+              <UIButton
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => currentBranch?._id && fetchBranchCash(currentBranch._id)}
+                startIcon={<RefreshCw className="size-3.5" />}
+                className="rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Retry
+              </UIButton>
+            </div>
+          </div>
+        </div>
       ) : !isInitialized ? (
         /* ══════════════════════════════════════════════════════════════════
            SCREEN 4: BEFORE-INITIALIZATION SCREEN (Compact)
@@ -1111,9 +1139,14 @@ export const BranchCashPage = () => {
                     <td className="py-2.5 px-3 border-l border-border/40">
                       <div className="flex items-center gap-2.5">
                         <span className="w-9 text-right font-mono font-black text-text">
-                          100%
+                          {totalVault > 0 ? "100%" : "0%"}
                         </span>
-                        <div className="flex-1 h-2 rounded-full bg-blue-600" />
+                        <div
+                          className={cn(
+                            "flex-1 h-2 rounded-full",
+                            totalVault > 0 ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-800"
+                          )}
+                        />
                       </div>
                     </td>
                   </tr>

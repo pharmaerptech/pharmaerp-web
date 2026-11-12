@@ -2,6 +2,7 @@ import { createSlice } from "@reduxjs/toolkit";
 
 import { API_STATUS, TOKEN_KEY, USER_STORAGE_KEY } from "@/constants";
 import { storage } from "@/utils";
+import { clearAllHeldBillsStorage } from "@/features/sales/services/holdBillStorage";
 
 import {
   registerUser,
@@ -91,6 +92,7 @@ const authSlice = createSlice({
 
       storage.remove(TOKEN_KEY);
       storage.remove(USER_STORAGE_KEY);
+      clearAllHeldBillsStorage();
       try {
         localStorage.removeItem("pahuch_work_mode");
         localStorage.removeItem("pahuch_work_mode_selected");
@@ -161,6 +163,7 @@ const authSlice = createSlice({
         state.subscription = null;
         state.isAuthenticated = false;
         state.message = "Logout successful";
+        clearAllHeldBillsStorage();
         try {
           localStorage.removeItem("pahuch_work_mode");
           localStorage.removeItem("pahuch_work_mode_selected");
@@ -172,6 +175,7 @@ const authSlice = createSlice({
         state.token = null;
         state.isAuthenticated = false;
         state.error = action.payload || "Logout failed";
+        clearAllHeldBillsStorage();
       })
 
       .addCase(forgotPassword.pending, (state) => {

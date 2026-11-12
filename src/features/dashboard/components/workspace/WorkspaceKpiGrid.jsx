@@ -1,6 +1,5 @@
 // src/features/dashboard/components/workspace/WorkspaceKpiGrid.jsx
 
-import React from "react";
 import {
   Building2,
   Store,
@@ -29,7 +28,7 @@ export const WorkspaceKpiGrid = ({ kpis, isLoading = false }) => {
       subtitle: "Corporate legal entities",
       icon: Building2,
       color: "purple",
-      route: ROUTES.COMPANIES || "/companies",
+      route: ROUTES.COMPANIES,
     },
     {
       id: "branches",
@@ -38,7 +37,7 @@ export const WorkspaceKpiGrid = ({ kpis, isLoading = false }) => {
       subtitle: "Operating dispensaries",
       icon: Store,
       color: "teal",
-      route: ROUTES.BRANCHES || "/branches",
+      route: null,
     },
     {
       id: "staff",
@@ -47,7 +46,7 @@ export const WorkspaceKpiGrid = ({ kpis, isLoading = false }) => {
       subtitle: "Assigned staff team",
       icon: Users,
       color: "blue",
-      route: ROUTES.USERS || "/workspace/users",
+      route: ROUTES.WORKSPACE_MEMBERS,
     },
     {
       id: "roles",
@@ -56,7 +55,7 @@ export const WorkspaceKpiGrid = ({ kpis, isLoading = false }) => {
       subtitle: "RBAC security roles",
       icon: ShieldCheck,
       color: "warning",
-      route: ROUTES.ROLES || "/workspace/roles",
+      route: ROUTES.ROLES,
     },
     {
       id: "plan-tier",
@@ -65,7 +64,7 @@ export const WorkspaceKpiGrid = ({ kpis, isLoading = false }) => {
       subtitle: `${kpis?.planTier || "PRO"} Tier active`,
       icon: Layers,
       color: "primary",
-      route: ROUTES.SUBSCRIPTIONS || "/workspace/subscription",
+      route: ROUTES.UPGRADE_PLAN,
     },
     {
       id: "plan-validity",
@@ -74,7 +73,7 @@ export const WorkspaceKpiGrid = ({ kpis, isLoading = false }) => {
       subtitle: `Till ${kpis?.validTill || "Continuous"}`,
       icon: Sparkles,
       color: "success",
-      route: ROUTES.SUBSCRIPTIONS || "/workspace/subscription",
+      route: ROUTES.UPGRADE_PLAN,
     },
   ];
 
@@ -91,9 +90,9 @@ export const WorkspaceKpiGrid = ({ kpis, isLoading = false }) => {
             icon={<Icon />}
             color={card.color}
             density="compact"
-            variant="interactive"
+            variant={card.route ? "interactive" : "default"}
             isLoading={isLoading}
-            onClick={() => card.route && navigate(card.route)}
+            onClick={card.route ? () => navigate(card.route) : undefined}
           />
         );
       })}

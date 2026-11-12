@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { API_STATUS, ROUTES } from "@/constants";
+import { API_STATUS, ROUTES, TOKEN_KEY } from "@/constants";
+import { storage } from "@/utils";
 import { useIsMobile } from "@/hooks";
 
 import useWorkspace from "../hooks/useWorkspace";
@@ -256,8 +257,8 @@ const EditWorkspacePage = () => {
 
   useEffect(() => {
     if (
-      getMyWorkspacesStatus === API_STATUS.IDLE ||
-      getMyWorkspacesStatus === API_STATUS.ERROR
+      getMyWorkspacesStatus === API_STATUS.IDLE &&
+      Boolean(storage.get(TOKEN_KEY))
     ) {
       getMyWorkspaces().catch(() => {});
     }

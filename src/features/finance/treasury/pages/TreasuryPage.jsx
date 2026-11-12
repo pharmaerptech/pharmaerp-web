@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ROUTES } from "@/constants";
@@ -10,6 +10,7 @@ import TreasuryMobilePage from "./mobile/TreasuryMobilePage";
 const TreasuryPage = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { can } = usePermission();
   const [isLoading, setIsLoading] = useState(false);
 
   // Statistics/metric cards data

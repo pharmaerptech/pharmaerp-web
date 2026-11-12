@@ -1,44 +1,43 @@
 // src/features/access-control/pages/mobile/CreateRoleMobilePage.jsx
 
-import React from "react";
-import {
-  Shield,
-  ArrowLeft,
-  Check,
-  RotateCcw,
-  Search,
-  FileKey,
-  Layers,
-} from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 
 import {
   UIButton,
   UIIconButton,
   UIInput,
   UISearchInput,
-  UISelect,
   UISwitch,
-  UIBadge,
   UISkeleton,
   UIAlert,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessFields } from "@/features/access-control/components";
 
 export default function CreateRoleMobilePage({
-  formData = { name: "", code: "", description: "", permissions: [] },
+  formData = {
+    name: "",
+    code: "",
+    description: "",
+    workModes: ["view"],
+    workLevel: "branch",
+    permissions: [],
+  },
   formErrors = {},
 
   permissionModules = [],
-  moduleOptions = [],
-  moduleFilter = "all",
   permissionSearch = "",
   permissionSummary = { total: 0, selected: 0, groups: 0, remaining: 0 },
 
-  isLoading = false,
+  actorAllowedWorkModes = null,
+  actorHighestWorkLevel = null,
+
   isCreating = false,
   isLoadingPermissions = false,
 
   handleChange,
+  handleWorkModesChange,
+  handleWorkLevelChange,
   handleTogglePermission,
   handleToggleModule,
   handleSelectAllPermissions,
@@ -48,7 +47,6 @@ export default function CreateRoleMobilePage({
   handleCancel,
 
   setPermissionSearch,
-  setModuleFilter,
 }) {
   return (
     <div className="min-h-screen bg-bg text-text p-3 pb-24 space-y-3.5">
@@ -133,12 +131,26 @@ export default function CreateRoleMobilePage({
         </div>
       </div>
 
+      {/* Work Modes & Level Hierarchy */}
+      <div className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-3">
+        <RoleWorkAccessFields
+          workModes={formData.workModes}
+          workLevel={formData.workLevel}
+          onChangeWorkModes={handleWorkModesChange}
+          onChangeWorkLevel={handleWorkLevelChange}
+          allowedActorWorkModes={actorAllowedWorkModes}
+          maxActorWorkLevel={actorHighestWorkLevel}
+          error={formErrors.workAccess}
+          compact
+        />
+      </div>
+
       {/* Permissions Section */}
       <div className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xs font-bold text-text uppercase tracking-wider">
-              Permissions
+              Module Permissions
             </h2>
             <span className="text-[11px] text-text-muted">
               {permissionSummary.selected} / {permissionSummary.total} assigned
@@ -182,7 +194,7 @@ export default function CreateRoleMobilePage({
             {permissionModules.map((mod) => {
               const modVals = mod.permissions.map((p) => p.value);
               const selectedCount = modVals.filter((v) =>
-                formData.permissions.includes(v)
+                formData.permissions.includes(v),
               ).length;
               const isAll = modVals.length > 0 && selectedCount === modVals.length;
 
@@ -214,7 +226,7 @@ export default function CreateRoleMobilePage({
                             "p-1.5 rounded-lg border text-left transition-all flex items-center justify-between text-[11px]",
                             isChecked
                               ? "bg-surface border-primary/50 text-primary font-semibold"
-                              : "bg-surface/50 border-border/60 text-text-muted"
+                              : "bg-surface/50 border-border/60 text-text-muted",
                           )}
                         >
                           <span className="truncate">{perm.actionLabel || perm.label}</span>

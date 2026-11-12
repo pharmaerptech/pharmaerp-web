@@ -1,10 +1,7 @@
 // src/features/dashboard/components/workspace/WorkspaceBranchesCard.jsx
 
-import { useNavigate } from "react-router-dom";
 import {
   Store,
-  ArrowRight,
-  ExternalLink,
   MapPin,
   Phone,
   UserCheck,
@@ -13,15 +10,11 @@ import {
 import {
   UICard,
   UIBadge,
-  UIButton,
   UIEmptyState,
   UISkeleton,
 } from "@/components/ui";
-import { ROUTES } from "@/constants";
 
-export const WorkspaceBranchesCard = ({ branches = [], isLoading = false, className }) => {
-  const navigate = useNavigate();
-
+export const WorkspaceBranchesCard = ({ branches = [], isLoading = false }) => {
   return (
     <UICard
       variant="default"
@@ -46,16 +39,6 @@ export const WorkspaceBranchesCard = ({ branches = [], isLoading = false, classN
             </p>
           </div>
         </div>
-
-        <UIButton
-          variant="ghost"
-          size="xs"
-          onClick={() => navigate(ROUTES.BRANCHES)}
-          className="text-primary hover:text-primary-hover gap-1 font-semibold"
-        >
-          View All
-          <ArrowRight className="size-3.5" />
-        </UIButton>
       </div>
 
       {/* Content */}
@@ -74,10 +57,8 @@ export const WorkspaceBranchesCard = ({ branches = [], isLoading = false, classN
         ) : branches.length === 0 ? (
           <UIEmptyState
             title="No Branches Configured"
-            description="Create retail counters or pharmacy store branches under your registered legal companies."
+            description="Enter a company to create retail counters or pharmacy store branches."
             icon={<Store className="size-6 text-teal-600 dark:text-teal-400" />}
-            actionText="Add Branch"
-            onAction={() => navigate(ROUTES.CREATE_BRANCH)}
             className="py-8"
           />
         ) : (
@@ -131,19 +112,6 @@ export const WorkspaceBranchesCard = ({ branches = [], isLoading = false, classN
                       </span>
                     )}
                   </div>
-                </div>
-
-                {/* Right: Direct Manage Button */}
-                <div className="shrink-0 self-end sm:self-center">
-                  <UIButton
-                    variant="outline"
-                    size="xs"
-                    onClick={() => navigate(`/branches/${b.id}`)}
-                    className="gap-1 text-xs"
-                  >
-                    <span>Manage</span>
-                    <ExternalLink className="size-3" />
-                  </UIButton>
                 </div>
               </div>
             ))}

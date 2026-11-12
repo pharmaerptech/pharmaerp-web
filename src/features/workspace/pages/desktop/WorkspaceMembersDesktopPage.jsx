@@ -53,6 +53,7 @@ import { TopBarStats } from "@/layouts/app/components/header";
 import { WorkspaceMembersTableView } from "../../components";
 import { usePermission } from "@/hooks";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessBadges } from "@/features/access-control/components";
 
 export default function WorkspaceMembersDesktopPage({
   workspace,
@@ -690,6 +691,18 @@ function MemberCard({
 
       {/* Bottom Section */}
       <div className="bg-surface border-t border-border/40 p-4 pt-3 space-y-3 text-left flex-1 flex flex-col justify-between">
+        {/* Work Modes & Level Ceiling */}
+        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/40">
+          <span className="text-[10.5px] font-bold text-text-muted uppercase tracking-wider shrink-0">
+            Access Scope
+          </span>
+          <RoleWorkAccessBadges
+            workAccess={member?.workAccess}
+            role={member?.role || member?.roleId}
+            compact
+          />
+        </div>
+
         {/* 2-Column Metadata Grid: Company Access & Branch Access Tiles */}
         <div className="w-full grid grid-cols-2 gap-2.5 text-left">
           <div className="rounded-xl bg-surface-alt/50 border border-border/40 p-2.5 shadow-2xs transition-colors">

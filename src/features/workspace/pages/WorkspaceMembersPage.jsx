@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import { resolveRoleWorkAccess } from "@/utils/workAccess";
 import { UIConfirmDialog, UI_TOOLBAR_VIEWS } from "@/components/ui";
 import { ResetMemberPasswordModal } from "../components";
 
@@ -130,6 +131,7 @@ const mapMemberForView = (member) => {
     displayEmail,
     displayPhone,
     displayRole,
+    workAccess: member?.workAccess || resolveRoleWorkAccess(role, { isOwner: Boolean(member?.isOwner) }),
     roleCode: member?.isOwner ? "owner" : getRoleCode(role),
     displayJoinedAt: formatDate(member?.createdAt),
     displayLastActiveAt: formatDateTime(member?.lastActiveAt),

@@ -1,14 +1,9 @@
 // src/layouts/app/mobile/AppMobileHeader.jsx
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Menu,
-  Search,
-  X,
-  ChevronRight,
-} from "lucide-react";
+import { Menu, Search, X, ChevronRight, Plus } from "lucide-react";
 
 import { ROUTES } from "@/constants";
 import { usePermission } from "@/hooks";
@@ -18,22 +13,49 @@ import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import {
   HeaderNotifications,
   HeaderProfileDropdown,
-  HeaderAppMenu,
-  HeaderWorkModeToggle,
+  HeaderBreadcrumbTrail,
+  getHeaderBreadcrumbs,
 } from "@/layouts/app/components/header";
 import { getAccessibleSearchCommands } from "@/layouts/app/components/header/accessibleSearchCommands";
 import { UIIconButton } from "@/components/ui";
 
 const getPageTitle = (pathname) => {
-  if (!pathname || pathname === "/" || pathname === ROUTES.HOME) return "Dashboard";
-  if (pathname.startsWith("/dashboard")) return "Dashboard";
-  if (pathname.startsWith("/workspace-products")) return "Products";
+  if (pathname === "/dashboard/branch" || pathname === ROUTES.BRANCH_DASHBOARD)
+    return "Branch Dashboard";
+  if (pathname === "/dashboard/company" || pathname === ROUTES.COMPANY_DASHBOARD)
+    return "Company Dashboard";
+  if (pathname === "/dashboard/workspace" || pathname === ROUTES.WORKSPACE_DASHBOARD)
+    return "Workspace Dashboard";
+  if (!pathname || pathname === "/" || pathname === ROUTES.HOME || pathname.startsWith("/dashboard"))
+    return "Dashboard";
+  if (pathname.startsWith("/sales/credit-notes")) return "Credit Notes";
+  if (pathname.startsWith("/sales/edit") || pathname.startsWith("/sale/edit")) return "Edit Invoice";
+  if (pathname.startsWith("/sales-returns")) return "Sales Returns";
+  if (pathname.startsWith("/sales") || pathname.startsWith("/sale")) return "POS Billing";
+  if (pathname.startsWith("/billing")) return "Sale Invoices";
+  if (pathname.startsWith("/purchases")) return "Purchases";
+  if (pathname.startsWith("/reports")) return "Reports Hub";
+  if (pathname.startsWith("/operations/shifts")) return "Shifts";
+  if (pathname.startsWith("/operations/business-days")) return "Business Days";
+  if (pathname.startsWith("/inventory/stock-metrics") || pathname.startsWith("/stock-metrics"))
+    return "Stock Metrics";
+  if (pathname.startsWith("/inventory/transfer-orders")) return "Transfer Orders";
+  if (pathname.startsWith("/workspace-products")) return "Custom Products";
   if (pathname.startsWith("/catalog/global-products")) return "Global Catalog";
   if (pathname.startsWith("/catalog")) return "Catalog";
   if (pathname.startsWith("/parties/customers")) return "Customers";
   if (pathname.startsWith("/parties/suppliers")) return "Suppliers";
   if (pathname.startsWith("/parties")) return "Parties";
   if (pathname.startsWith("/doctors")) return "Doctors";
+  if (pathname.startsWith("/finance/treasury/branch-cash")) return "Cash Counter";
+  if (pathname.startsWith("/finance/treasury/payment-qrs")) return "Counter QR";
+  if (pathname.startsWith("/finance/treasury/upi-transactions")) return "UPI Transactions";
+  if (pathname.startsWith("/finance/treasury/cash-transactions")) return "Cash Transactions";
+  if (pathname.startsWith("/finance/treasury/bank-accounts")) return "Bank Accounts";
+  if (pathname.startsWith("/finance/gst-ledger/gstr-1")) return "GSTR-1";
+  if (pathname.startsWith("/finance/gst-ledger/gstr-2")) return "GSTR-2";
+  if (pathname.startsWith("/finance/gst-ledger/gstr-3b")) return "GSTR-3B";
+  if (pathname.startsWith("/finance/treasury")) return "Treasury";
   if (pathname.startsWith("/finance")) return "Finance";
   if (pathname.startsWith("/marketplace")) return "Marketplace";
   if (
@@ -67,11 +89,13 @@ const getPageTitle = (pathname) => {
   ) {
     return "Roles & Permissions";
   }
+  if (pathname.startsWith("/members")) return "Staff & Members";
   if (pathname.startsWith("/branches")) return "Branches";
   if (pathname.startsWith("/companies")) return "Companies";
   if (pathname.startsWith("/workspace")) return "Workspace";
   if (pathname.startsWith("/setup")) return "Setup Center";
   if (pathname.startsWith("/settings")) return "Settings";
+  if (pathname.startsWith("/help-center")) return "Help & Support";
   if (pathname.startsWith("/me") || pathname.startsWith("/profile")) return "My Profile";
 
   const segment = pathname.split("/").filter(Boolean).pop() || "Dashboard";
@@ -83,21 +107,24 @@ const getPageTitle = (pathname) => {
 const AppMobileHeader = ({ onMenuClick }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { can, canAny, isOwner } = usePermission();
+  const { can, canAny, isOwner, workAccess, canWorkMode, canWorkLevel } = usePermission();
   const { isSetupComplete } = useSetupStatus();
-  const { workMode } = useWorkMode();
-  const { currentLevel } = useNavigationPipeline();
+  const { workMode, isOperationMode } = useWorkMode();
+  const { currentLevel, isBranchLevel } = useNavigationPipeline();
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef(null);
 
   const pageTitle = useMemo(() => getPageTitle(location.pathname), [location.pathname]);
+  const breadcrumbs = useMemo(
+    () => getHeaderBreadcrumbs(location.pathname),
+    [location.pathname]
+  );
 
-  // Compute all commands accessible to the user scoped by currentLevel
   const accessibleCommands = useMemo(() => {
-    return getAccessibleSearchCommands(can, canAny, isOwner, workMode, currentLevel);
-  }, [can, canAny, isOwner, workMode, currentLevel]);
+    return getAccessibleSearchCommands(can, canAny, isOwner, workMode, currentLevel, workAccess);
+  }, [can, canAny, isOwner, workMode, currentLevel, workAccess]);
 
   useEffect(() => {
     if (searchOpen) {
@@ -156,40 +183,38 @@ const AppMobileHeader = ({ onMenuClick }) => {
   return (
     <header className="sticky top-0 z-[60] border-b border-border bg-surface/95 backdrop-blur-md">
       <div className="flex h-13 items-center justify-between px-3">
-        {/* Left: Menu & Dynamic Title */}
-        <div className="flex min-w-0 items-center gap-2">
+        {/* Left: Menu, Title & Subroute Breadcrumbs (kept visible when drawer opens) */}
+        <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
           <UIIconButton
             type="button"
             onClick={onMenuClick}
             aria-label="Open navigation menu"
             variant="ghost"
             size="sm"
+            className="shrink-0"
           >
             <Menu className="size-5" />
           </UIIconButton>
 
-          <AnimatePresence mode="wait">
-            <motion.h1
-              key={pageTitle}
-              initial={{ opacity: 0, y: -2 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 2 }}
-              transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
-              className="truncate text-[15px] font-extrabold tracking-tight text-text leading-tight"
-            >
-              {pageTitle}
-            </motion.h1>
-          </AnimatePresence>
+          <div className="flex min-w-0 flex-col justify-center">
+            <AnimatePresence mode="wait">
+              <motion.h1
+                key={pageTitle}
+                initial={{ opacity: 0, y: -2 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 2 }}
+                transition={{ duration: 0.15, ease: [0.23, 1, 0.32, 1] }}
+                className="truncate text-[15px] font-extrabold tracking-tight text-text leading-tight"
+              >
+                {pageTitle}
+              </motion.h1>
+            </AnimatePresence>
+            <HeaderBreadcrumbTrail breadcrumbs={breadcrumbs} compact />
+          </div>
         </div>
 
-        {/* Right: Work Mode, App Menu, Search, Notifications, Profile */}
+        {/* Right: Search, Notifications, Branch-Op POS (+), Profile */}
         <div className="flex shrink-0 items-center gap-1.5">
-          {workMode && (
-            <HeaderWorkModeToggle />
-          )}
-
-          <HeaderAppMenu />
-
           {isSetupComplete && (
             <>
               <UIIconButton
@@ -207,11 +232,25 @@ const AppMobileHeader = ({ onMenuClick }) => {
             </>
           )}
 
+          {isOperationMode &&
+            isBranchLevel &&
+            canWorkLevel("branch") &&
+            canWorkMode("operation") && (
+            <Link
+              to={ROUTES.SALES}
+              aria-label="Open POS Billing"
+              title="POS Billing"
+              className="flex size-8 items-center justify-center rounded-full bg-primary text-white shadow-xs active:scale-95 transition"
+            >
+              <Plus className="size-4" />
+            </Link>
+          )}
+
           <HeaderProfileDropdown />
         </div>
       </div>
 
-      {/* Expandable Mobile Search Bar (Styled like AuthInput) */}
+      {/* Expandable Mobile Search Bar */}
       <AnimatePresence>
         {searchOpen && (
           <motion.div
@@ -246,7 +285,6 @@ const AppMobileHeader = ({ onMenuClick }) => {
               )}
             </div>
 
-            {/* Filtered Mobile Commands */}
             {searchQuery && (
               <div className="mt-2 max-h-[180px] overflow-y-auto space-y-0.5">
                 {filteredCommands.length ? (

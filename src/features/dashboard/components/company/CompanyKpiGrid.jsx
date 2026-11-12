@@ -1,6 +1,5 @@
 // src/features/dashboard/components/company/CompanyKpiGrid.jsx
 
-import React from "react";
 import {
   BarChart3,
   ShoppingCart,
@@ -30,7 +29,7 @@ export const CompanyKpiGrid = ({ kpis, isLoading = false }) => {
       growthLabel: "vs prior period",
       icon: BarChart3,
       color: "success",
-      route: ROUTES.SALES || "/sales",
+      route: ROUTES.GSTR1,
     },
     {
       id: "purchases",
@@ -40,7 +39,7 @@ export const CompanyKpiGrid = ({ kpis, isLoading = false }) => {
       growthLabel: "vs prior period",
       icon: ShoppingCart,
       color: "blue",
-      route: ROUTES.PURCHASES || "/purchases",
+      route: ROUTES.GSTR2,
     },
     {
       id: "profit",
@@ -50,7 +49,7 @@ export const CompanyKpiGrid = ({ kpis, isLoading = false }) => {
       growthLabel: "margin realization",
       icon: TrendingUp,
       color: "warning",
-      route: ROUTES.REPORTS_FINANCIAL || ROUTES.SALES || "/sales",
+      route: ROUTES.REPORTS,
     },
     {
       id: "receivables",
@@ -60,7 +59,7 @@ export const CompanyKpiGrid = ({ kpis, isLoading = false }) => {
       growthLabel: "customer credit dues",
       icon: Smartphone,
       color: "purple",
-      route: ROUTES.CUSTOMERS || "/parties/customers",
+      route: ROUTES.CUSTOMERS,
     },
     {
       id: "payables",
@@ -70,7 +69,7 @@ export const CompanyKpiGrid = ({ kpis, isLoading = false }) => {
       growthLabel: "distributor dues",
       icon: Wallet,
       color: "error",
-      route: ROUTES.SUPPLIERS || "/parties/suppliers",
+      route: ROUTES.SUPPLIERS,
     },
     {
       id: "bank",
@@ -80,7 +79,7 @@ export const CompanyKpiGrid = ({ kpis, isLoading = false }) => {
       growthLabel: "liquid bank balances",
       icon: Landmark,
       color: "info",
-      route: ROUTES.BANK_ACCOUNTS || "/finance/treasury/bank-accounts",
+      route: ROUTES.BANK_ACCOUNTS,
     },
   ];
 

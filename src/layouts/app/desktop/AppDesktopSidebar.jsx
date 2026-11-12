@@ -15,13 +15,18 @@ import {
   SIDEBAR_NAV_GROUPS,
   SidebarItem,
   SidebarLevelIndicator,
+  SidebarWorkModeSwitcher,
   SidebarUserProfile,
   SidebarScrollArea,
-  SidebarContextualStatusWidget,
   filterNavByPipeline,
+  filterNavForCollapsedRail,
 } from "../components/sidebar";
 import { filterNavByPermission } from "../components/sidebar/filterNavByPermission";
-import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
+import {
+  useNavigationPipeline,
+  PIPELINE_STORAGE_KEYS,
+} from "@/contexts/NavigationPipelineContext";
+import { clearAllHeldBillsStorage } from "@/features/sales/services/holdBillStorage";
 
 const SIDEBAR_EXPANDED_WIDTH = 240;
 const SIDEBAR_COLLAPSED_WIDTH = 68;
@@ -32,17 +37,17 @@ const AppDesktopSidebar = ({
   onToggleCollapse,
   onExpand,
   onCollapse,
-  onClose,
 }) => {
   const { user, logout, clearCredentials } = useAuth();
   const [isLogoutDialogOpen, setIsLogoutDialogOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+  const [isModeDialogOpen, setIsModeDialogOpen] = useState(false);
   const autoCloseTimerRef = useRef(null);
   const { currentCompany } = useCompany();
   const { currentBranch } = useBranch();
   const { isSetupComplete, companyCompleted, branchCompleted } = useSetupStatus();
-  const { can, canAny, isOwner } = usePermission();
+  const { can, canAny, isOwner, workAccess } = usePermission();
   const { workMode } = useWorkMode();
   const { currentLevel } = useNavigationPipeline();
 
@@ -55,11 +60,11 @@ const AppDesktopSidebar = ({
   }, [collapsed]);
 
   useEffect(() => {
-    if (isCompanyDropdownOpen && autoCloseTimerRef.current) {
+    if ((isCompanyDropdownOpen || isModeDialogOpen || isLogoutDialogOpen) && autoCloseTimerRef.current) {
       clearTimeout(autoCloseTimerRef.current);
       autoCloseTimerRef.current = null;
     }
-  }, [isCompanyDropdownOpen]);
+  }, [isCompanyDropdownOpen, isModeDialogOpen, isLogoutDialogOpen]);
 
   useEffect(() => {
     return () => {
@@ -77,12 +82,12 @@ const AppDesktopSidebar = ({
   };
 
   const handleMouseLeave = () => {
-    if (collapsed || isLogoutDialogOpen || isCompanyDropdownOpen) return;
+    if (collapsed || isLogoutDialogOpen || isCompanyDropdownOpen || isModeDialogOpen) return;
     if (autoCloseTimerRef.current) {
       clearTimeout(autoCloseTimerRef.current);
     }
     autoCloseTimerRef.current = setTimeout(() => {
-      if (!isLogoutDialogOpen && !isCompanyDropdownOpen) {
+      if (!isLogoutDialogOpen && !isCompanyDropdownOpen && !isModeDialogOpen) {
         if (onCollapse) {
           onCollapse();
         } else if (onToggleCollapse) {
@@ -92,28 +97,35 @@ const AppDesktopSidebar = ({
     }, AUTO_CLOSE_DELAY_MS);
   };
 
-  // Filter nav groups by active pipeline level and workMode first, then by permissions
+  // Filter nav groups by active pipeline level and workMode first, then by permissions,
+  // and finally apply curated essential rail filtering when the sidebar is collapsed.
   const visibleNavGroups = useMemo(() => {
     const pipelineFiltered = filterNavByPipeline(SIDEBAR_NAV_GROUPS, currentLevel, workMode);
-    return filterNavByPermission(
+    const permissionFiltered = filterNavByPermission(
       pipelineFiltered,
       can,
       canAny,
       isOwner,
-      { 
-        isSetupComplete, 
-        companyCompleted, 
-        branchCompleted, 
-        hasActiveCompany: !!currentCompany, 
-        hasActiveBranch: !!currentBranch 
+      {
+        isSetupComplete,
+        companyCompleted,
+        branchCompleted,
+        hasActiveCompany: !!currentCompany,
+        hasActiveBranch: !!currentBranch,
+        workAccess,
       },
     );
+    return collapsed
+      ? filterNavForCollapsedRail(permissionFiltered)
+      : permissionFiltered;
   }, [
+    collapsed,
     currentLevel,
     workMode,
     can,
     canAny,
     isOwner,
+    workAccess,
     isSetupComplete,
     companyCompleted,
     branchCompleted,
@@ -133,10 +145,16 @@ const AppDesktopSidebar = ({
       console.error("Logout failed:", err);
     } finally {
       clearCredentials();
+      clearAllHeldBillsStorage();
       try {
         localStorage.removeItem("pahuch_work_mode");
         localStorage.removeItem("pahuch_work_mode_selected");
-      } catch {}
+        localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL);
+        localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+        localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+      } catch {
+        // ignore storage errors
+      }
       setIsLogoutDialogOpen(false);
       window.location.href = ROUTES.LOGIN;
     }
@@ -210,13 +228,14 @@ const AppDesktopSidebar = ({
           <SidebarLevelIndicator
             collapsed={collapsed}
             onToggleCollapse={onToggleCollapse}
+            onExpand={handleSidebarExpand}
             onOpenChange={setIsCompanyDropdownOpen}
           />
         )}
 
         {/* ── MIDDLE: Multi-Level Navigation Tree (WhatsApp-Style Auto-Hiding Scrollbar) ── */}
-        <SidebarScrollArea className="px-2 py-2 space-y-3">
-          <nav className="space-y-3">
+        <SidebarScrollArea className={collapsed ? "px-2 py-2 space-y-1.5" : "px-2 py-2 space-y-3"}>
+          <nav className={collapsed ? "space-y-1.5" : "space-y-3"}>
             {visibleNavGroups.map((group) => (
               <div key={group.id} className="space-y-0.5">
                 {/* Subtle Group Label (11px uppercase) */}
@@ -243,9 +262,12 @@ const AppDesktopSidebar = ({
           </nav>
         </SidebarScrollArea>
 
-        {/* ── BOTTOM: Context Status Widget & User Profile ───────────── */}
+        {/* ── BOTTOM: Work Mode Switcher & User Profile ───────────── */}
         <div className="shrink-0">
-          <SidebarContextualStatusWidget collapsed={collapsed} />
+          <SidebarWorkModeSwitcher
+            collapsed={collapsed}
+            onConfirmOpenChange={setIsModeDialogOpen}
+          />
           <SidebarUserProfile
             user={user}
             collapsed={collapsed}

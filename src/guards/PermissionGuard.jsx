@@ -1,62 +1,77 @@
 // src/guards/PermissionGuard.jsx
-//
-// Route-level permission guard.
-//
-// Usage in routes.jsx:
-//   { element: <PermissionGuard permission="product:view"><InventoryPage /></PermissionGuard> }
-//   { element: <PermissionGuard permissions={["customer:view", "supplier:view"]}><PartiesPage /></PermissionGuard> }
-//
-// Props:
-//   permission  - string: required permission key.
-//   permissions - string[]: array of permissions (user needs ANY one of them).
-//   fallback    - ReactNode: custom fallback. Defaults to <AccessDeniedPage />.
-//   children    - ReactNode: content to render if permission is granted.
 
-import { Outlet, Navigate } from "react-router-dom";
-import { ROUTES } from "@/constants";
-
+import { Outlet, Navigate, useLocation } from "react-router-dom";
 import usePermission from "@/hooks/usePermission";
+import { useWorkMode, WORK_MODES } from "@/contexts/WorkModeContext";
+import {
+  useNavigationPipeline,
+  getPipelineDefaultRoute,
+} from "@/contexts/NavigationPipelineContext";
+import { ROUTES } from "@/constants";
 
 const PermissionGuard = ({
   permission,
   permissions,
+  requiredWorkMode = null,
+  requiredWorkLevel = null,
   requireOwner = false,
   fallback,
   children,
 }) => {
-  const { can, canAny, isOwner, isLoaded } = usePermission();
+  const location = useLocation();
+  const {
+    can,
+    canAny,
+    canWorkMode,
+    canWorkLevel,
+    isOwner,
+    isLoaded,
+    workAccess,
+  } = usePermission();
+  const { currentLevel } = useNavigationPipeline();
+  const { workMode } = useWorkMode();
 
-  // While permissions are loading, render nothing (AppLayout handles the loader)
   if (!isLoaded) {
     return null;
   }
 
-  // Determine if access is granted
   let hasAccess = true;
 
   if (requireOwner) {
     hasAccess = Boolean(isOwner);
+  } else if (requiredWorkLevel && !canWorkLevel(requiredWorkLevel)) {
+    hasAccess = false;
+  } else if (requiredWorkMode && !canWorkMode(requiredWorkMode)) {
+    hasAccess = false;
   } else if (permissions?.length) {
-    // Array of permissions — user needs ANY one
     hasAccess = canAny(permissions);
   } else if (permission) {
-    // Single permission key
     hasAccess = can(permission);
   }
 
   if (!hasAccess) {
+    const safeTarget =
+      getPipelineDefaultRoute(
+        workAccess?.highestWorkLevel || currentLevel,
+        workMode || workAccess?.defaultWorkMode || WORK_MODES.VIEW,
+        !isOwner ? workAccess : null,
+      ) || ROUTES.DASHBOARD;
+
+    if (location.pathname === safeTarget && fallback) {
+      return fallback;
+    }
+
     return (
       fallback || (
-        <Navigate 
-          to={ROUTES.DASHBOARD} 
-          replace 
-          state={{ unauthorizedPermission: true }} 
+        <Navigate
+          to={safeTarget}
+          replace
+          state={{ unauthorizedPermission: true }}
         />
       )
     );
   }
 
-  // Render children directly or outlet for nested routes
   return children || <Outlet />;
 };
 

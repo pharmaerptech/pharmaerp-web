@@ -58,8 +58,6 @@ export const CompanyTopSellingProductsCard = ({ products = [], className, isLoad
               icon={<Pill className="size-8 text-text-muted" />}
               title="No Sales In Period"
               description="Prescription and OTC medicines sold during this timeframe will appear here."
-              actionText="Record Sale"
-              onAction={() => navigate(ROUTES.SALES || "/sales")}
             />
           </div>
         ) : (
@@ -103,14 +101,14 @@ export const CompanyTopSellingProductsCard = ({ products = [], className, isLoad
         )}
       </div>
 
-      {/* Footer link to real workspace products catalog */}
+      {/* Footer link to global catalog */}
       <div className="pt-2 border-t border-border/60 flex justify-end">
         <button
           type="button"
-          onClick={() => navigate(ROUTES.WORKSPACE_PRODUCTS || "/workspace-products")}
+          onClick={() => navigate(ROUTES.CATALOG)}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
-          <span>View Catalog SKUs</span>
+          <span>View Catalog</span>
           <ArrowRight className="size-3" />
         </button>
       </div>

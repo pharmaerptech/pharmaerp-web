@@ -1,21 +1,21 @@
 // src/layouts/app/AppLayout.jsx
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
+import { TOKEN_KEY } from "@/constants";
+import { storage } from "@/utils";
 import { useIsMobile, useWorkModeDeepLinkSync } from "@/hooks";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
-import useUser from "@/features/user/hooks/useUser";
 import useAccessControl from "@/features/access-control/hooks/useAccessControl";
 import {
-  useWorkMode,
   NavigationPipelineProvider,
   PIPELINE_LEVELS,
   PIPELINE_STORAGE_KEYS,
-  getLevelFromPathname,
+  useWorkMode,
 } from "@/contexts";
-import { ChooseWorkModeModal } from "@/features/operations/components/ChooseWorkModeModal";
+import { resolveMyWorkAccess } from "@/utils/workAccess";
 import { ScrollToTop } from "@/components";
 import { UIToastContainer } from "@/components/ui";
 import { AnimatePresence } from "framer-motion";
@@ -23,185 +23,257 @@ import { AnimatePresence } from "framer-motion";
 import AppDesktopLayout from "./desktop/AppDesktopLayout";
 import AppMobileLayout from "./mobile/AppMobileLayout";
 import PremiumAppLoader from "./components/loader/PremiumAppLoader";
+import {
+  hydrateBootContext,
+  needsContextHydration,
+  normalizeArrayPayload,
+  normalizeStoredId,
+  resolveBootWorkMode,
+  resolveRequestedBootLevel,
+} from "./bootContextPolicy";
 
-const getWorkspaceFromItem = (item) => {
-  return item?.workspace || item || null;
+const safeGetStorage = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
 };
 
-const AppLayout = () => {
+const safeSetStorage = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const safeRemoveStorage = (key) => {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const AppLayoutContent = ({ isSyncComplete }) => {
   const isMobile = useIsMobile();
-  useWorkModeDeepLinkSync();
-
-  const { user } = useUser();
-  const { workspaces, currentWorkspace, getMyWorkspaces, setCurrentWorkspace } =
-    useWorkspace();
-  const {
-    companies,
-    currentCompany,
-    getWorkspaceCompanies,
-    setCurrentCompany,
-    clearCurrentCompany,
-  } = useCompany();
-  const {
-    branches,
-    currentBranch,
-    getCompanyBranches,
-    setCurrentBranch,
-    clearCurrentBranch,
-  } = useBranch();
-  const { getMyAccess } = useAccessControl();
-  const { hasSelectedMode, openModeModal } = useWorkMode();
-
-  // STRATEGY: If workspace is populated in Redux, skip initialization. If empty, reload session.
-  const isHardRefresh = !currentWorkspace?._id;
-  const [isSyncComplete, setIsSyncComplete] = useState(!isHardRefresh);
-
-  const initializedRef = useRef(false);
-
-  // ONE SINGLE EFFECT TO HYDRATE CORE CONTEXT IN PERFECT SEQUENTIAL ORDER
-  useEffect(() => {
-    // If we are navigating or already booted this session, unlock instantly and exit
-    if (!isHardRefresh || initializedRef.current) {
-      setIsSyncComplete(true);
-      return;
-    }
-
-    initializedRef.current = true;
-
-    const bootApplicationContext = async () => {
-      try {
-        // STEP 1: Determine active floor level from URL route or localStorage
-        const routeLevel = getLevelFromPathname(window.location.pathname);
-        let effectiveLevel = routeLevel;
-        if (!effectiveLevel) {
-          try {
-            effectiveLevel = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL);
-          } catch {}
-        }
-        if (
-          !effectiveLevel ||
-          !Object.values(PIPELINE_LEVELS).includes(effectiveLevel)
-        ) {
-          effectiveLevel = PIPELINE_LEVELS.WORKSPACE;
-        }
-
-        // Read locally stored company and branch identifiers (NO database fetch)
-        let savedCompanyId = null;
-        let savedBranchId = null;
-        try {
-          savedCompanyId = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
-          savedBranchId = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-        } catch {}
-
-        // STEP 2: Resolve Workspace Array
-        const workspaceItems = workspaces?.length
-          ? workspaces
-          : await getMyWorkspaces();
-        const selectedWorkspaceItem = workspaceItems?.[0];
-        const selectedWorkspace = getWorkspaceFromItem(selectedWorkspaceItem);
-
-        if (selectedWorkspace?._id) {
-          setCurrentWorkspace(selectedWorkspace);
-        }
-
-        // STEP 3: Always fetch available Workspace Companies so the list is ready in Redux
-        let companyItems = [];
-        if (selectedWorkspace?._id) {
-          companyItems = await getWorkspaceCompanies().catch(() => []);
-        }
-
-        // STEP 4: Strict Level Context Hydration
-        if (effectiveLevel === PIPELINE_LEVELS.WORKSPACE) {
-          // At Workspace level: both active company & active branch MUST remain null!
-          clearCurrentCompany();
-          clearCurrentBranch();
-          try {
-            localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
-            localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-          } catch {}
-        } else if (effectiveLevel === PIPELINE_LEVELS.COMPANY) {
-          // At Company level: branch MUST remain null!
-          clearCurrentBranch();
-          try {
-            localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-          } catch {}
-
-          const selectedCompany =
-            companyItems?.find((company) => company?._id === savedCompanyId) ||
-            null;
-
-          if (selectedCompany?._id) {
-            setCurrentCompany(selectedCompany);
-            // Pre-fetch branches for this active company
-            await getCompanyBranches(selectedCompany._id).catch(() => null);
-          } else {
-            clearCurrentCompany();
-            try {
-              localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
-            } catch {}
-          }
-        } else if (effectiveLevel === PIPELINE_LEVELS.BRANCH) {
-          // At Branch level: resolve both company and branch strictly
-          const selectedCompany =
-            companyItems?.find((company) => company?._id === savedCompanyId) ||
-            companyItems?.[0] ||
-            null;
-
-          if (selectedCompany?._id) {
-            setCurrentCompany(selectedCompany);
-
-            const branchItems = await getCompanyBranches(selectedCompany._id).catch(() => []);
-            const selectedBranch =
-              branchItems?.find((branch) => branch?._id === savedBranchId) ||
-              null;
-
-            if (selectedBranch?._id) {
-              setCurrentBranch(selectedBranch);
-            } else {
-              clearCurrentBranch();
-              try {
-                localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-              } catch {}
-            }
-          } else {
-            clearCurrentCompany();
-            clearCurrentBranch();
-            try {
-              localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
-              localStorage.removeItem(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
-            } catch {}
-          }
-        }
-
-        // UNLOCK GATE: Everything resolved in sequential order safely!
-        // Load the current user's permissions (non-blocking — errors fail silently)
-        getMyAccess().catch(() => null);
-
-        setIsSyncComplete(true);
-      } catch (error) {
-        console.error(
-          "Critical failure during layout initialization sync:",
-          error,
-        );
-        setIsSyncComplete(true); // Fail-safe to prevent hard UI freezes
-      }
-    };
-
-    bootApplicationContext();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHardRefresh]);
+  useWorkModeDeepLinkSync({ isSyncComplete });
 
   return (
-    <NavigationPipelineProvider>
+    <>
       <ScrollToTop />
       <UIToastContainer position="bottom-right" />
       <AnimatePresence mode="wait">
         {!isSyncComplete ? (
           <PremiumAppLoader key="loader" />
+        ) : isMobile ? (
+          <AppMobileLayout key="mobile" />
         ) : (
-          isMobile ? <AppMobileLayout key="mobile" /> : <AppDesktopLayout key="desktop" />
+          <AppDesktopLayout key="desktop" />
         )}
       </AnimatePresence>
+    </>
+  );
+};
+
+const readBootStorage = () => ({
+  savedLevel: safeGetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL),
+  savedCompanyId: safeGetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID),
+  savedBranchId: safeGetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID),
+});
+
+const applyBootStorageUpdates = ({
+  activeLevel,
+  activeCompanyId,
+  activeBranchId,
+}) => {
+  safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL, activeLevel);
+
+  if (activeCompanyId) {
+    safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID, activeCompanyId);
+  } else {
+    safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_COMPANY_ID);
+  }
+
+  if (activeBranchId) {
+    safeSetStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID, activeBranchId);
+  } else {
+    safeRemoveStorage(PIPELINE_STORAGE_KEYS.ACTIVE_BRANCH_ID);
+  }
+};
+
+const AppLayout = () => {
+  const { workspaces, currentWorkspace, getMyWorkspaces, setCurrentWorkspace } =
+    useWorkspace();
+  const {
+    currentCompany,
+    getWorkspaceCompanies,
+    getCompanyById,
+    setCurrentCompany,
+    clearCurrentCompany,
+  } = useCompany();
+  const {
+    currentBranch,
+    getCompanyBranches,
+    getBranchById,
+    setCurrentBranch,
+    clearCurrentBranch,
+  } = useBranch();
+  const { getMyAccess } = useAccessControl();
+  const { setWorkMode } = useWorkMode();
+
+  const [isSyncComplete, setIsSyncComplete] = useState(() => {
+    if (!storage.get(TOKEN_KEY)) return true;
+    return false;
+  });
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const bootApplicationContext = async () => {
+      try {
+        if (!storage.get(TOKEN_KEY)) {
+          if (!isCancelled) setIsSyncComplete(true);
+          return;
+        }
+
+        // Ensure currentWorkspace exists before querying workspace-scoped access
+        let activeWorkspace = currentWorkspace;
+        if (!normalizeStoredId(activeWorkspace)) {
+          const existingItem = Array.isArray(workspaces) ? workspaces[0] : null;
+          activeWorkspace = existingItem?.workspace || existingItem || null;
+          if (!normalizeStoredId(activeWorkspace)) {
+            const fetchedWs = normalizeArrayPayload(
+              await getMyWorkspaces().catch(() => []),
+            );
+            activeWorkspace =
+              fetchedWs[0]?.workspace || fetchedWs[0] || null;
+          }
+          if (normalizeStoredId(activeWorkspace)) {
+            setCurrentWorkspace(activeWorkspace);
+          }
+        }
+
+        if (isCancelled) return;
+
+        // Await authoritative backend permissions BEFORE resolving boot level or mode
+        const myAccessPayload = await getMyAccess().catch(() => null);
+        if (isCancelled) return;
+
+        const resolvedWorkAccess = resolveMyWorkAccess(myAccessPayload);
+        const allowedWorkLevels = resolvedWorkAccess?.allowedWorkLevels || null;
+        const allowedWorkModes = resolvedWorkAccess?.allowedWorkModes || null;
+
+        // Clamp/auto-resolve Work Mode according to role
+        const bootMode = resolveBootWorkMode({
+          storedMode: safeGetStorage("pahuch_work_mode"),
+          wasSelected: safeGetStorage("pahuch_work_mode_selected") === "true",
+          allowedWorkModes,
+        });
+        if (bootMode.workMode && (bootMode.autoSelected || bootMode.hasSelectedMode)) {
+          setWorkMode(bootMode.workMode, true);
+        }
+
+        const { savedLevel, savedCompanyId, savedBranchId } = readBootStorage();
+        const requestedLevel = resolveRequestedBootLevel({
+          savedLevel,
+          pathname: window.location.pathname,
+          savedCompanyId,
+          savedBranchId,
+          allowedWorkLevels,
+        });
+
+        const shouldHydrate = needsContextHydration({
+          requestedLevel,
+          savedCompanyId,
+          savedBranchId,
+          currentCompany,
+          currentBranch,
+        });
+
+        if (!shouldHydrate) {
+          applyBootStorageUpdates({
+            activeLevel: requestedLevel,
+            activeCompanyId:
+              requestedLevel === PIPELINE_LEVELS.WORKSPACE
+                ? null
+                : normalizeStoredId(currentCompany),
+            activeBranchId:
+              requestedLevel === PIPELINE_LEVELS.BRANCH
+                ? normalizeStoredId(currentBranch)
+                : null,
+          });
+          if (requestedLevel === PIPELINE_LEVELS.WORKSPACE) {
+            getWorkspaceCompanies().catch(() => null);
+          }
+          if (!isCancelled) setIsSyncComplete(true);
+          return;
+        }
+
+        const result = await hydrateBootContext({
+          savedLevel,
+          savedCompanyId,
+          savedBranchId,
+          pathname: window.location.pathname,
+          workspaces,
+          currentWorkspace: activeWorkspace,
+          allowedWorkLevels,
+          fetchWorkspaces: getMyWorkspaces,
+          fetchCompanies: getWorkspaceCompanies,
+          fetchBranches: getCompanyBranches,
+          fetchCompanyById: getCompanyById,
+          fetchBranchById: getBranchById,
+        });
+
+        if (isCancelled) return;
+
+        if (
+          normalizeStoredId(result.workspace) &&
+          !normalizeStoredId(currentWorkspace)
+        ) {
+          setCurrentWorkspace(result.workspace);
+        }
+
+        if (result.company) {
+          setCurrentCompany(result.company);
+        } else {
+          clearCurrentCompany();
+        }
+
+        if (result.branch) {
+          setCurrentBranch(result.branch);
+        } else {
+          clearCurrentBranch();
+        }
+
+        applyBootStorageUpdates(result.storageUpdates);
+
+        if (!isCancelled) setIsSyncComplete(true);
+      } catch (error) {
+        console.error(
+          "Critical failure during layout initialization sync:",
+          error,
+        );
+        if (!isCancelled) setIsSyncComplete(true);
+      }
+    };
+
+    bootApplicationContext();
+
+    return () => {
+      isCancelled = true;
+    };
+    // Run once per AppLayout mount; StrictMode cleanup cancels Mount #1 so Mount #2 commits cleanly
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <NavigationPipelineProvider
+      key={isSyncComplete ? "pipeline-ready" : "pipeline-boot"}
+      isSyncComplete={isSyncComplete}
+    >
+      <AppLayoutContent isSyncComplete={isSyncComplete} />
     </NavigationPipelineProvider>
   );
 };

@@ -1,15 +1,6 @@
 // src/features/access-control/pages/mobile/EditRoleMobilePage.jsx
 
-import React from "react";
-import {
-  Shield,
-  ArrowLeft,
-  Check,
-  RotateCcw,
-  Search,
-  FileKey,
-  Layers,
-} from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 
 import {
   UIButton,
@@ -18,11 +9,11 @@ import {
   UISearchInput,
   UISelect,
   UISwitch,
-  UIBadge,
   UISkeleton,
   UIAlert,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessFields } from "@/features/access-control/components";
 
 const statusOptions = [
   { label: "Active", value: "active" },
@@ -30,21 +21,32 @@ const statusOptions = [
 ];
 
 export default function EditRoleMobilePage({
-  formData = { name: "", code: "", description: "", permissions: [], status: "active" },
+  formData = {
+    name: "",
+    code: "",
+    description: "",
+    workModes: ["view"],
+    workLevel: "branch",
+    permissions: [],
+    status: "active",
+  },
   formErrors = {},
 
   permissionModules = [],
-  moduleOptions = [],
-  moduleFilter = "all",
   permissionSearch = "",
   permissionSummary = { total: 0, selected: 0, groups: 0, remaining: 0 },
 
-  isLoading = false,
+  actorAllowedWorkModes = null,
+  actorHighestWorkLevel = null,
+  isRoleLocked = false,
+  isOwnerRole = false,
+
   isUpdating = false,
   isLoadingPermissions = false,
 
   handleChange,
-  handlePermissionsChange,
+  handleWorkModesChange,
+  handleWorkLevelChange,
   handleTogglePermission,
   handleToggleModule,
   handleSelectAllPermissions,
@@ -54,7 +56,6 @@ export default function EditRoleMobilePage({
   handleCancel,
 
   setPermissionSearch,
-  setModuleFilter,
 }) {
   return (
     <div className="min-h-screen bg-bg text-text p-3 pb-24 space-y-3.5">
@@ -82,6 +83,7 @@ export default function EditRoleMobilePage({
           size="sm"
           onClick={handleSubmit}
           isLoading={isUpdating}
+          disabled={isRoleLocked}
           startIcon={<Check className="size-3.5" />}
         >
           Save
@@ -90,6 +92,18 @@ export default function EditRoleMobilePage({
 
       {formErrors.submit && (
         <UIAlert intent="danger" title="Error" description={formErrors.submit} />
+      )}
+
+      {isRoleLocked && (
+        <UIAlert
+          intent="warning"
+          title={isOwnerRole ? "Protected Owner Role" : "Role Locked"}
+          description={
+            isOwnerRole
+              ? "Owner holds full access across all modes and levels."
+              : "This role cannot be modified."
+          }
+        />
       )}
 
       {/* Role Identity Form */}
@@ -108,6 +122,7 @@ export default function EditRoleMobilePage({
             value={formData.name}
             onChange={handleChange}
             error={formErrors.name}
+            disabled={isRoleLocked}
             size="sm"
           />
         </div>
@@ -122,6 +137,7 @@ export default function EditRoleMobilePage({
             value={formData.status || "active"}
             onChange={handleChange}
             options={statusOptions}
+            disabled={isRoleLocked}
           />
         </div>
 
@@ -135,9 +151,25 @@ export default function EditRoleMobilePage({
             placeholder="Describe role responsibilities..."
             value={formData.description}
             onChange={handleChange}
-            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text placeholder:text-text-muted/60 focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            disabled={isRoleLocked}
+            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs text-text placeholder:text-text-muted/60 focus:outline-hidden focus:ring-2 focus:ring-primary/20 focus:border-primary disabled:opacity-60"
           />
         </div>
+      </div>
+
+      {/* Work Modes & Level Hierarchy */}
+      <div className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-3">
+        <RoleWorkAccessFields
+          workModes={formData.workModes}
+          workLevel={formData.workLevel}
+          onChangeWorkModes={handleWorkModesChange}
+          onChangeWorkLevel={handleWorkLevelChange}
+          allowedActorWorkModes={actorAllowedWorkModes}
+          maxActorWorkLevel={actorHighestWorkLevel}
+          disabled={isRoleLocked}
+          error={formErrors.workAccess}
+          compact
+        />
       </div>
 
       {/* Permissions Section */}
@@ -145,30 +177,32 @@ export default function EditRoleMobilePage({
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xs font-bold text-text uppercase tracking-wider">
-              Permissions
+              Module Permissions
             </h2>
             <span className="text-[11px] text-text-muted">
               {permissionSummary.selected} / {permissionSummary.total} assigned
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSelectAllPermissions}
-              className="text-xs text-primary font-semibold hover:underline"
-            >
-              All
-            </button>
-            <span className="text-border">|</span>
-            <button
-              type="button"
-              onClick={handleClearPermissions}
-              className="text-xs text-text-muted font-semibold hover:underline"
-            >
-              Clear
-            </button>
-          </div>
+          {!isRoleLocked && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSelectAllPermissions}
+                className="text-xs text-primary font-semibold hover:underline"
+              >
+                All
+              </button>
+              <span className="text-border">|</span>
+              <button
+                type="button"
+                onClick={handleClearPermissions}
+                className="text-xs text-text-muted font-semibold hover:underline"
+              >
+                Clear
+              </button>
+            </div>
+          )}
         </div>
 
         <UISearchInput
@@ -189,7 +223,7 @@ export default function EditRoleMobilePage({
             {permissionModules.map((mod) => {
               const modVals = mod.permissions.map((p) => p.value);
               const selectedCount = modVals.filter((v) =>
-                formData.permissions.includes(v)
+                formData.permissions.includes(v),
               ).length;
               const isAll = modVals.length > 0 && selectedCount === modVals.length;
 
@@ -204,7 +238,8 @@ export default function EditRoleMobilePage({
                     </span>
                     <UISwitch
                       checked={isAll}
-                      onChange={() => handleToggleModule(mod)}
+                      onChange={() => !isRoleLocked && handleToggleModule(mod)}
+                      disabled={isRoleLocked}
                       size="sm"
                     />
                   </div>
@@ -216,12 +251,13 @@ export default function EditRoleMobilePage({
                         <button
                           key={perm.value}
                           type="button"
-                          onClick={() => handleTogglePermission(perm.value)}
+                          disabled={isRoleLocked}
+                          onClick={() => !isRoleLocked && handleTogglePermission(perm.value)}
                           className={cn(
-                            "p-1.5 rounded-lg border text-left transition-all flex items-center justify-between text-[11px]",
+                            "p-1.5 rounded-lg border text-left transition-all flex items-center justify-between text-[11px] disabled:opacity-70",
                             isChecked
                               ? "bg-surface border-primary/50 text-primary font-semibold"
-                              : "bg-surface/50 border-border/60 text-text-muted"
+                              : "bg-surface/50 border-border/60 text-text-muted",
                           )}
                         >
                           <span className="truncate">{perm.actionLabel || perm.label}</span>
@@ -254,6 +290,7 @@ export default function EditRoleMobilePage({
           className="flex-1"
           onClick={handleSubmit}
           isLoading={isUpdating}
+          disabled={isRoleLocked}
           startIcon={<Check className="size-3.5" />}
         >
           Save Changes

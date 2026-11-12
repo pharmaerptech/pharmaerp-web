@@ -1,6 +1,5 @@
 // src/features/dashboard/components/branch/BranchRecentSalesCard.jsx
 
-import React from "react";
 import { ArrowRight, ShoppingCart } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { UICard, UIBadge, UIEmptyState, UISkeleton } from "@/components/ui";
@@ -61,10 +60,10 @@ export const BranchRecentSalesCard = ({ sales = [], className, isLoading = false
 
         <button
           type="button"
-          onClick={() => navigate(ROUTES.SALES || "/sales")}
+          onClick={() => navigate(ROUTES.REPORTS_SALES)}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
-          <span>View All</span>
+          <span>View Sales Report</span>
           <ArrowRight className="size-3" />
         </button>
       </div>
@@ -77,8 +76,6 @@ export const BranchRecentSalesCard = ({ sales = [], className, isLoading = false
               icon={<ShoppingCart className="size-8 text-text-muted" />}
               title="No Sales Recorded Today"
               description="Completed counter sales invoices will stream here in real time."
-              actionText="Open Billing"
-              onAction={() => navigate(ROUTES.SALES || "/sales")}
               variant="inline"
               size="sm"
             />

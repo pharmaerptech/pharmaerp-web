@@ -62,5 +62,16 @@ export const selectCheckBranchAccessStatus = (state) =>
 
 export const selectMyAccess = (state) => state.accessControl.myAccess;
 
+export const selectMyWorkAccess = (state) => state.accessControl.myWorkAccess;
+
+export const selectAllowedWorkModes = (state) =>
+  state.accessControl.myWorkAccess?.allowedWorkModes || null;
+
+export const selectAllowedWorkLevels = (state) =>
+  state.accessControl.myWorkAccess?.allowedWorkLevels || null;
+
+export const selectHighestWorkLevel = (state) =>
+  state.accessControl.myWorkAccess?.highestWorkLevel || null;
+
 export const selectGetMyAccessStatus = (state) =>
   state.accessControl.getMyAccessStatus;

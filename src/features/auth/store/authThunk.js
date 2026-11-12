@@ -4,6 +4,7 @@ import authService from "../services/authService";
 
 import { TOKEN_KEY, USER_STORAGE_KEY } from "@/constants";
 import { getErrorMessage, storage } from "@/utils";
+import { clearAllHeldBillsStorage } from "@/features/sales/services/holdBillStorage";
 
 export const registerUser = createAsyncThunk(
   "auth/registerUser",
@@ -57,11 +58,13 @@ export const logoutUser = createAsyncThunk(
 
       storage.remove(TOKEN_KEY);
       storage.remove(USER_STORAGE_KEY);
+      clearAllHeldBillsStorage();
 
       return true;
     } catch (error) {
       storage.remove(TOKEN_KEY);
       storage.remove(USER_STORAGE_KEY);
+      clearAllHeldBillsStorage();
 
       return rejectWithValue(getErrorMessage(error));
     }

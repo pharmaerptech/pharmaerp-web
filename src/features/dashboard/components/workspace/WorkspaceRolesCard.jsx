@@ -11,7 +11,7 @@ import {
 } from "@/components/ui";
 import { ROUTES } from "@/constants";
 
-export const WorkspaceRolesCard = ({ roles = [], isLoading = false, className }) => {
+export const WorkspaceRolesCard = ({ roles = [], isLoading = false }) => {
   const navigate = useNavigate();
 
   return (
@@ -69,7 +69,7 @@ export const WorkspaceRolesCard = ({ roles = [], isLoading = false, className })
             description="Define roles with fine-grained permissions for your workspace members."
             icon={<ShieldCheck className="size-6 text-amber-600 dark:text-amber-400" />}
             actionText="Create Role"
-            onAction={() => navigate(ROUTES.CREATE_ROLE || ROUTES.ROLES)}
+            onAction={() => navigate(ROUTES.ROLES)}
             className="py-8"
           />
         ) : (

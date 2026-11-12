@@ -28,7 +28,6 @@ const AppDesktopLayout = () => {
   // Global Marg ERP Shortcuts hook & modal state
   const {
     isShortcutsModalOpen,
-    openShortcutsModal,
     closeShortcutsModal,
     executeShortcut,
   } = useMargShortcuts();
@@ -75,7 +74,6 @@ const AppDesktopLayout = () => {
           sidebarCollapsed={collapsed}
           sidebarWidth={sidebarWidth}
           onToggleCollapse={() => setCollapsed((prev) => !prev)}
-          onOpenShortcuts={openShortcutsModal}
         />
 
         <main

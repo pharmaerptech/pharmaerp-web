@@ -6,10 +6,13 @@ import { UICard, UIEmptyState, UISkeleton } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/constants";
 import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
+import usePermission from "@/hooks/usePermission";
 
 export const CompanyBranchPerformanceCard = ({ branches = [], className, isLoading = false }) => {
   const navigate = useNavigate();
   const { enterBranch } = useNavigationPipeline();
+  const { canWorkLevel } = usePermission();
+  const canEnterBranch = canWorkLevel("branch");
 
   if (isLoading) {
     return (
@@ -62,8 +65,8 @@ export const CompanyBranchPerformanceCard = ({ branches = [], className, isLoadi
               icon={<Store className="size-8 text-text-muted" />}
               title="No Branches Configured"
               description="Register physical branches under this company to see live sales rankings."
-              actionText="Add Branch"
-              onAction={() => navigate(ROUTES.CREATE_BRANCH || "/branches/create")}
+              actionText="View Branches"
+              onAction={() => navigate(ROUTES.BRANCHES || "/branches")}
             />
           </div>
         ) : (
@@ -88,8 +91,8 @@ export const CompanyBranchPerformanceCard = ({ branches = [], className, isLoadi
                   return (
                     <tr
                       key={item.id || item.name}
-                      onClick={() => enterBranch({ _id: item.id, name: item.name })}
-                      className="hover:bg-surface-alt/40 transition-colors cursor-pointer group"
+                      onClick={() => canEnterBranch && enterBranch({ _id: item.id, name: item.name })}
+                      className={`hover:bg-surface-alt/40 transition-colors group ${canEnterBranch ? "cursor-pointer" : "cursor-default"}`}
                     >
                       <td className="py-2 px-1.5 text-center font-mono text-text-muted">
                         {idx + 1}
@@ -127,17 +130,21 @@ export const CompanyBranchPerformanceCard = ({ branches = [], className, isLoadi
                         )}
                       </td>
                       <td className="py-2 px-2 text-right">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            enterBranch({ _id: item.id, name: item.name });
-                          }}
-                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold text-[10px] transition-colors"
-                        >
-                          <span>Enter</span>
-                          <ArrowRight className="size-2.5" />
-                        </button>
+                        {canEnterBranch ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              enterBranch({ _id: item.id, name: item.name });
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold text-[10px] transition-colors"
+                          >
+                            <span>Enter</span>
+                            <ArrowRight className="size-2.5" />
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-text-muted">—</span>
+                        )}
                       </td>
                     </tr>
                   );

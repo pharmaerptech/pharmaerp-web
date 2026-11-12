@@ -1,80 +1,125 @@
 // src/hooks/useWorkModeDeepLinkSync.js
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   useWorkMode,
-  WORK_MODES,
-  getPipelineDefaultRoute,
-  PIPELINE_LEVELS,
-  PIPELINE_STORAGE_KEYS,
+  useNavigationPipeline,
+  isRouteAllowedForPipeline,
 } from "@/contexts";
-import { ROUTES } from "@/constants";
+import usePermission from "@/hooks/usePermission";
+import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
+import useCompany from "@/features/company/hooks/useCompany";
+import useBranch from "@/features/branch/hooks/useBranch";
+import { uiToast } from "@/components/ui";
+import {
+  normalizeStoredId,
+  shouldDeferDeepLinkEvaluation,
+} from "@/layouts/app/bootContextPolicy";
 
 /**
- * Ensures strict mode enforcement:
- * - When in View Mode: If on /sales or /sale, immediately redirects to /dashboard.
- * - When in Operation Mode: If on /dashboard or /, immediately redirects to /sales.
+ * Enforces strict (currentLevel, workMode) AND backend role access boundaries across the app.
  */
-export const useWorkModeDeepLinkSync = () => {
+export const useWorkModeDeepLinkSync = ({ isSyncComplete = true } = {}) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { workMode, hasSelectedMode } = useWorkMode();
+  const { currentLevel } = useNavigationPipeline();
+  const {
+    isLoaded: isPermissionsLoaded,
+    isOwner,
+    allowedWorkLevels,
+    allowedWorkModes,
+  } = usePermission();
+  const {
+    isSetupComplete,
+    companyCompleted,
+    setupStatus,
+    isLoading: isSetupLoading,
+    workspaceId,
+  } = useSetupStatus();
+  const { currentCompany } = useCompany();
+  const { currentBranch } = useBranch();
+  const lastRedirectToastRef = useRef("");
 
   useEffect(() => {
-    // If user has not chosen a work mode yet, do nothing (Choose Mode screen handles it)
-    if (!workMode || !hasSelectedMode) {
-      return;
-    }
-
-    const pathname = location.pathname.toLowerCase();
-
-    // Skip choose-mode, auth, or setup screens
     if (
-      pathname === "/choose-mode" ||
-      pathname.startsWith("/login") ||
-      pathname.startsWith("/setup")
+      !isPermissionsLoaded ||
+      shouldDeferDeepLinkEvaluation({
+        isSyncComplete,
+        workMode,
+        hasSelectedMode,
+        isSetupLoading,
+        workspaceId,
+        setupStatus,
+      })
     ) {
       return;
     }
 
-    // 1. In View Mode: Disallow operational sales counter (/sales, /sale) -> Go to Dashboard
-    if (workMode === WORK_MODES.VIEW) {
-      if (
-        pathname === "/" ||
-        pathname === "/sales" ||
-        pathname.startsWith("/sales/") ||
-        pathname.startsWith("/sale/") ||
-        pathname === "/billing/credit-notes"
-      ) {
-        navigate(ROUTES.DASHBOARD, { replace: true });
-        return;
-      }
-    }
+    const pathname = location.pathname;
+    const evaluation = isRouteAllowedForPipeline(pathname, {
+      currentLevel,
+      workMode,
+      isSetupComplete,
+      companyCompleted,
+      hasActiveCompany: Boolean(normalizeStoredId(currentCompany)),
+      hasActiveBranch: Boolean(normalizeStoredId(currentBranch)),
+      allowedWorkLevels: !isOwner ? allowedWorkLevels : null,
+      allowedWorkModes: !isOwner ? allowedWorkModes : null,
+    });
 
-    // 2. In Operation Mode: Disallow view dashboard routes -> Go to active level landing route
-    if (workMode === WORK_MODES.OPERATION) {
-      if (
-        pathname === "/" ||
-        pathname === "/dashboard" ||
-        pathname.startsWith("/dashboard/")
-      ) {
-        let activeLevel = PIPELINE_LEVELS.WORKSPACE;
-        try {
-          const saved = localStorage.getItem(PIPELINE_STORAGE_KEYS.ACTIVE_LEVEL);
-          if (
-            saved === PIPELINE_LEVELS.WORKSPACE ||
-            saved === PIPELINE_LEVELS.COMPANY ||
-            saved === PIPELINE_LEVELS.BRANCH
-          ) {
-            activeLevel = saved;
-          }
-        } catch {}
-        const targetRoute = getPipelineDefaultRoute(activeLevel, WORK_MODES.OPERATION);
-        navigate(targetRoute, { replace: true });
-        return;
+    if (!evaluation.allowed && evaluation.redirectTo) {
+      const normalizedCurrent = pathname.toLowerCase().replace(/\/+$/, "") || "/";
+      const normalizedTarget =
+        evaluation.redirectTo.toLowerCase().replace(/\/+$/, "") || "/";
+
+      if (normalizedCurrent !== normalizedTarget) {
+        if (
+          (evaluation.reason === "level-mismatch" ||
+            evaluation.reason === "mode-mismatch" ||
+            evaluation.reason === "role-level-denied" ||
+            evaluation.reason === "role-mode-denied") &&
+          lastRedirectToastRef.current !== `${pathname}:${evaluation.reason}`
+        ) {
+          lastRedirectToastRef.current = `${pathname}:${evaluation.reason}`;
+          const messageMap = {
+            "role-mode-denied":
+              "Your role does not permit accessing that Work Mode.",
+            "role-level-denied":
+              "Your role does not permit accessing that Work Level.",
+            "mode-mismatch":
+              "That page belongs to another Work Mode. Switch mode in the sidebar to access it.",
+            "level-mismatch":
+              "That page belongs to another level. Change your level in the sidebar to access it.",
+          };
+          uiToast.info(
+            "Route Restricted",
+            messageMap[evaluation.reason] || "Access to this route is restricted.",
+          );
+        }
+
+        navigate(evaluation.redirectTo, { replace: true });
       }
     }
-  }, [location.pathname, workMode, hasSelectedMode, navigate]);
+  }, [
+    isSyncComplete,
+    isPermissionsLoaded,
+    isOwner,
+    allowedWorkLevels,
+    allowedWorkModes,
+    location.pathname,
+    workMode,
+    hasSelectedMode,
+    currentLevel,
+    isSetupComplete,
+    companyCompleted,
+    setupStatus,
+    isSetupLoading,
+    workspaceId,
+    currentCompany,
+    currentBranch,
+    navigate,
+  ]);
 };
 
 export default useWorkModeDeepLinkSync;

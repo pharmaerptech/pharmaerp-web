@@ -5,8 +5,14 @@ import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import {
+  HOLD_TYPE,
+  getBillHoldType,
   getHeldBills,
+  getAutoHeldBill,
   saveHeldBill,
+  saveAutoHeldBill,
+  consumeAutoHeldBill,
+  removeAutoHeldBill,
   removeHeldBill,
   clearBranchHeldBills,
   HELD_BILLS_STORAGE_KEY,
@@ -14,7 +20,7 @@ import {
 } from "../services/holdBillStorage";
 
 /**
- * Custom hook to manage branch-scoped held bills with multi-tab reactivity.
+ * Custom hook to manage branch-scoped held bills (auto + manual) with multi-tab reactivity.
  */
 export const useHoldBills = () => {
   const { currentWorkspace } = useWorkspace();
@@ -74,17 +80,30 @@ export const useHoldBills = () => {
     };
   }, [refetch]);
 
+  const autoHeldBill = useMemo(
+    () => heldBills.find((b) => getBillHoldType(b) === HOLD_TYPE.AUTO) || null,
+    [heldBills]
+  );
+
+  const manualHeldBills = useMemo(
+    () => heldBills.filter((b) => getBillHoldType(b) !== HOLD_TYPE.AUTO),
+    [heldBills]
+  );
+
   /**
-   * Hold the active bill
+   * Hold the active bill manually
    */
   const holdBill = useCallback(
     ({
       billingMode = "B2C",
+      b2bPartyType = "all",
       customer = null,
       customerName = "",
       customerPhone = "",
       doctorName = "",
+      doctorId = null,
       saleDate = null,
+      isReturnInvoice = false,
       cart = [],
       note = "",
     }) => {
@@ -98,13 +117,17 @@ export const useHoldBills = () => {
         companyId,
         branchId,
         billingMode,
+        b2bPartyType,
         customer,
         customerName,
         customerPhone,
         doctorName,
+        doctorId,
         saleDate,
+        isReturnInvoice,
         cart,
         note,
+        holdType: HOLD_TYPE.MANUAL,
       });
 
       refetch();
@@ -114,12 +137,63 @@ export const useHoldBills = () => {
   );
 
   /**
+   * Save/replace the automatic hold for the current branch
+   */
+  const saveAutoHold = useCallback(
+    (draft, overrideTenant = null) => {
+      const targetWs = overrideTenant?.workspaceId ?? workspaceId;
+      const targetCo = overrideTenant?.companyId ?? companyId;
+      const targetBr = overrideTenant?.branchId ?? branchId;
+      if (!targetBr) return null;
+
+      return saveAutoHeldBill({
+        ...draft,
+        workspaceId: targetWs,
+        companyId: targetCo,
+        branchId: targetBr,
+      });
+    },
+    [workspaceId, companyId, branchId]
+  );
+
+  /**
+   * Read the current automatic hold from storage synchronously
+   */
+  const getAutoHold = useCallback(() => {
+    if (!branchId) return null;
+    return getAutoHeldBill(workspaceId, companyId, branchId);
+  }, [workspaceId, companyId, branchId]);
+
+  /**
+   * Consume (retrieve + remove) the automatic hold for the current branch
+   */
+  const consumeAutoHold = useCallback(() => {
+    if (!branchId) return null;
+    const bill = consumeAutoHeldBill(workspaceId, companyId, branchId);
+    if (bill) {
+      refetch();
+    }
+    return bill;
+  }, [workspaceId, companyId, branchId, refetch]);
+
+  /**
+   * Remove any automatic hold for the current branch (leaves manual holds intact)
+   */
+  const removeAutoHold = useCallback(() => {
+    if (!branchId) return false;
+    const ok = removeAutoHeldBill(workspaceId, companyId, branchId);
+    refetch();
+    return ok;
+  }, [workspaceId, companyId, branchId, refetch]);
+
+  /**
    * Resume a held bill by ID (removes it from held bills storage and returns it)
    */
   const resumeBill = useCallback(
     (billId) => {
       if (!billId) return null;
-      const target = heldBills.find((b) => b.id === billId);
+      const freshBills = getHeldBills(workspaceId, companyId, branchId);
+      const target = freshBills.find((b) => b.id === billId);
       if (target) {
         removeHeldBill(billId);
         refetch();
@@ -127,7 +201,7 @@ export const useHoldBills = () => {
       }
       return null;
     },
-    [heldBills, refetch]
+    [workspaceId, companyId, branchId, refetch]
   );
 
   /**
@@ -144,7 +218,7 @@ export const useHoldBills = () => {
   );
 
   /**
-   * Clear all held bills for current branch
+   * Clear all held bills (both automatic and manual) for current branch
    */
   const clearAll = useCallback(() => {
     if (!branchId) return false;
@@ -155,12 +229,22 @@ export const useHoldBills = () => {
 
   return {
     heldBills,
+    autoHeldBill,
+    manualHeldBills,
     count: heldBills.length,
+    manualCount: manualHeldBills.length,
+    hasAutoHold: Boolean(autoHeldBill),
     holdBill,
+    saveAutoHold,
+    getAutoHold,
+    consumeAutoHold,
+    removeAutoHold,
     resumeBill,
     discardBill,
     clearAll,
     refetch,
+    workspaceId,
+    companyId,
     branchId,
     currentBranch,
   };

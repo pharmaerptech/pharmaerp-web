@@ -1,6 +1,5 @@
 // src/features/dashboard/components/branch/BranchPurchaseReceiptsCard.jsx
 
-import React from "react";
 import { ArrowRight, Package } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { UICard, UIBadge, UIEmptyState, UISkeleton } from "@/components/ui";
@@ -59,7 +58,7 @@ export const BranchPurchaseReceiptsCard = ({ receipts = [], className, isLoading
 
         <button
           type="button"
-          onClick={() => navigate(ROUTES.PURCHASES || "/purchases")}
+          onClick={() => navigate(ROUTES.REPORTS_PURCHASE)}
           className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary-hover transition-colors cursor-pointer"
         >
           <span>View All</span>

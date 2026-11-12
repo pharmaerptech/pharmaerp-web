@@ -1,13 +1,9 @@
 // src/features/access-control/pages/mobile/RolesMobilePage.jsx
 
-import React from "react";
 import {
   Shield,
   Plus,
-  Search,
-  RotateCcw,
   MoreHorizontal,
-  Edit2,
   Trash2,
   Users,
   Lock,
@@ -19,36 +15,40 @@ import {
   UIIconButton,
   UISearchInput,
   UISelect,
-  UIBadge,
   UIEmptyState,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
   UIDropdownItem,
-  UIDropdownDivider,
+  PermissionGate,
 } from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { usePermission } from "@/hooks";
+import { RoleWorkAccessBadges } from "@/features/access-control/components";
 
 export default function RolesMobilePage({
   roles = [],
-  stats = [],
-  filters = { search: "", status: "all", type: "all" },
+  filters = {
+    search: "",
+    status: "all",
+    type: "all",
+    workMode: "all",
+    workLevel: "all",
+  },
   statusOptions = [],
   typeOptions = [],
-  isLoading = false,
   totalRoles = 0,
-  filteredRolesCount = 0,
   hasFilteredRoles = false,
   handleFilterChange,
   handleSearchChange,
   handleClearFilters,
-  handleRefresh,
   handleCreateRole,
   handleViewPermissions,
   handleViewRole,
   handleEditRole,
   handleDeleteRole,
 }) {
+  const { can } = usePermission();
+
   return (
     <div className="min-h-screen bg-bg text-text p-3 pb-24 space-y-3.5">
       {/* Header Bar */}
@@ -76,21 +76,23 @@ export default function RolesMobilePage({
               Permissions
             </UIButton>
 
-            <UIButton
-              variant="primary"
-              size="xs"
-              onClick={handleCreateRole}
-              startIcon={<Plus className="size-3" />}
-            >
-              Add
-            </UIButton>
+            <PermissionGate permission="role:create">
+              <UIButton
+                variant="primary"
+                size="xs"
+                onClick={handleCreateRole}
+                startIcon={<Plus className="size-3" />}
+              >
+                Add
+              </UIButton>
+            </PermissionGate>
           </div>
         </div>
 
         {/* Search & Filter */}
         <div className="space-y-2 pt-1 border-t border-border/40">
           <UISearchInput
-            placeholder="Search roles..."
+            placeholder="Search roles, modes or levels..."
             value={filters.search}
             onChange={handleSearchChange}
             onClear={() => handleSearchChange({ target: { value: "" } })}
@@ -121,12 +123,14 @@ export default function RolesMobilePage({
           {roles.map((role) => {
             const isSystem = Boolean(role.isSystem);
             const memberCount = role.membersCount || 0;
-            const permissionCount = role.permissionCount || (role.permissions?.length || 0);
+            const permissionCount =
+              role.permissionCount ?? role.permissions?.length ?? 0;
+            const canUpdateThisRole = can("role:update") && role.canEdit;
 
             return (
               <div
                 key={role._id}
-                className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-3"
+                className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-2.5"
               >
                 {/* Header */}
                 <div className="flex items-start justify-between gap-2">
@@ -148,6 +152,13 @@ export default function RolesMobilePage({
                   </span>
                 </div>
 
+                {/* Work Mode & Level Pills */}
+                <RoleWorkAccessBadges
+                  workAccess={role.workAccess}
+                  role={role}
+                  compact
+                />
+
                 {/* Description */}
                 <p className="text-xs text-text-muted line-clamp-2 leading-relaxed">
                   {role.displayDescription || "Role access and permission configuration."}
@@ -164,7 +175,7 @@ export default function RolesMobilePage({
                   </UIButton>
 
                   <div className="flex items-center gap-1.5">
-                    {role.canEdit && (
+                    {canUpdateThisRole && (
                       <UIButton
                         variant="outline"
                         size="xs"
@@ -175,7 +186,7 @@ export default function RolesMobilePage({
                       </UIButton>
                     )}
 
-                    {role.canDelete && (
+                    {can("role:delete") && role.canDelete && (
                       <UIDropdown>
                         <UIDropdownTrigger asChild>
                           <UIIconButton variant="ghost" size="xs" aria-label="More actions">
@@ -200,16 +211,20 @@ export default function RolesMobilePage({
           })}
 
           {/* Dashed Create New Role Card */}
-          <div
-            onClick={handleCreateRole}
-            className="border-2 border-dashed border-border/80 hover:border-primary/60 bg-surface/30 rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-center cursor-pointer shadow-2xs active:bg-surface"
-          >
-            <div className="size-9 rounded-full bg-surface-alt flex items-center justify-center text-primary">
-              <Plus className="size-4" />
+          <PermissionGate permission="role:create">
+            <div
+              onClick={handleCreateRole}
+              className="border-2 border-dashed border-border/80 hover:border-primary/60 bg-surface/30 rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-center cursor-pointer shadow-2xs active:bg-surface"
+            >
+              <div className="size-9 rounded-full bg-surface-alt flex items-center justify-center text-primary">
+                <Plus className="size-4" />
+              </div>
+              <span className="text-xs font-bold text-text">Create New Role</span>
+              <span className="text-[10.5px] text-text-muted">
+                Tap to configure Work Modes, level &amp; permissions
+              </span>
             </div>
-            <span className="text-xs font-bold text-text">Create New Role</span>
-            <span className="text-[10.5px] text-text-muted">Tap to define custom roles & permissions</span>
-          </div>
+          </PermissionGate>
         </div>
       ) : (
         <div className="bg-surface rounded-2xl p-6 border border-border/60 shadow-2xs text-center space-y-3">

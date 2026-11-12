@@ -1,17 +1,37 @@
 // src/layouts/app/components/sidebar/filterNavByPermission.js
-//
-// Pure utility that recursively filters sidebar nav groups/items
-// based on user permissions, owner status, and workspace setup completion.
 
-/**
- * Filter a single nav item (and its children) by permission and granular setup completion.
- * @param {object} item - nav item from sidebarNavConfig
- * @param {function} canFn - can(permissionKey) -> boolean
- * @param {function} [canAnyFn] - canAny(permissionKeys) -> boolean
- * @param {boolean} [isOwner=false] - whether current user is owner
- * @param {object|boolean} [setupOpts={}] - { isSetupComplete, companyCompleted, branchCompleted } or boolean
- * @returns {object|null} filtered item or null if access denied
- */
+import { isWorkLevelAllowed, isWorkModeAllowed } from "@/utils/workAccess";
+
+const SETUP_CENTER_IDS = new Set(["setup-center", "workspace-setup-center"]);
+const COMPANY_SETUP_IDS = new Set([
+  "companies",
+  "manage-companies",
+  "workspace-companies-view",
+]);
+const BRANCH_SETUP_IDS = new Set([
+  "branches",
+  "company-branches",
+  "company-branches-view",
+]);
+
+const isItemAllowedByRoleWorkScope = (item, workAccess, isOwner) => {
+  if (isOwner || !workAccess) return true;
+
+  if (item.level && item.level !== "all" && !isWorkLevelAllowed(workAccess, item.level)) {
+    return false;
+  }
+
+  if (
+    item.workMode &&
+    item.workMode !== "both" &&
+    !isWorkModeAllowed(workAccess, item.workMode)
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 const filterItem = (
   item,
   canFn,
@@ -25,150 +45,164 @@ const filterItem = (
     branchCompleted = false,
     hasActiveCompany = true,
     hasActiveBranch = true,
-  } = typeof setupOpts === "boolean"
-    ? { isSetupComplete: setupOpts }
-    : (setupOpts || {});
+    workAccess = null,
+  } =
+    typeof setupOpts === "boolean"
+      ? { isSetupComplete: setupOpts }
+      : setupOpts || {};
 
-  // ── Hide Setup Center completely from sidebar once setup is 100% complete ──
-  if (isSetupComplete && item.id === "setup-center") {
+  if (!isItemAllowedByRoleWorkScope(item, workAccess, isOwner)) {
     return null;
   }
 
-  // ── Setup Center Guarding: Progressive reveal of Organization items during setup ──
+  // Hide Setup Center completely from sidebar once setup is 100% complete
+  if (isSetupComplete && SETUP_CENTER_IDS.has(item.id)) {
+    return null;
+  }
+
+  // Progressive reveal of navigation items during incomplete onboarding
   if (!isSetupComplete) {
-    // 1. Hide dashboard until setup is 100% complete
-    if (item.id === "dashboard") {
+    if (
+      item.id === "dashboard" ||
+      item.id === "workspace-dashboard" ||
+      item.id === "company-dashboard" ||
+      item.id === "branch-dashboard"
+    ) {
       return null;
     }
 
-    // 2. If company is NOT created yet (!companyCompleted):
-    //    Hide Organization completely (along with companies and branches)
     if (!companyCompleted) {
       if (
+        COMPANY_SETUP_IDS.has(item.id) ||
+        BRANCH_SETUP_IDS.has(item.id) ||
         item.id === "organization" ||
-        item.id === "companies" ||
-        item.id === "branches" ||
         item.id === "members" ||
+        item.id === "manage-members" ||
+        item.id === "workspace-members-view" ||
         item.id === "roles-permissions" ||
+        item.id === "manage-roles" ||
+        item.id === "workspace-roles-view" ||
         item.id === "access-control"
       ) {
         return null;
       }
     }
 
-    // 3. If company IS created, but branch is NOT created yet (companyCompleted && !branchCompleted):
-    //    Inside Organization, ONLY show Companies. Hide Branches, Members, Access Control.
     if (companyCompleted && !branchCompleted) {
       if (
-        item.id === "branches" ||
+        BRANCH_SETUP_IDS.has(item.id) ||
         item.id === "members" ||
+        item.id === "manage-members" ||
+        item.id === "workspace-members-view" ||
         item.id === "roles-permissions" ||
+        item.id === "manage-roles" ||
+        item.id === "workspace-roles-view" ||
         item.id === "access-control"
       ) {
         return null;
       }
     }
 
-    // 4. Allowed navigation items during setup onboarding:
-    // - Setup Center
-    // - Organization (only when companyCompleted is true)
-    // - Companies (only when companyCompleted is true)
-    // - Settings
-    // - Help & Support
-    const allowedIdsInSetup = [
-      "setup-center",
-      "organization",
-      "companies",
-      "branches",
-      "settings",
-      "help",
-    ];
+    const isAllowedInSetup =
+      SETUP_CENTER_IDS.has(item.id) ||
+      COMPANY_SETUP_IDS.has(item.id) ||
+      BRANCH_SETUP_IDS.has(item.id) ||
+      item.id === "organization" ||
+      item.id === "settings" ||
+      item.id === "help";
 
-    if (!allowedIdsInSetup.includes(item.id)) {
+    if (!isAllowedInSetup) {
       return null;
     }
   }
 
-  // Check owner-only items
   if (item.requireOwner && !isOwner) {
     return null;
   }
 
-  // Enforce Active Contexts for Non-Owners on Operational Routes
   if (!isOwner) {
-    const COMPANY_DEPENDENT_NAV_IDS = [
+    const COMPANY_DEPENDENT_NAV_IDS = new Set([
+      "company-dashboard",
+      "company-branches-view",
+      "company-branches",
+      "company-customers-view",
+      "company-customers",
+      "company-suppliers-view",
+      "company-suppliers",
+      "company-doctors-view",
+      "company-doctors",
+      "company-bank-accounts-view",
+      "company-bank-accounts",
+      "view-gst-reports",
+      "view-gstr-1",
+      "view-gstr-2",
+      "view-gstr-3b",
+      "view-financial-reports",
+      "view-general-ledger",
+      "view-account-balances",
+      "company-accounts",
+      "company-vouchers",
+      "company-account-groups",
+      "company-periods",
+      "company-deposit-slips",
       "billing",
+      "sale-invoices",
+      "sales-returns",
+      "credit-notes",
       "purchases",
       "pharmacy-stock",
       "stock-metrics",
-      "customers",
-      "suppliers",
-      "cash-counter",
-      "bank-accounts",
-      "bank-deposit-slips",
-      "more-treasury",
-      "bank-transactions",
-      "cash-transactions",
-      "cash-exchanges",
-      "transfers",
-      "payment-qrs",
-      "cheques",
       "transfer-orders",
-      "catalog",
-      "master-data",
-      "marketplace",
-      "more-finance",
-      "accounts",
-      "chart-of-accounts",
-      "chart-of-accounts-hub",
-      "account-groups",
-      "accounts-ledger",
-      "ledger",
-      "account-balances",
-      "vouchers",
-      "gst-ledger",
-      "reports",
-      "periods",
-    ];
-    
-    const BRANCH_DEPENDENT_NAV_IDS = [
+      "shifts",
+      "business-days",
+      "cash-counter",
+      "payment-qrs",
+      "upi-transactions",
+      "cash-transactions",
+      "branch-dashboard",
+      "branch-reports-hub",
+      "branch-stock-metrics-view",
+    ]);
+
+    const BRANCH_DEPENDENT_NAV_IDS = new Set([
+      "branch-dashboard",
+      "branch-reports-hub",
+      "branch-stock-metrics-view",
       "billing",
+      "sale-invoices",
+      "sales-returns",
+      "credit-notes",
       "purchases",
       "pharmacy-stock",
       "stock-metrics",
+      "transfer-orders",
+      "shifts",
+      "business-days",
       "cash-counter",
-      "bank-deposit-slips",
-      "more-treasury",
-      "bank-transactions",
-      "cash-transactions",
-      "cash-exchanges",
       "payment-qrs",
-      "cheques",
-    ];
+      "upi-transactions",
+      "cash-transactions",
+    ]);
 
-    if (!hasActiveCompany && COMPANY_DEPENDENT_NAV_IDS.includes(item.id)) {
+    if (!hasActiveCompany && COMPANY_DEPENDENT_NAV_IDS.has(item.id)) {
       return null;
     }
 
-    if (!hasActiveBranch && BRANCH_DEPENDENT_NAV_IDS.includes(item.id)) {
+    if (!hasActiveBranch && BRANCH_DEPENDENT_NAV_IDS.has(item.id)) {
       return null;
     }
   }
 
-  // Check array of permissions (user needs ANY one)
   if (item.permissions?.length) {
     const hasAny =
       typeof canAnyFn === "function"
         ? canAnyFn(item.permissions)
         : item.permissions.some((p) => canFn(p));
     if (!hasAny) return null;
-  }
-  // Check single permission key
-  else if (item.permission && !canFn(item.permission)) {
+  } else if (item.permission && !canFn(item.permission)) {
     return null;
   }
 
-  // If the item has children, filter them recursively
   if (item.children?.length) {
     const visibleChildren = item.children
       .map((child) =>
@@ -176,7 +210,6 @@ const filterItem = (
       )
       .filter(Boolean);
 
-    // If all children are hidden and parent had no independent action, hide parent
     if (visibleChildren.length === 0) {
       return null;
     }
@@ -187,15 +220,6 @@ const filterItem = (
   return item;
 };
 
-/**
- * Filter the full SIDEBAR_NAV_GROUPS structure by permission and setup completion.
- * @param {object[]} groups - array of nav group objects
- * @param {function} canFn - can(permissionKey) -> boolean
- * @param {function} [canAnyFn] - canAny(permissionKeys) -> boolean
- * @param {boolean} [isOwner=false] - whether current user is owner
- * @param {object|boolean} [setupOpts=true] - { isSetupComplete, companyCompleted, branchCompleted, hasActiveCompany, hasActiveBranch } or boolean
- * @returns {object[]} filtered groups (empty groups are removed)
- */
 export const filterNavByPermission = (
   groups,
   canFn,
@@ -203,12 +227,17 @@ export const filterNavByPermission = (
   isOwner = false,
   setupOpts = true,
 ) => {
+  const workAccess =
+    typeof setupOpts === "object" ? setupOpts?.workAccess || null : null;
+
   return groups
     .map((group) => {
+      if (!isItemAllowedByRoleWorkScope(group, workAccess, isOwner)) {
+        return null;
+      }
+
       const visibleItems = group.items
-        .map((item) =>
-          filterItem(item, canFn, canAnyFn, isOwner, setupOpts),
-        )
+        .map((item) => filterItem(item, canFn, canAnyFn, isOwner, setupOpts))
         .filter(Boolean);
 
       if (visibleItems.length === 0) return null;

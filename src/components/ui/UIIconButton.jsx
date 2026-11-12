@@ -6,8 +6,7 @@ import { cn } from "@/lib/utils";
 const iconButtonVariants = {
   ghost:
     "bg-transparent text-text-muted hover:text-text hover:bg-surface-hover active:bg-surface-active",
-  soft:
-    "bg-primary-soft text-primary hover:bg-primary/15 border border-primary/10",
+  soft: "bg-primary-soft text-primary hover:bg-primary/15 border border-primary/10",
   outline:
     "border border-border bg-transparent text-text hover:bg-surface-hover hover:border-border-strong",
   primary:
@@ -69,15 +68,19 @@ export const UIIconButton = forwardRef(
       onClick,
       ...props
     },
-    ref
+    ref,
   ) => {
-    const appliedVariant = iconButtonVariants[variant] || iconButtonVariants.ghost;
+    const appliedVariant =
+      iconButtonVariants[variant] || iconButtonVariants.ghost;
     const appliedSize = iconButtonSizes[size] || iconButtonSizes.md;
     const appliedShape = shapeMap[shape] || shapeMap.rounded;
     const currentIconSize = innerIconSizes[size] || innerIconSizes.md;
 
     const isDisabled = disabled || isLoading;
-    const accessibleLabel = ariaLabel || tooltip || (typeof children === "string" ? children : undefined);
+    const accessibleLabel =
+      ariaLabel ||
+      tooltip ||
+      (typeof children === "string" ? children : undefined);
 
     const renderContent = () => {
       if (isLoading) {
@@ -104,14 +107,14 @@ export const UIIconButton = forwardRef(
         transition={{ type: "spring", stiffness: 600, damping: 25 }}
         onClick={isDisabled ? undefined : onClick}
         className={cn(
-          "relative inline-flex items-center justify-center shrink-0 cursor-pointer select-none",
+          "group relative inline-flex items-center justify-center shrink-0 cursor-pointer select-none",
           "transition-colors duration-150 ease-out",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
           "disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:shadow-none",
           appliedVariant,
           appliedSize,
           appliedShape,
-          className
+          className,
         )}
         {...props}
       >
@@ -124,7 +127,7 @@ export const UIIconButton = forwardRef(
               typeof badge === "boolean"
                 ? "size-2.5 p-0"
                 : "min-w-4.5 h-4.5 px-1 text-[10px]",
-              badgeColorMap[badgeColor] || badgeColorMap.error
+              badgeColorMap[badgeColor] || badgeColorMap.error,
             )}
           >
             {typeof badge !== "boolean" ? badge : null}
@@ -132,7 +135,7 @@ export const UIIconButton = forwardRef(
         )}
       </motion.button>
     );
-  }
+  },
 );
 
 UIIconButton.displayName = "UIIconButton";
