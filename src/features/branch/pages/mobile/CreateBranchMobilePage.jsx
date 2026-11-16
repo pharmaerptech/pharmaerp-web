@@ -177,7 +177,8 @@ const CreateBranchMobilePage = memo(
                   rounded="md"
                   startIcon={<FiCheckCircle />}
                   onClick={handleSubmit}
-                  loading={isLoading}
+                  isLoading={isLoading}
+                  loadingText="Creating Branch..."
                   disabled={isLoading}
                   sx={actionButtonRightSx}
                 >

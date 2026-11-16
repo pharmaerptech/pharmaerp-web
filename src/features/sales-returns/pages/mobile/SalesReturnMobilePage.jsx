@@ -14,6 +14,8 @@ import {
 import { UIButton, UIBadge } from "@/components/ui";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
+import { useBranchFilter } from "@/hooks";
 import salesReturnService from "../../services/salesReturnService";
 import SalesReturnDetailsDrawer from "../../components/SalesReturnDetailsDrawer";
 import CreateSalesReturnModal from "../../components/CreateSalesReturnModal";
@@ -40,6 +42,7 @@ const formatDate = (val) => {
 export const SalesReturnMobilePage = () => {
   const { currentBranch } = useBranch();
   const { currentCompany } = useWorkspace();
+  const { isCompanyLevel, selectedBranchId, setSelectedBranchId, queryBranchId } = useBranchFilter();
 
   const [returns, setReturns] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -63,8 +66,12 @@ export const SalesReturnMobilePage = () => {
   const fetchReturns = useCallback(async () => {
     setIsLoading(true);
     try {
+      const activeBranchId = isCompanyLevel
+        ? queryBranchId
+        : (currentBranch?._id || currentBranch?.id || undefined);
+
       const res = await salesReturnService.getAllSalesReturns({
-        branchId: currentBranch?._id || currentBranch?.id || undefined,
+        branchId: activeBranchId,
         search: debouncedSearch || undefined,
         returnType: refundType !== "all" ? refundType : undefined,
         limit: 50,
@@ -76,7 +83,7 @@ export const SalesReturnMobilePage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentBranch, debouncedSearch, refundType]);
+  }, [currentBranch, isCompanyLevel, queryBranchId, debouncedSearch, refundType]);
 
   useEffect(() => {
     fetchReturns();
@@ -108,6 +115,14 @@ export const SalesReturnMobilePage = () => {
 
       {/* Search & Filter Pills */}
       <div className="p-3 bg-surface border-b border-border space-y-2">
+        {isCompanyLevel && (
+          <BranchFilterSelect
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            size="sm"
+            className="w-full"
+          />
+        )}
         <div className="relative">
           <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -210,8 +225,11 @@ export const SalesReturnMobilePage = () => {
                   </div>
                 </div>
 
-                <div className="mt-1 text-[11px] text-text-muted font-mono">
-                  Against Bill: <span className="text-primary font-semibold">{origBill}</span>
+                <div className="mt-1 text-[11px] text-text-muted font-mono flex items-center justify-between">
+                  <span>Against Bill: <span className="text-primary font-semibold">{origBill}</span></span>
+                  {isCompanyLevel && item.branchId && (
+                    <BranchBadge branch={item.branchId} />
+                  )}
                 </div>
               </div>
             );

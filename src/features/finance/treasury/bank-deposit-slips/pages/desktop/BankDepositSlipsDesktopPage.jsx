@@ -45,6 +45,7 @@ import {
 } from "@/components/ui";
 import { usePermission } from "@/hooks";
 import { cn } from "@/lib/utils";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 
 const formatCurrency = (val) => {
   if (val === undefined || val === null || isNaN(Number(val))) return "0.00";
@@ -77,7 +78,11 @@ export const BankDepositSlipsDesktopPage = ({
   handleCancelSlip,
   handleViewDetails,
   handleCreateNew,
+  canCreateSlip = true,
   handleRefresh,
+  isCompanyLevel = false,
+  selectedBranchId = "all",
+  setSelectedBranchId,
 }) => {
   const { can } = usePermission();
   const tableContainerRef = useRef(null);
@@ -250,9 +255,21 @@ export const BankDepositSlipsDesktopPage = ({
       </div>
 
       {/* ── 2. Streamlined Single-Row Filter Toolbar ─────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-3.5 shrink-0">
+        {/* Branch Filter (Company Level Only) */}
+        {isCompanyLevel && (
+          <div className="w-[190px] sm:w-[210px] shrink-0">
+            <BranchFilterSelect
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              size="md"
+              className="w-full"
+            />
+          </div>
+        )}
+
         {/* Search Input */}
-        <div className="w-[220px] sm:w-[260px] lg:w-[300px]">
+        <div className="w-[220px] sm:w-[260px] lg:w-[290px] shrink-0">
           <UIInput
             type="text"
             value={searchParams.search || ""}
@@ -320,18 +337,20 @@ export const BankDepositSlipsDesktopPage = ({
             />
           </UIButton>
 
-          <PermissionGate permission="bank-deposit-slip:create">
-            <UIButton
-              type="button"
-              variant="primary"
-              size="md"
-              startIcon={<Plus className="size-3.5" />}
-              onClick={handleCreateNew}
-              className="h-10 px-3.5 text-xs font-semibold shadow-xs"
-            >
-              Create Deposit Slip
-            </UIButton>
-          </PermissionGate>
+          {canCreateSlip && (
+            <PermissionGate permission="bank-deposit-slip:create">
+              <UIButton
+                type="button"
+                variant="primary"
+                size="md"
+                startIcon={<Plus className="size-3.5" />}
+                onClick={handleCreateNew}
+                className="h-10 px-3.5 text-xs font-semibold shadow-xs"
+              >
+                Create Deposit Slip
+              </UIButton>
+            </PermissionGate>
+          )}
         </div>
       </div>
 
@@ -352,6 +371,9 @@ export const BankDepositSlipsDesktopPage = ({
             >
               <UITableRow className="border-b border-border text-[11px] font-semibold text-text-muted uppercase tracking-wider bg-surface-alt/70 h-10">
                 <UITableHead sticky className="min-w-[190px]">Slip # & Date</UITableHead>
+                {isCompanyLevel && (
+                  <UITableHead sticky className="min-w-[150px]">Branch</UITableHead>
+                )}
                 <UITableHead sticky className="min-w-[220px]">Destination Bank</UITableHead>
                 <UITableHead sticky className="min-w-[160px]">Prepared By</UITableHead>
                 <UITableHead sticky align="center" className="min-w-[130px]">Denominations</UITableHead>
@@ -363,10 +385,10 @@ export const BankDepositSlipsDesktopPage = ({
 
             <UITableBody>
               {isLoading ? (
-                <UITableLoading colSpan={7} rows={8} />
+                <UITableLoading colSpan={isCompanyLevel ? 8 : 7} rows={8} />
               ) : displayedSlips.length === 0 ? (
                 <UITableEmpty
-                  colSpan={7}
+                  colSpan={isCompanyLevel ? 8 : 7}
                   title="No bank deposit slips found"
                   description={
                     isFiltered
@@ -382,7 +404,7 @@ export const BankDepositSlipsDesktopPage = ({
                       >
                         Clear Filters
                       </UIButton>
-                    ) : (
+                    ) : canCreateSlip ? (
                       <PermissionGate permission="bank-deposit-slip:create">
                         <UIButton
                           variant="primary"
@@ -393,7 +415,7 @@ export const BankDepositSlipsDesktopPage = ({
                           Create First Deposit Slip
                         </UIButton>
                       </PermissionGate>
-                    )
+                    ) : null
                   }
                 />
               ) : (
@@ -431,6 +453,13 @@ export const BankDepositSlipsDesktopPage = ({
                           </span>
                         </div>
                       </UITableCell>
+
+                      {/* Branch (Company Level) */}
+                      {isCompanyLevel && (
+                        <UITableCell className="py-2">
+                          <BranchBadge branch={slip.branchId} />
+                        </UITableCell>
+                      )}
 
                       {/* 2. Destination Bank */}
                       <UITableCell className="py-2">

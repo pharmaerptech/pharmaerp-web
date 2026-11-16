@@ -29,6 +29,7 @@ import {
   AppTablePagination,
   AppMenu,
 } from "@/components";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 
 const providerOptions = [
   { label: "All Providers", value: "all" },
@@ -66,6 +67,7 @@ const PaymentQrsMobilePage = ({
   handlePageSizeChange,
   handleRefresh,
   handleCreateQr,
+  canCreateQr = true,
   handleEditQr,
   handleViewDetails,
   handleDeleteQr,
@@ -73,6 +75,9 @@ const PaymentQrsMobilePage = ({
   clearError,
   clearMessage,
   currentBranch,
+  isCompanyLevel = false,
+  selectedBranchId = "all",
+  setSelectedBranchId,
 }) => {
   const [showFilters, setShowFilters] = useState(false);
   const hasFilteredQrs = pagedQrs.length > 0;
@@ -127,20 +132,32 @@ const PaymentQrsMobilePage = ({
                 disabled={isLoading}
                 sx={refreshMobileBtnSx}
               />
-              <AppIconButton
-                icon={<FiPlus />}
-                variant="filled"
-                colorVariant="success"
-                size="small"
-                rounded="md"
-                onClick={handleCreateQr}
-                sx={createNewBtnSx}
-              />
+              {canCreateQr && (
+                <AppIconButton
+                  icon={<FiPlus />}
+                  variant="filled"
+                  colorVariant="success"
+                  size="small"
+                  rounded="md"
+                  onClick={handleCreateQr}
+                  sx={createNewBtnSx}
+                />
+              )}
             </AppStack>
           </AppStack>
         </AppBox>
 
         {/* inline Search Field */}
+        {isCompanyLevel && (
+          <div className="mb-2">
+            <BranchFilterSelect
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              size="sm"
+              className="w-full"
+            />
+          </div>
+        )}
         <div className="px-0 mb-3 flex gap-2">
           <AppInput
             placeholder="Search UPI ID or label..."
@@ -337,6 +354,9 @@ const PaymentQrsMobilePage = ({
                             <AppHeading level={3} weight={700} sx={qrTitleSx}>
                               {qr.label || "UPI QR Register"}
                             </AppHeading>
+                            {qr.branchId && (
+                              <BranchBadge branch={qr.branchId} />
+                            )}
                             {getProviderTag(qr.provider)}
                             {qr.isPrimary && (
                               <span className="inline-flex items-center rounded bg-[#fff9db] px-1.5 py-0.2 text-[8px] font-bold text-[#f08c00] uppercase tracking-wide">

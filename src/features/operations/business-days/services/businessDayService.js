@@ -37,6 +37,16 @@ const businessDayService = {
     return apiClient.get(`/operations/business-days/${id}/summary`);
   },
 
+  /** Initiates closing of the Business Day. */
+  initiateBusinessDayClose(id) {
+    return apiClient.patch(`/operations/business-days/${id}/initiate-close`);
+  },
+
+  /** Aborts closing of the Business Day, reverting it back to open. */
+  abortBusinessDayClose(id) {
+    return apiClient.patch(`/operations/business-days/${id}/abort-close`);
+  },
+
   /** Closes the Business Day and aggregates all shift financial data. */
   closeBusinessDay(id, payload) {
     return apiClient.patch(`/operations/business-days/${id}/close`, payload);

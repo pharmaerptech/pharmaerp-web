@@ -1,840 +1,412 @@
 // src/features/branch/pages/mobile/BranchDetailsMobilePage.jsx
 
-import { useMemo, useState } from "react";
+import { memo } from "react";
 import {
-  FiArrowLeft,
-  FiEdit3,
-  FiMoreHorizontal,
-  FiCalendar,
-  FiUser,
-  FiClock,
-  FiFileText,
-  FiShield,
-  FiChevronRight,
-  FiChevronDown,
-  FiMail,
-  FiPhone,
-  FiExternalLink,
-  FiMapPin,
-  FiAlertTriangle,
-  FiTrendingUp,
-  FiLayers,
-  FiActivity,
-  FiPackage,
-  FiCreditCard,
-  FiUsers,
-  FiCheckCircle,
-  FiSettings,
-  FiRefreshCw,
-  FiGrid,
-} from "react-icons/fi";
-import { LuStore } from "react-icons/lu";
-import { FaWhatsapp } from "react-icons/fa"; // 🔥 Fixed: Removed FaWhitespace export artifact
+  Calendar,
+  Edit3,
+  ExternalLink,
+  Mail,
+  MapPin,
+  Phone,
+  Scale,
+  Store,
+  Trash2,
+  Stethoscope,
+} from "lucide-react";
 
 import {
-  AppBox,
-  AppButton,
-  AppCard,
-  AppHeading,
-  AppIconButton,
-  AppMenu,
-  AppStack,
-  AppStatusBadge,
-  AppTag,
-  AppText,
-  AppPageLoader,
-  AppErrorState,
-} from "@/components";
+  UIAlert,
+  UIBadge,
+  UIButton,
+} from "@/components/ui";
 
-const statusColorMap = {
-  active: "success",
-  inactive: "neutral",
-  suspended: "danger",
+const formatBranchType = (type) => {
+  if (!type) return "Retail Pharmacy";
+  return String(type)
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 };
 
-const BranchDetailsMobilePage = ({
-  branch,
-  isLoading,
-  hasError,
-  error,
-  currentTab,
-  handleTabChange,
-  handleBack,
-  handleEdit,
-  handleRefresh,
-}) => {
-  const [isNoteExpanded, setIsNoteExpanded] = useState(false);
+const formatDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 
-  if (isLoading && !branch) {
+const BranchDetailsMobileSkeleton = () => (
+  <div className="w-full min-h-screen bg-bg pb-12 pt-1 px-3 font-sans select-none animate-pulse space-y-3">
+    {/* Hero Card Skeleton */}
+    <div className="bg-surface border border-border/90 rounded-2xl p-4 shadow-2xs space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0 flex-1">
+          <div className="size-13 rounded-xl border border-border/80 bg-surface-alt/70 shrink-0 flex items-center justify-center">
+            <Store className="size-6 text-text-muted/20" />
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-4 w-3/4 bg-surface-alt rounded" />
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <div className="h-4 w-14 bg-surface-alt/80 rounded" />
+              <div className="h-4 w-16 bg-primary/10 rounded-full" />
+              <div className="h-4 w-12 bg-surface-alt/80 rounded-full" />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <div className="h-8 w-14 bg-surface-alt rounded-lg" />
+          <div className="h-8 w-14 bg-surface-alt/40 rounded-lg" />
+        </div>
+      </div>
+
+      <div className="pt-2.5 border-t border-border/60 space-y-2">
+        <div className="h-3 w-48 bg-surface-alt/70 rounded" />
+        <div className="h-3 w-36 bg-surface-alt/70 rounded" />
+        <div className="h-3 w-40 bg-surface-alt/70 rounded" />
+      </div>
+    </div>
+
+    {/* Section 1: Pharmacist Skeleton */}
+    <div className="bg-surface border border-border/90 rounded-2xl p-4 shadow-2xs space-y-3">
+      <div className="flex items-center gap-2 pb-2.5 border-b border-border/60">
+        <div className="size-6 rounded bg-surface-alt/80 shrink-0" />
+        <div className="h-3.5 w-36 bg-surface-alt rounded" />
+      </div>
+      <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-surface-alt/40">
+        <div className="size-8 rounded-lg bg-primary/20 shrink-0" />
+        <div className="space-y-1 flex-1">
+          <div className="h-3 w-28 bg-surface-alt rounded" />
+          <div className="h-2.5 w-36 bg-surface-alt/60 rounded" />
+        </div>
+      </div>
+      <div className="space-y-2 text-xs">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex justify-between py-1">
+            <div className="h-3 w-20 bg-surface-alt/60 rounded" />
+            <div className="h-3 w-28 bg-surface-alt rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Section 2: Statutory Licensing Skeleton */}
+    <div className="bg-surface border border-border/90 rounded-2xl p-4 shadow-2xs space-y-3">
+      <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+        <div className="flex items-center gap-2">
+          <div className="size-6 rounded bg-surface-alt/80 shrink-0" />
+          <div className="h-3.5 w-36 bg-surface-alt rounded" />
+        </div>
+        <div className="h-4 w-12 bg-emerald-500/10 rounded-full" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/50 space-y-1.5">
+            <div className="h-2 w-16 bg-surface-alt/60 rounded" />
+            <div className="h-3 w-20 bg-surface-alt rounded" />
+          </div>
+        ))}
+      </div>
+    </div>
+
+    {/* Section 3: Registered Facility Skeleton */}
+    <div className="bg-surface border border-border/90 rounded-2xl p-4 shadow-2xs space-y-2.5">
+      <div className="flex items-center gap-2 pb-2 border-b border-border/60">
+        <div className="size-6 rounded bg-surface-alt/80 shrink-0" />
+        <div className="h-3.5 w-36 bg-surface-alt rounded" />
+      </div>
+      <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/50 space-y-2">
+        <div className="h-3 w-full bg-surface-alt rounded" />
+        <div className="h-3 w-2/3 bg-surface-alt/70 rounded" />
+      </div>
+    </div>
+  </div>
+);
+
+const BranchDetailsMobilePage = memo(
+  ({
+    branch,
+    isLoading = false,
+    hasError = false,
+    error,
+    handleBack,
+    handleEdit,
+    handleDelete,
+    handleRefresh,
+  }) => {
+    if (hasError && !branch) {
+      return (
+        <div className="w-full min-h-screen bg-bg p-4 space-y-4 font-sans">
+          <UIAlert
+            intent="danger"
+            title="Location Extraction Failure"
+            description={error || "The server could not process the branch identifier."}
+          />
+          <div className="flex gap-2">
+            <UIButton variant="outline" size="sm" onClick={handleBack} className="flex-1">
+              Back to Branches
+            </UIButton>
+            <UIButton variant="primary" size="sm" onClick={handleRefresh} className="flex-1">
+              Retry
+            </UIButton>
+          </div>
+        </div>
+      );
+    }
+
+    if (!branch || isLoading) {
+      return <BranchDetailsMobileSkeleton />;
+    }
+
+    const {
+      name,
+      branchCode,
+      type,
+      isPrimary,
+      status,
+      email,
+      phones = {},
+      address = {},
+      license = {},
+      pharmacist = {},
+      emergencyContact = {},
+      createdAt,
+    } = branch;
+
+    const displayType = formatBranchType(type);
+    const fullAddress = [
+      address.addressLine1,
+      address.addressLine2,
+      address.city,
+      address.district,
+      address.state ? `${address.state} - ${address.pincode || ""}` : address.pincode,
+      address.country || "India",
+    ]
+      .filter(Boolean)
+      .join(", ");
+
     return (
-      <AppBox sx={loadingErrorWrapperSx}>
-        <AppPageLoader text="Extracting branch node registry data..." />
-      </AppBox>
-    );
-  }
-
-  if (hasError && !branch) {
-    return (
-      <AppBox sx={loadingErrorWrapperSx}>
-        <AppErrorState
-          title="Location Matrix Extraction Failure"
-          description={
-            error ||
-            "The service registry failed to unpack the branch entity token."
-          }
-          actionText="Re-verify Pipeline"
-          onRetry={handleRefresh}
-          size="medium"
-        />
-      </AppBox>
-    );
-  }
-
-  const safeBranch = branch || {};
-
-  // Compact swipeable navigation layout tabs configuration matrix
-  const mobileTabs = [
-    { value: "overview", label: "Overview" },
-    { value: "staff", label: `Staff (${safeBranch.staff?.length || 0})` },
-    { value: "stock", label: "Stock" },
-    { value: "licenses", label: "Licenses" },
-  ];
-
-  return (
-    <section className="w-full bg-bg">
-      <AppBox sx={containerSx}>
-        {/* --- MOBILE COMPACT HEADER JUMBOTRON LINK --- */}
-        <AppBox sx={jumbotronHeaderSx}>
-          <AppStack
-            direction="row"
-            align="center"
-            justify="space-between"
-            gap={1}
-            sx={{ mb: 1.5 }}
-          >
-            <AppIconButton
-              icon={<FiArrowLeft />}
-              variant="outlined"
-              colorVariant="neutral"
-              size="small"
-              rounded="md"
-              onClick={handleBack}
-              sx={backBtnSx}
-            />
-            <AppStack direction="row" align="center" gap={0.5}>
-              <AppButton
-                variant="outlined"
-                colorVariant="neutral"
-                size="small"
-                rounded="md"
-                onClick={handleEdit}
-                sx={headerActionBtnSx}
-              >
-                Configure
-              </AppButton>
-              <AppMenu
-                trigger={
-                  <AppIconButton
-                    icon={<FiMoreHorizontal />}
-                    size="small"
-                    variant="outlined"
-                    colorVariant="neutral"
-                    rounded="md"
-                    sx={moreActionBtnSx}
-                  />
-                }
-                triggerProps={{ onClick: (e) => e.stopPropagation() }}
-                items={[
-                  {
-                    id: "sync",
-                    label: "Sync Inventory",
-                    icon: <FiRefreshCw />,
-                    onClick: handleRefresh,
-                  },
-                  {
-                    id: "report",
-                    label: "EOD Report",
-                    icon: <FiFileText />,
-                    onClick: () => {},
-                  },
-                ]}
-                dense
-                minWidth={160}
-              />
-            </AppStack>
-          </AppStack>
-
-          <AppStack direction="row" align="center" gap={1}>
-            <AppBox sx={branchIconFrameSx}>
-              <LuStore />
-            </AppBox>
-            <AppBox sx={{ minWidth: 0, flex: 1 }}>
-              <AppStack direction="row" align="center" gap={0.5} wrap="wrap">
-                <AppHeading level={2} weight={800} sx={branchTitleTextSx}>
-                  {safeBranch.name}
-                </AppHeading>
-                {safeBranch.isPrimary && (
-                  <AppTag
-                    label="Primary Hub"
-                    variant="contained"
-                    colorVariant="primary"
-                    rounded="sm"
-                    sx={hubTagOverrideSx}
-                  />
-                )}
-                <AppStatusBadge
-                  status={safeBranch.status || "active"}
-                  variant="soft"
-                  rounded="md"
-                  size="small"
-                  sx={statusBadgeOverrideSx}
-                />
-              </AppStack>
-              <AppText variant="body2" sx={branchMetadataTextSx}>
-                {safeBranch.displayType} &bull; Code:{" "}
-                {safeBranch.displayTypeCode}
-              </AppText>
-            </AppBox>
-          </AppStack>
-
-          {/* Chronological Summary Metadata Tag Strip */}
-          <AppBox sx={metaPillsRibbonSx}>
-            <span className="flex items-center gap-1.5">
-              <FiCalendar className="text-primary" /> Active Since{" "}
-              {safeBranch.displayCreatedAt}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <FiUser className="text-success" /> Pharmacist-in-Charge:{" "}
-              {safeBranch.displayPharmacistName}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <FiActivity className="text-warning" /> Real-time Calculation
-              Online
-            </span>
-          </AppBox>
-        </AppBox>
-
-        {/* --- FLUSH HIGHLIGHTED HORIZONTAL SLIDER TABS --- */}
-        <AppBox sx={tabsLineTrackSx}>
-          {mobileTabs.map((tab) => {
-            const isTabActive = currentTab === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => handleTabChange(tab.value)}
-                className={`border-b-2 px-3.5 pb-2 text-[12px] font-bold transition whitespace-nowrap outline-none ${
-                  isTabActive
-                    ? "border-primary text-primary"
-                    : "border-transparent text-text-muted hover:text-text"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </AppBox>
-
-        {/* --- HIGH-DENSITY BODY SEGMENT INTERFACES --- */}
-        <AppBox sx={mainBodyScrollContentWrapperSx}>
-          {currentTab === "overview" && (
-            <AppStack direction="column" gap={1.25}>
-              {/* Card Section A: Static Parameter Properties Ledger */}
-              <AppCard
-                variant="default"
-                rounded="lg"
-                bordered
-                shadow="none"
-                padding="none"
-                sx={moduleCardContainerSx}
-              >
-                <AppBox sx={cardHeaderBannerSx}>
-                  <AppHeading level={3} weight={800} sx={cardHeaderTitleSx}>
-                    Terminal Location Parameters
-                  </AppHeading>
-                </AppBox>
-                <AppBox sx={{ p: 1.2, spaceY: 3.5 }}>
-                  <CompactDataInfoRow
-                    icon={<LuStore />}
-                    label="Branch Name"
-                    value={safeBranch.displayName}
-                  />
-                  <CompactDataInfoRow
-                    icon={<FiLayers />}
-                    label="System Type"
-                    value={safeBranch.displayType}
-                  />
-                  <CompactDataInfoRow
-                    icon={<FiGrid />}
-                    label="Unique Code"
-                    value={safeBranch.displayTypeCode}
-                  />
-                  <CompactDataInfoRow
-                    icon={<FiMail />}
-                    label="Operational Email"
-                    value={safeBranch.displayEmail}
-                  />
-                  <CompactDataInfoRow
-                    icon={<FiPhone />}
-                    label="Primary Landline"
-                    value={safeBranch.displayPhone}
-                  />
-                  {safeBranch.displayWhatsapp && (
-                    <CompactDataInfoRow
-                      icon={<FaWhatsapp className="text-emerald-500" />}
-                      label="WhatsApp Desk"
-                      value={safeBranch.displayWhatsapp}
-                    />
-                  )}
-                  <CompactDataInfoRow
-                    icon={<FiFileText />}
-                    label="Drug License Node"
-                    value={safeBranch.displayDrugLicense}
-                  />
-                  <CompactDataInfoRow
-                    icon={<FiUser />}
-                    label="Pharmacist-In-Charge"
-                    value={safeBranch.displayPharmacistName}
-                  />
-                  <CompactDataInfoRow
-                    icon={<FiCalendar />}
-                    label="License Verified"
-                    value={safeBranch.displayLicenseExpiry}
-                  />
-                  <CompactDataInfoRow
-                    icon={<FiMapPin />}
-                    label="Shipping Address"
-                    value={safeBranch.displayAddress}
-                  />
-                </AppBox>
-                <AppBox sx={cardFooterActionTriggerSx}>
-                  <button
-                    type="button"
-                    className="text-[11.5px] font-bold text-primary flex items-center gap-0.5"
-                  >
-                    Inspect Full Registration Ledger{" "}
-                    <FiChevronRight className="text-[12px]" />
-                  </button>
-                </AppBox>
-              </AppCard>
-
-              {/* Card Section B: Compact Real-Time Telemetry Performance Widgets */}
-              <AppBox sx={highlightsHeaderSpacingBoxSx}>
-                <AppHeading level={3} weight={800} sx={cardHeaderTitleSx}>
-                  Terminal Performance Live Summary
-                </AppHeading>
-              </AppBox>
-              <div className="grid grid-cols-2 gap-2">
-                <CompactHighlightCard
-                  icon={<FiTrendingUp />}
-                  title="Sales Today"
-                  value={safeBranch.highlights?.totalSalesToday}
-                  color="success"
-                />
-                <CompactHighlightCard
-                  icon={<FiFileText />}
-                  title="Active Invoices"
-                  value={safeBranch.highlights?.activeInvoicesCount}
-                  color="primary"
-                />
-                <CompactHighlightCard
-                  icon={<FiLayers />}
-                  title="Stock Items"
-                  value={safeBranch.highlights?.stockItemsCount}
-                  color="purple"
-                />
-                <CompactHighlightCard
-                  icon={<FiAlertTriangle />}
-                  title="Stock Alerts"
-                  value={safeBranch.highlights?.lowStockAlerts}
-                  color="error"
-                />
+      <div className="w-full min-h-screen bg-bg pb-12 pt-1 px-3 font-sans select-none text-text space-y-3">
+        {/* Mobile Hero Card with Integrated Actions */}
+        <div className="bg-surface border border-border/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-3 min-w-0">
+              <div className="size-13 rounded-xl border border-border/80 bg-primary/10 text-primary flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                <Store className="size-6" />
               </div>
 
-              {/* Card Section C: Compliance Certifications Monitor */}
-              <AppCard
-                variant="default"
-                rounded="lg"
-                bordered
-                shadow="none"
-                padding="none"
-                sx={moduleCardContainerSx}
+              <div className="min-w-0">
+                <h1 className="text-base font-bold text-text truncate">
+                  {name || "Unnamed Branch"}
+                </h1>
+                <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                  {branchCode && (
+                    <UIBadge variant="outline" className="font-mono text-[10px] px-1.5 py-0.2">
+                      {branchCode}
+                    </UIBadge>
+                  )}
+                  <UIBadge variant="primary" className="text-[10px] px-1.5 py-0.2">
+                    {displayType}
+                  </UIBadge>
+                  {isPrimary && (
+                    <UIBadge variant="outline" className="text-[10px] px-1.5 py-0.2 border-primary/30 text-primary">
+                      Primary
+                    </UIBadge>
+                  )}
+                  <UIBadge
+                    variant={status === "active" ? "success" : "neutral"}
+                    className="capitalize text-[10px] px-1.5 py-0.2"
+                  >
+                    {status || "Active"}
+                  </UIBadge>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-1 shrink-0">
+              <UIButton
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleEdit}
+                startIcon={<Edit3 className="size-3.5" />}
+                className="h-8 px-2 text-xs font-semibold cursor-pointer"
               >
-                <AppBox sx={cardHeaderBannerSx}>
-                  <AppHeading level={3} weight={800} sx={cardHeaderTitleSx}>
-                    Compliance Parameters
-                  </AppHeading>
-                </AppBox>
-                <AppBox sx={{ p: 1.2, spaceY: 3 }}>
-                  <CompactTrackingRow
-                    label="Node Status"
-                    value={
-                      <AppTag
-                        label="Active Line"
-                        colorVariant="success"
-                        variant="soft"
-                        rounded="sm"
-                        sx={inlineStatusPillSx}
-                      />
-                    }
-                  />
-                  <CompactTrackingRow
-                    label="Pharmacist Bonded"
-                    value={
-                      <span className="flex items-center gap-0.5 text-[11px] font-bold text-success">
-                        <FiCheckCircle /> Verified
-                      </span>
-                    }
-                  />
-                  <CompactTrackingRow
-                    label="FSSAI Index"
-                    value={safeBranch.displayFssai || "10024011000234"}
-                  />
-                  <CompactTrackingRow
-                    label="Incorporation Date"
-                    value={safeBranch.displayCreatedAt}
-                  />
-
-                  <div className="w-full h-[1px] bg-divider my-2" />
-
-                  <AppBox sx={{ mt: 1 }}>
-                    <AppText
-                      variant="body2"
-                      weight={750}
-                      sx={regulatoryNoteHeadingTextSx}
-                    >
-                      Regulatory Note
-                    </AppText>
-                    <p
-                      className={`mt-1 text-[11px] leading-relaxed text-text-muted ${isNoteExpanded ? "" : "line-clamp-2"}`}
-                    >
-                      This terminal site location is strictly audited and
-                      certified for automated real-time stock calculation,
-                      unified invoicing execution layers, and localized
-                      pharmaceutical batch compliance management tracking
-                      schemas.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setIsNoteExpanded(!isNoteExpanded)}
-                      className="mt-1 flex items-center gap-0.5 text-[10.5px] font-bold text-primary outline-none"
-                    >
-                      {isNoteExpanded ? "Read Less" : "Read More"}{" "}
-                      <FiChevronDown
-                        className={`text-[11px] transition-transform ${isNoteExpanded ? "rotate-180" : ""}`}
-                      />
-                    </button>
-                  </AppBox>
-                </AppBox>
-              </AppCard>
-            </AppStack>
-          )}
-
-          {/* Staff Roster Tab Section Fallback Component */}
-          {currentTab === "staff" && (
-            <AppCard
-              variant="default"
-              rounded="md"
-              bordered
-              shadow="none"
-              padding="md"
-              sx={emptyCardContainerSx}
-            >
-              <AppStack
-                direction="column"
-                align="center"
-                justify="center"
-                gap={1}
-                sx={{ py: 3, width: "100%" }}
-              >
-                <FiUsers className="text-[28px] text-text-muted/60" />
-                <AppHeading
-                  level={3}
-                  weight={700}
-                  align="center"
-                  sx={{ m: 0, fontSize: "13px", width: "100%" }}
+                Edit
+              </UIButton>
+              {handleDelete && (
+                <UIButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDelete}
+                  startIcon={<Trash2 className="size-3.5 text-error" />}
+                  className="h-8 px-2 text-xs text-error hover:bg-error/10 cursor-pointer"
                 >
-                  Assigned Operational Staff Desk
-                </AppHeading>
-                <AppText variant="body2" align="center" sx={tabFallbackDescSx}>
-                  Verify location privilege profiles and shift rosters allocated
-                  inside this terminal cell.
-                </AppText>
-              </AppStack>
-            </AppCard>
-          )}
+                  Delete
+                </UIButton>
+              )}
+            </div>
+          </div>
 
-          {/* Stock Analytics Tab Section Fallback Component */}
-          {currentTab === "stock" && (
-            <AppCard
-              variant="default"
-              rounded="md"
-              bordered
-              shadow="none"
-              padding="md"
-              sx={emptyCardContainerSx}
-            >
-              <AppStack
-                direction="column"
-                align="center"
-                justify="center"
-                gap={1}
-                sx={{ py: 3, width: "100%" }}
+          {/* Quick contact list */}
+          <div className="pt-2.5 border-t border-border/60 space-y-1.5 text-xs text-text-muted">
+            {email && (
+              <div className="flex items-center gap-2 truncate">
+                <Mail className="size-3.5 shrink-0" />
+                <span className="truncate">{email}</span>
+              </div>
+            )}
+            {phones.mobile && (
+              <div className="flex items-center gap-2">
+                <Phone className="size-3.5 shrink-0" />
+                <span>+91 {phones.mobile}</span>
+              </div>
+            )}
+            {address.city && address.state && (
+              <div className="flex items-center gap-2">
+                <MapPin className="size-3.5 shrink-0" />
+                <span>{address.city}, {address.state}</span>
+              </div>
+            )}
+            {createdAt && (
+              <div className="flex items-center gap-2">
+                <Calendar className="size-3.5 shrink-0" />
+                <span>Registered {formatDate(createdAt)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Section 1: Pharmacist Leadership Card */}
+        <div className="bg-surface border border-border/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <div className="flex items-center gap-2 pb-2.5 border-b border-border/60">
+            <Stethoscope className="size-4 text-primary" />
+            <h2 className="text-xs font-bold text-text uppercase tracking-wider">
+              Pharmacist In-Charge
+            </h2>
+          </div>
+
+          <div className="flex items-center gap-3 p-2.5 rounded-xl bg-surface-alt/40 border border-border/40">
+            <div className="size-9 rounded-xl bg-primary text-primary-foreground font-bold text-xs flex items-center justify-center shrink-0">
+              {pharmacist.name ? pharmacist.name.charAt(0).toUpperCase() : "P"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-text truncate">
+                {pharmacist.name || "Unassigned"}
+              </p>
+              <p className="text-[11px] text-text-muted truncate">
+                Registered Pharmacist (RPh)
+              </p>
+            </div>
+          </div>
+
+          <div className="divide-y divide-border/40 text-xs">
+            <div className="py-1.5 flex justify-between">
+              <span className="text-text-muted">Council Reg</span>
+              <span className="font-mono font-bold text-text">
+                {pharmacist.registrationNumber || "-"}
+              </span>
+            </div>
+            <div className="py-1.5 flex justify-between">
+              <span className="text-text-muted">Direct Mobile</span>
+              <span className="font-semibold text-text font-mono">
+                {pharmacist.mobile ? `+91 ${pharmacist.mobile}` : "-"}
+              </span>
+            </div>
+            <div className="py-1.5 flex justify-between">
+              <span className="text-text-muted">Emergency Dispatch</span>
+              <span className="font-semibold text-text truncate max-w-[170px]">
+                {emergencyContact.name
+                  ? `${emergencyContact.name} (${emergencyContact.relationship || "Contact"})`
+                  : "-"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Statutory Licensing Matrix */}
+        <div className="bg-surface border border-border/90 rounded-2xl p-4 shadow-2xs space-y-3">
+          <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+            <div className="flex items-center gap-2">
+              <Scale className="size-4 text-primary" />
+              <h2 className="text-xs font-bold text-text uppercase tracking-wider">
+                Statutory Licenses
+              </h2>
+            </div>
+            <UIBadge variant="success" className="text-[10px] px-1.5 py-0.2">
+              Active
+            </UIBadge>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/50 space-y-1">
+              <span className="text-[10px] text-text-muted block">Drug License</span>
+              <span className="font-mono font-bold text-text block truncate">
+                {license.drugLicenseNumber || "Form 20/21"}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/50 space-y-1">
+              <span className="text-[10px] text-text-muted block">Classification</span>
+              <span className="font-semibold text-text block truncate">
+                {license.drugLicenseType || "Retail Dispensing"}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/50 space-y-1">
+              <span className="text-[10px] text-text-muted block">FSSAI Safety</span>
+              <span className="font-mono font-bold text-text block truncate">
+                {license.fssaiNumber || "Not Registered"}
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/50 space-y-1">
+              <span className="text-[10px] text-text-muted block">Validity</span>
+              <span className="font-mono font-semibold text-text block truncate">
+                {license.expiresAt ? formatDate(license.expiresAt) : "Active"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 3: Registered Facility Location */}
+        <div className="bg-surface border border-border/90 rounded-2xl p-4 shadow-2xs space-y-2.5">
+          <div className="flex items-center gap-2 pb-2 border-b border-border/60">
+            <MapPin className="size-4 text-primary" />
+            <h2 className="text-xs font-bold text-text uppercase tracking-wider">
+              Facility Address
+            </h2>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/50 space-y-2">
+            <div className="flex items-start gap-2 text-xs">
+              <MapPin className="size-3.5 text-primary shrink-0 mt-0.5" />
+              <p className="font-medium text-text leading-relaxed">
+                {fullAddress || "Physical address not recorded"}
+              </p>
+            </div>
+            {address.googleMapLocation && (
+              <a
+                href={address.googleMapLocation.startsWith("http") ? address.googleMapLocation : `https://${address.googleMapLocation}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline pt-1"
               >
-                <FiPackage className="text-[28px] text-text-muted/60" />
-                <AppHeading
-                  level={3}
-                  weight={700}
-                  align="center"
-                  sx={{ m: 0, fontSize: "13px", width: "100%" }}
-                >
-                  Real-time Inventory Monitor
-                </AppHeading>
-                <AppText variant="body2" align="center" sx={tabFallbackDescSx}>
-                  Telemetry metrics parsing pipelines are actively tracking
-                  batch numbers and low safe-point parameters.
-                </AppText>
-              </AppStack>
-            </AppCard>
-          )}
-
-          {/* Regulatory Licenses Tab Section Fallback Component */}
-          {currentTab === "licenses" && (
-            <AppCard
-              variant="default"
-              rounded="md"
-              bordered
-              shadow="none"
-              padding="md"
-              sx={emptyCardContainerSx}
-            >
-              <AppStack
-                direction="column"
-                align="center"
-                justify="center"
-                gap={1}
-                sx={{ py: 3, width: "100%" }}
-              >
-                <FiShield className="text-[28px] text-text-muted/60" />
-                <AppHeading
-                  level={3}
-                  weight={700}
-                  align="center"
-                  sx={{ m: 0, fontSize: "13px", width: "100%" }}
-                >
-                  Drug Compliance Licenses
-                </AppHeading>
-                <AppText variant="body2" align="center" sx={tabFallbackDescSx}>
-                  Inspect active retail drug certification frameworks and valid
-                  oversight signatures.
-                </AppText>
-              </AppStack>
-            </AppCard>
-          )}
-        </AppBox>
-      </AppBox>
-    </section>
-  );
-};
-
-// Reusable Atomic Information Rows mapping layout schema fields
-const CompactDataInfoRow = ({ icon, label, value, isLink = false }) => (
-  <div className="grid grid-cols-[115px_1fr] gap-2 items-start py-0.5 text-[11px]">
-    <div className="flex items-center gap-1.5 font-bold text-text-muted">
-      <span className="text-[12.5px] text-primary shrink-0">{icon}</span>
-      <span className="truncate">{label}</span>
-    </div>
-    <div
-      className={`font-semibold text-text break-words ${isLink ? "text-primary flex items-center gap-0.5" : ""}`}
-    >
-      {value || "-"} {isLink && <FiExternalLink className="text-[9.5px]" />}
-    </div>
-  </div>
-);
-
-// High-Density Metric Grid Blocks
-const CompactHighlightCard = ({ icon, title, value, color }) => (
-  <AppCard
-    variant="default"
-    rounded="md"
-    bordered
-    shadow="none"
-    padding="none"
-    sx={highlightGridCardSx}
-  >
-    <AppStack direction="row" align="center" gap={0.75}>
-      <AppBox
-        sx={{
-          ...highlightIconBoxFrameSx,
-          bgcolor: `var(--app-color-${color}-soft)`,
-          color: `var(--app-color-${color})`,
-        }}
-      >
-        {icon}
-      </AppBox>
-      <AppBox sx={{ minWidth: 0, flex: 1 }}>
-        <AppText variant="body2" sx={highlightCardTitleSx}>
-          {title}
-        </AppText>
-        <AppHeading level={3} weight={800} sx={highlightCardValueSx}>
-          {value || "0"}
-        </AppHeading>
-      </AppBox>
-    </AppStack>
-    <AppStack
-      direction="row"
-      align="center"
-      justify="space-between"
-      sx={highlightCardFooterSx}
-    >
-      <AppText variant="body2" sx={highlightFooterLabelTextSx}>
-        Sales register
-      </AppText>
-      <FiChevronRight className="text-[9.5px]" />
-    </AppStack>
-  </AppCard>
-);
-
-const CompactTrackingRow = ({ label, value }) => (
-  <div className="flex items-center justify-between gap-2 text-[11px]">
-    <AppText
-      variant="body2"
-      weight={700}
-      sx={{ color: "var(--app-color-text-muted)" }}
-    >
-      {label}
-    </AppText>
-    <div className="font-semibold text-text text-right">{value}</div>
-  </div>
-);
-
-/* Architectural Style Definitions Dictionary */
-const containerSx = {
-  position: "relative",
-  zIndex: 1,
-  width: "100%",
-  maxWidth: { xs: 430, sm: 460 },
-  mx: "auto",
-  px: 0,
-  pt: 0,
-  pb: 0,
-};
-
-const loadingErrorWrapperSx = {
-  width: "100%",
-  minHeight: 320,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  px: 1.5,
-};
-
-const jumbotronHeaderSx = {
-  pt: 1.5,
-  pb: 1.25,
-  px: 0.5,
-};
-
-const backBtnSx = {
-  height: 32,
-  width: 32,
-  minWidth: 32,
-  borderColor: "var(--app-color-border)",
-};
-
-const headerActionBtnSx = {
-  height: 32,
-  fontSize: "11px",
-  fontWeight: 750,
-  px: 1.3,
-  borderColor: "var(--app-color-border-strong)",
-  color: "var(--app-color-text)",
-};
-
-const moreActionBtnSx = {
-  height: 32,
-  width: 32,
-  minWidth: 32,
-  borderColor: "var(--app-color-border-strong)",
-};
-
-const branchIconFrameSx = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 44,
-  height: 44,
-  borderRadius: "10px",
-  fontSize: "22px",
-  flexShrink: 0,
-  bgcolor: "var(--app-color-primary-soft)",
-  color: "var(--app-color-primary)",
-};
-
-const branchTitleTextSx = {
-  m: 0,
-  fontSize: "17.5px",
-  lineHeight: 1.2,
-  letterSpacing: "-0.3px",
-  color: "var(--app-color-text)",
-};
-
-const hubTagOverrideSx = {
-  height: 16,
-  fontSize: "8.5px",
-  fontWeight: 800,
-  px: 0.85,
-};
-
-const statusBadgeOverrideSx = {
-  height: 16,
-  fontSize: "8.5px",
-  fontWeight: 750,
-  px: 0.85,
-  textTransform: "capitalize",
-};
-
-const branchMetadataTextSx = {
-  mt: 0.15,
-  fontSize: "10.5px",
-  color: "var(--app-color-text-muted)",
-};
-
-const metaPillsRibbonSx = {
-  mt: 1.5,
-  pt: 1.1,
-  borderTop: "1px dashed var(--app-color-border)",
-  display: "flex",
-  flexDirection: "column",
-  gap: 0.4,
-  fontSize: "10.5px",
-  fontWeight: 600,
-  color: "var(--app-color-text-muted)",
-};
-
-const tabsLineTrackSx = {
-  display: "flex",
-  gap: 0.75,
-  borderBottom: "1px solid var(--app-color-divider)",
-  px: 0.5,
-  overflowX: "auto",
-  msOverflowStyle: "none",
-  scrollbarWidth: "none",
-  "&::-webkit-scrollbar": {
-    display: "none",
-    width: 0,
-    height: 0,
+                <span>Open in Google Maps</span>
+                <ExternalLink className="size-3" />
+              </a>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   },
-};
+);
 
-const mainBodyScrollContentWrapperSx = {
-  px: 0.5,
-  py: 1.25,
-  bgcolor: "color-mix(in_srgb, var(--app-color-surface-alt) 20%, transparent)",
-};
-
-const moduleCardContainerSx = {
-  bgcolor: "var(--app-color-surface)",
-  borderColor: "var(--app-color-border)",
-  boxShadow: "var(--app-shadow-xs)",
-};
-
-const cardHeaderBannerSx = {
-  px: 1.2,
-  py: 0.85,
-  borderBottom: "1px solid var(--app-color-divider)",
-  bgcolor: "var(--app-color-surface-alt)",
-};
-
-const cardHeaderTitleSx = {
-  m: 0,
-  fontSize: "12px",
-  letterSpacing: "-0.1px",
-  color: "var(--app-color-text)",
-};
-
-const cardFooterActionTriggerSx = {
-  borderTop: "1px solid var(--app-color-divider)",
-  py: 0.75,
-  display: "flex",
-  justifyContent: "center",
-};
-
-const highlightsHeaderSpacingBoxSx = {
-  pt: 0.5,
-  pb: 0.65,
-};
-
-const highlightGridCardSx = {
-  p: 0.85,
-  bgcolor: "var(--app-color-surface)",
-  borderColor: "var(--app-color-border)",
-  boxShadow: "none",
-};
-
-const highlightIconBoxFrameSx = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  width: 28,
-  height: 28,
-  borderRadius: "6px",
-  fontSize: "13px",
-  flexShrink: 0,
-};
-
-const highlightCardTitleSx = {
-  fontSize: "9.5px",
-  fontWeight: 650,
-  color: "var(--app-color-text-muted)",
-  lineHeight: 1,
-};
-
-const highlightCardValueSx = {
-  m: 0,
-  mt: 0.15,
-  fontSize: "14.5px",
-  lineHeight: 1,
-  color: "var(--app-color-text)",
-};
-
-const highlightCardFooterSx = {
-  mt: 1,
-  pt: 0.6,
-  borderTop:
-    "1px solid color-mix(in_srgb, var(--app-color-divider) 60%, transparent)",
-  color: "var(--app-color-text-muted)",
-};
-
-const highlightFooterLabelTextSx = {
-  fontSize: "9px",
-  fontWeight: 500,
-};
-
-const inlineStatusPillSx = {
-  height: 16,
-  fontSize: "8.5px",
-  px: 0.85,
-};
-
-const regulatoryNoteHeadingTextSx = {
-  fontSize: "10.5px",
-  color: "var(--app-color-text)",
-  textTransform: "uppercase",
-  letterSpacing: "0.2px",
-};
-
-const emptyCardContainerSx = {
-  borderColor: "var(--app-color-border)",
-  bgcolor: "var(--app-color-surface)",
-  width: "100%",
-};
-
-const tabFallbackDescSx = {
-  fontSize: "11px",
-  color: "var(--app-color-text-muted)",
-  px: 2,
-  textAlign: "center",
-};
+BranchDetailsMobilePage.displayName = "BranchDetailsMobilePage";
 
 export default BranchDetailsMobilePage;

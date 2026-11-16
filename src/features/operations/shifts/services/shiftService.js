@@ -16,6 +16,12 @@ const shiftService = {
   updateShiftStatus(id, payload) {
     return apiClient.patch(`/operations/shifts/${id}/status`, payload);
   },
+  initiateShiftClose(id) {
+    return apiClient.patch(`/operations/shifts/${id}/initiate-close`);
+  },
+  abortShiftClose(id) {
+    return apiClient.patch(`/operations/shifts/${id}/abort-close`);
+  },
   cancelShift(id, payload) {
     return apiClient.patch(`/operations/shifts/${id}/cancel`, payload);
   },

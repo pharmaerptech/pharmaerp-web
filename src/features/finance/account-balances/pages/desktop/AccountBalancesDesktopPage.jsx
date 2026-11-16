@@ -34,6 +34,7 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
   UIModal,
   UIModalHeader,
   UIModalTitle,
@@ -44,6 +45,8 @@ import {
 import { cn } from "@/lib/utils";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { useCompanyFilter } from "@/hooks";
+import { CompanyFilterSelect } from "@/components/shared";
 import accountBalanceService from "../../services/accountBalanceService";
 import { AccountBalanceDetailsDialog } from "../../components/AccountBalanceDetailsDialog";
 
@@ -112,6 +115,7 @@ const PAGE_LIMIT = 10;
 export const AccountBalancesDesktopPage = () => {
   const { currentWorkspace } = useWorkspace();
   const { currentBranch } = useBranch();
+  const companyFilter = useCompanyFilter();
   const tableContainerRef = useRef(null);
 
   // Balances & Infinite Scroll states
@@ -196,6 +200,7 @@ export const AccountBalancesDesktopPage = () => {
       page,
       limit: PAGE_LIMIT,
       branchId: currentBranch?._id || undefined,
+      companyId: companyFilter?.queryCompanyId,
       accountScope,
     };
 
@@ -273,6 +278,7 @@ export const AccountBalancesDesktopPage = () => {
     selectedNature,
     sortOption,
     accountScope,
+    companyFilter?.queryCompanyId,
   ]);
 
   // Load next batch via Infinite Scroll
@@ -322,6 +328,7 @@ export const AccountBalancesDesktopPage = () => {
     sortOption,
     accountScope,
     totalBalances,
+    companyFilter?.queryCompanyId,
   ]);
 
   // Trigger re-fetch on filter changes
@@ -524,6 +531,14 @@ export const AccountBalancesDesktopPage = () => {
           />
         </div>
 
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
+
         {/* Upfront Best Filter: Account Scope */}
         <div className="w-[180px] sm:w-[220px]">
           <UISelect
@@ -595,12 +610,8 @@ export const AccountBalancesDesktopPage = () => {
       </div>
 
       {/* ── 4. Constrained-Height Table with Sticky Header & Infinite Scroll ────── */}
-      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-        {/* Internal Vertical Scroll Container: The definitive scroll parent */}
-        <div
-          ref={tableContainerRef}
-          className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0 divide-y divide-border/60"
-        >
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
           <UITable
             stickyHeader
             containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -730,7 +741,7 @@ export const AccountBalancesDesktopPage = () => {
               }
             />
           )}
-        </div>
+        </UITableScrollArea>
       </div>
 
       {/* ── 5. Filter Dialog (Modal) ──────────────────────────────────────────────── */}

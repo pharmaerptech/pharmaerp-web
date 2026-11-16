@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useCompanyFilter } from "@/hooks";
 import { uiToast } from "@/components/ui";
 
 import useCheque from "../hooks/useCheque";
@@ -79,6 +79,7 @@ const ChequesPage = () => {
     status: "all",
   });
 
+  const { companyFilter } = useCompanyFilter();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
 
@@ -90,12 +91,13 @@ const ChequesPage = () => {
         search: searchParams.search || undefined,
         chequeType: searchParams.chequeType === "all" ? undefined : searchParams.chequeType,
         status: searchParams.status === "all" ? undefined : searchParams.status,
+        companyId: companyFilter?.queryCompanyId,
       };
       await getCheques(query);
     } catch (err) {
       console.error("Failed to load cheques:", err);
     }
-  }, [currentPage, pageSize, searchParams, getCheques]);
+  }, [currentPage, pageSize, searchParams, getCheques, companyFilter?.queryCompanyId]);
 
   useEffect(() => {
     fetchChequesData();
@@ -277,6 +279,7 @@ const ChequesPage = () => {
     handleCreateNew,
     handleEditCheque,
     handleRefresh,
+    companyFilter,
   };
 
   return (

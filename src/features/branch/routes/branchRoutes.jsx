@@ -10,14 +10,17 @@ import {
   BranchSettingsPage,
 } from "../pages";
 
-const branchRoutes = [
-  {
-    path: ROUTES.BRANCHES,
-    element: <BranchesPage />,
-  },
+export const createBranchRoutes = [
   {
     path: ROUTES.CREATE_BRANCH,
     element: <CreateBranchPage />,
+  },
+];
+
+export const existingBranchRoutes = [
+  {
+    path: ROUTES.BRANCHES,
+    element: <BranchesPage />,
   },
   {
     path: ROUTES.EDIT_BRANCH,
@@ -32,5 +35,7 @@ const branchRoutes = [
     element: <BranchSettingsPage />,
   },
 ];
+
+const branchRoutes = [...createBranchRoutes, ...existingBranchRoutes];
 
 export default branchRoutes;

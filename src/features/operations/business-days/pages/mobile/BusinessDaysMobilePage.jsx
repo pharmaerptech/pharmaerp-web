@@ -30,6 +30,7 @@ import {
   ViewBusinessDayDialog,
   CloseBusinessDayDialog,
 } from "../../components";
+import { BranchFilterSelect } from "@/components/shared";
 import { cn } from "@/lib/utils";
 
 export const BusinessDaysMobilePage = ({
@@ -58,6 +59,9 @@ export const BusinessDaysMobilePage = ({
   handleClearFilters,
   handleRefresh,
   activeFilterChips = [],
+  isCompanyLevel = false,
+  selectedBranchId = "all",
+  setSelectedBranchId,
   openBusinessDay,
   isOpenDialogOpen,
   setIsOpenDialogOpen,
@@ -198,6 +202,14 @@ export const BusinessDaysMobilePage = ({
 
       {/* Filter & View Switcher */}
       <div className="bg-surface border border-border/60 rounded-xl p-2.5 shadow-2xs space-y-2">
+        {isCompanyLevel && (
+          <BranchFilterSelect
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            size="sm"
+            className="w-full"
+          />
+        )}
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             <UISearchInput

@@ -51,6 +51,7 @@ import {
   uiToast,
 } from "@/components/ui";
 import { usePermission } from "@/hooks";
+import { CompanyFilterSelect } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { ClearChequeModal, BounceChequeModal, CancelChequeModal } from "../../components/ChequeActionModals";
 
@@ -93,6 +94,7 @@ export const ChequesDesktopPage = ({
   handleCreateNew,
   handleEditCheque,
   handleRefresh,
+  companyFilter,
 }) => {
   const { can } = usePermission();
   const tableContainerRef = useRef(null);
@@ -366,17 +368,6 @@ export const ChequesDesktopPage = ({
 
       {/* ── 2. Table Filter Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
-        {/* Cheque Type Selector */}
-        <div className="w-[180px] sm:w-[210px]">
-          <UISelect
-            value={searchParams.chequeType || "all"}
-            onChange={(val) => handleFilterChange("chequeType", val)}
-            options={CHEQUE_TYPE_OPTIONS}
-            placeholder="Cheque Type"
-            size="md"
-          />
-        </div>
-
         {/* Search Input */}
         <div className="flex-1 min-w-[220px] sm:min-w-[260px]">
           <UIInput
@@ -392,6 +383,23 @@ export const ChequesDesktopPage = ({
             className="w-full"
           />
         </div>
+
+        {/* Cheque Type Selector */}
+        <div className="w-[180px] sm:w-[210px]">
+          <UISelect
+            value={searchParams.chequeType || "all"}
+            onChange={(val) => handleFilterChange("chequeType", val)}
+            options={CHEQUE_TYPE_OPTIONS}
+            placeholder="Cheque Type"
+            size="md"
+          />
+        </div>
+
+        {/* Workspace Company Filter */}
+        <CompanyFilterSelect
+          companyFilter={companyFilter}
+          className="w-[180px] sm:w-[200px]"
+        />
 
         {/* Status Selector */}
         <div className="w-[150px]">

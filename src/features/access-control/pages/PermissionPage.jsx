@@ -15,9 +15,19 @@ import PermissionMobilePage from "./mobile/PermissionMobilePage";
 
 const moduleOptionsBase = [{ label: "All Modules", value: "all" }];
 
+const actionOptions = [
+  { label: "All Actions", value: "all" },
+  { label: "Read / View", value: "view" },
+  { label: "Create", value: "create" },
+  { label: "Update / Manage", value: "manage" },
+  { label: "Delete", value: "delete" },
+  { label: "Export", value: "export" },
+];
+
 const initialFilters = {
   search: "",
   module: "all",
+  actionType: "all",
 };
 
 const PRIORITY_MODULE_DESCRIPTIONS = {
@@ -147,6 +157,28 @@ const PermissionPage = () => {
     return [...moduleOptionsBase, ...modules];
   }, [permissionModules]);
 
+  const filteredPermissions = useMemo(() => {
+    const search = normalizeText(filters.search);
+    const mod = filters.module;
+    const act = filters.actionType;
+
+    return mappedPermissions.filter((p) => {
+      const matchesModule = !mod || mod === "all" || p.moduleKey === mod;
+      const matchesAction = !act || act === "all" || p.actionType === act;
+      if (!matchesModule || !matchesAction) return false;
+
+      if (!search) return true;
+
+      return (
+        normalizeText(p.value).includes(search) ||
+        normalizeText(p.displayAction).includes(search) ||
+        normalizeText(p.displayModule).includes(search) ||
+        normalizeText(p.actionType).includes(search) ||
+        normalizeText(p.displayPermission).includes(search)
+      );
+    });
+  }, [mappedPermissions, filters]);
+
   const filteredPermissionModules = useMemo(() => {
     const search = normalizeText(filters.search);
 
@@ -267,12 +299,14 @@ const PermissionPage = () => {
   }, [navigate]);
 
   const pageProps = {
+    permissions: filteredPermissions,
     permissionModules: filteredPermissionModules,
     allModules: permissionModules,
     stats,
 
     filters,
     moduleOptions,
+    actionOptions,
 
     isLoading,
     hasError,
@@ -280,7 +314,7 @@ const PermissionPage = () => {
     message,
 
     totalPermissionsCount: rawPermissions.length,
-    filteredModulesCount: filteredPermissionModules.length,
+    filteredPermissionsCount: filteredPermissions.length,
     hasPermissions: rawPermissions.length > 0,
 
     handleFilterChange,

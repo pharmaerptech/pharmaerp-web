@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import AppDesktopHeader from "@/layouts/app/desktop/AppDesktopHeader";
 import { ROUTES } from "@/constants";
 import { useGstLedger } from "../../hooks/useGstLedger";
-import { UIInfiniteScroll } from "@/components/ui";
+import { UIInfiniteScroll, UITableScrollArea } from "@/components/ui";
 import useCompany from "@/features/company/hooks/useCompany";
+import { useCompanyFilter } from "@/hooks";
+import { CompanyFilterSelect } from "@/components/shared";
 import { calculateGstr1Summary, deduceGstrGroup, isCreditNoteEntry } from "../../utils/gstr1SummaryCalculator";
 import {
   FiSearch,
@@ -40,6 +42,7 @@ const formatDate = (dateStr) => {
 const Gstr1DesktopPage = () => {
   const tableContainerRef = useRef(null);
   const { currentCompany } = useCompany();
+  const companyFilter = useCompanyFilter();
   const {
     entries,
     total,
@@ -313,6 +316,17 @@ const Gstr1DesktopPage = () => {
               />
             </div>
 
+            {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+            <CompanyFilterSelect
+              value={companyFilter?.selectedCompanyId || "all"}
+              onChange={(val) => {
+                companyFilter?.setSelectedCompanyId(val);
+                handleFilterChange("companyId", val === "all" ? undefined : val);
+              }}
+              size="md"
+              className="min-w-[180px]"
+            />
+
             {/* Branch Filter Selector */}
             <div className="min-w-[180px]">
               <select
@@ -398,12 +412,12 @@ const Gstr1DesktopPage = () => {
         )}
 
         {/* Main Data Table */}
-        <div className="bg-white dark:bg-surface rounded-xl border border-slate-200 dark:border-border shadow-sm overflow-hidden flex flex-col transition-colors">
+        <div className="bg-white dark:bg-surface rounded-xl border border-slate-200 dark:border-border shadow-sm overflow-hidden flex flex-col transition-colors relative">
           {/* Constrained-Height Scroll Container: limited to ~5 visible records */}
-          <div
-            ref={tableContainerRef}
+          <UITableScrollArea
+            containerRef={tableContainerRef}
             onScroll={handleTableScroll}
-            className="relative overflow-y-auto overflow-x-auto max-h-[280px] flex-1 divide-y divide-slate-100 dark:divide-border/60"
+            className="max-h-[280px] divide-y divide-slate-100 dark:divide-border/60"
           >
             <table className="w-full text-left border-collapse">
               <thead className="sticky top-0 z-20 bg-slate-50 dark:bg-surface-alt shadow-xs">
@@ -568,7 +582,7 @@ const Gstr1DesktopPage = () => {
                 }
               />
             )}
-          </div>
+          </UITableScrollArea>
 
           {/* Records Summary Footer */}
           <div className="px-4 py-3 bg-slate-50 dark:bg-surface-alt border-t border-slate-200 dark:border-border flex items-center justify-between transition-colors">

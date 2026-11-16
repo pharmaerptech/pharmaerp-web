@@ -1,19 +1,19 @@
 // src/features/access-control/pages/desktop/PermissionDesktopPage.jsx
 
-import React from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   FileKey,
   Shield,
+  ShieldCheck,
   Search,
   RotateCcw,
+  RefreshCw,
   Layers,
-  ArrowLeft,
   Eye,
   Plus,
   Edit2,
   Trash2,
   Download,
-  CheckCircle2,
   Lock,
   Building2,
   GitBranch,
@@ -24,20 +24,27 @@ import {
   Users,
   BarChart3,
   Settings,
-  Sparkles,
 } from "lucide-react";
 
 import {
   UIButton,
-  UIIconButton,
-  UISearchInput,
+  UIInput,
   UISelect,
   UIBadge,
-  UISkeleton,
-  UIEmptyState,
-  UIAlert,
+  UITable,
+  UITableHeader,
+  UITableBody,
+  UITableRow,
+  UITableHead,
+  UITableCell,
+  UITableEmpty,
+  UITableLoading,
+  UIInfiniteScroll,
+  UITableScrollArea,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+
+const PAGE_LIMIT = 25;
 
 const moduleIconMap = {
   workspace: Shield,
@@ -65,27 +72,27 @@ const moduleIconMap = {
 
 const actionColorMap = {
   view: {
-    bg: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    bg: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
     icon: Eye,
     label: "Read",
   },
   create: {
-    bg: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    bg: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
     icon: Plus,
     label: "Create",
   },
   manage: {
-    bg: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    bg: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
     icon: Edit2,
     label: "Update",
   },
   delete: {
-    bg: "bg-rose-500/10 text-rose-600 border-rose-500/20",
+    bg: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
     icon: Trash2,
     label: "Delete",
   },
   export: {
-    bg: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+    bg: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
     icon: Download,
     label: "Export",
   },
@@ -97,288 +104,384 @@ const actionColorMap = {
 };
 
 export default function PermissionDesktopPage({
-  permissionModules = [],
+  permissions = [],
   allModules = [],
   stats = [],
 
-  filters,
+  filters = { search: "", module: "all", actionType: "all" },
   moduleOptions = [],
+  actionOptions = [],
 
   isLoading = false,
-  hasError = false,
-  error = null,
-  message = null,
-
   totalPermissionsCount = 0,
-  filteredModulesCount = 0,
-  hasPermissions = false,
 
   handleFilterChange,
   handleSearchChange,
   handleClearFilters,
-
   handleRefresh,
   handleViewRoles,
-  handleBackToAccessControl,
-
-  clearMessage,
 }) {
+  const tableContainerRef = useRef(null);
+
+  // Infinite Scroll state - incremental batches
+  const [visibleCount, setVisibleCount] = useState(PAGE_LIMIT);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Reset visible count and scroll to top on filter change
+  useEffect(() => {
+    setVisibleCount(PAGE_LIMIT);
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  }, [filters.search, filters.module, filters.actionType]);
+
+  const displayedPermissions = useMemo(() => {
+    return (permissions || []).slice(0, visibleCount);
+  }, [permissions, visibleCount]);
+
+  const hasMore = visibleCount < (permissions || []).length;
+
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount((prev) =>
+        Math.min(prev + PAGE_LIMIT, (permissions || []).length)
+      );
+      setIsLoadingMore(false);
+    }, 120);
+  }, [isLoadingMore, hasMore, permissions]);
+
+  const hasActiveFilters = Boolean(
+    filters.search ||
+      (filters.module && filters.module !== "all") ||
+      (filters.actionType && filters.actionType !== "all")
+  );
+
+  // 4 Top Stat Cards
+  const statCards = useMemo(() => {
+    const totalCaps = totalPermissionsCount || permissions.length;
+    const viewStat = stats.find((s) => s.id === "view")?.value ?? 0;
+    const manageStat = stats.find((s) => s.id === "manage")?.value ?? 0;
+    const moduleCount = allModules.length;
+
+    return [
+      {
+        id: "total_caps",
+        title: "Total Capabilities",
+        value: totalCaps,
+        subtitle: "Granular system keys",
+        icon: FileKey,
+        color: "text-indigo-600 dark:text-indigo-400",
+        bg: "bg-indigo-500/10",
+        border: "border-indigo-500/20",
+      },
+      {
+        id: "modules",
+        title: "System Modules",
+        value: moduleCount,
+        subtitle: "Policy & domain modules",
+        icon: Layers,
+        color: "text-purple-600 dark:text-purple-400",
+        bg: "bg-purple-500/10",
+        border: "border-purple-500/20",
+      },
+      {
+        id: "view_keys",
+        title: "Read / View Keys",
+        value: viewStat,
+        subtitle: "Auditing & inspection",
+        icon: Eye,
+        color: "text-blue-600 dark:text-blue-400",
+        bg: "bg-blue-500/10",
+        border: "border-blue-500/20",
+      },
+      {
+        id: "manage_keys",
+        title: "Write & Admin Keys",
+        value: manageStat,
+        subtitle: "Create, update, delete",
+        icon: ShieldCheck,
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/20",
+      },
+    ];
+  }, [allModules, permissions, stats, totalPermissionsCount]);
+
   return (
-    <div className="min-h-screen bg-bg text-text p-3 sm:p-4 lg:p-5 max-w-[1440px] mx-auto space-y-4">
-      {/* Feedback Toast */}
-      {message && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4">
-          <UIAlert
-            intent="success"
-            title={message}
-            onClose={clearMessage}
-            className="shadow-lg"
+    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-2 sm:px-3 pt-0 pb-1 gap-2.5 text-text font-sans transition-colors overflow-hidden select-none">
+      {/* ── 1. Top Stat Cards Grid ───────────────────────────────────────── */}
+      <div className="shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.id}
+                className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors"
+              >
+                <div
+                  className={cn(
+                    "size-9 rounded-lg flex items-center justify-center shrink-0 border",
+                    stat.bg,
+                    stat.border,
+                    stat.color
+                  )}
+                >
+                  <Icon className="size-4.5 stroke-[1.8]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11.5px] font-medium text-text-muted truncate">
+                    {stat.title}
+                  </div>
+                  <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                    {stat.value}
+                  </div>
+                  <div className="text-[10px] text-text-muted truncate mt-0.5">
+                    {stat.subtitle}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── 2. Streamlined Single-Row Toolbar ────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {/* Search Input */}
+        <div className="flex-1 min-w-[200px] sm:min-w-[240px]">
+          <UIInput
+            type="text"
+            value={filters.search || ""}
+            onChange={handleSearchChange}
+            placeholder="Search capability, key, or module (e.g. product:create)..."
+            startIcon={<Search className="size-4 text-text-muted" />}
+            size="md"
+            variant="outline"
+            isClearable
+            onClear={() => handleSearchChange?.({ target: { value: "" } })}
+            className="w-full"
           />
         </div>
-      )}
 
-      {/* 1. Header Banner Card */}
-      <div className="bg-surface rounded-2xl p-5 sm:p-6 border border-border/60 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <UIIconButton
-            variant="outline"
-            size="sm"
-            onClick={handleBackToAccessControl}
-            aria-label="Back to access control"
-          >
-            <ArrowLeft className="size-4" />
-          </UIIconButton>
-
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2.5">
-              <div className="size-8 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-600 shrink-0">
-                <FileKey className="size-4" />
-              </div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-text">
-                Permission Catalog
-              </h1>
-              <UIBadge variant="soft" color="purple" size="sm">
-                {totalPermissionsCount} System Capabilities
-              </UIBadge>
-            </div>
-            <p className="text-xs sm:text-sm text-text-muted">
-              Live authorization capability matrix supported by the ERP backend engine.
-            </p>
-          </div>
+        {/* Module Filter Select */}
+        <div className="w-[160px] sm:w-[190px]">
+          <UISelect
+            value={filters.module || "all"}
+            onChange={(val) => handleFilterChange?.({ module: val })}
+            options={moduleOptions}
+            placeholder="All Modules"
+            size="md"
+          />
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
+        {/* Action Type Select */}
+        {actionOptions?.length > 0 && (
+          <div className="w-[135px] sm:w-[155px]">
+            <UISelect
+              value={filters.actionType || "all"}
+              onChange={(val) => handleFilterChange?.({ actionType: val })}
+              options={actionOptions}
+              placeholder="All Actions"
+              size="md"
+            />
+          </div>
+        )}
+
+        {/* Quick Reset */}
+        {hasActiveFilters && (
           <UIButton
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isLoading}
-            startIcon={<RotateCcw className={cn("size-3.5", isLoading && "animate-spin")} />}
+            type="button"
+            variant="ghost"
+            size="md"
+            onClick={handleClearFilters}
+            startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+            className="h-10 px-2.5 text-xs text-text-muted hover:text-text"
+            title="Reset all filters"
           >
-            Refresh
+            Reset
+          </UIButton>
+        )}
+
+        {/* Action Cluster (Right) */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
+            disabled={isLoading}
+            onClick={handleRefresh}
+            className="h-10 w-10 p-0 text-text-muted hover:text-text cursor-pointer"
+            title="Refresh permissions catalog"
+          >
+            <RefreshCw
+              className={cn(
+                "size-4 text-text-muted hover:text-primary",
+                isLoading && "animate-spin text-primary"
+              )}
+            />
           </UIButton>
 
           <UIButton
+            type="button"
             variant="primary"
-            size="sm"
+            size="md"
+            startIcon={<Shield className="size-4" />}
             onClick={handleViewRoles}
-            startIcon={<Shield className="size-3.5" />}
+            className="h-10 px-3.5 text-xs font-semibold shadow-xs"
           >
             Manage Roles
           </UIButton>
         </div>
       </div>
 
-      {/* 2. Stat Metric Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {stats.map((stat) => (
-          <div
-            key={stat.id}
-            className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-1"
+      {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ── */}
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
+          <UITable
+            stickyHeader
+            containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
+            className="w-full"
           >
-            <div className="text-xs font-semibold text-text-muted">{stat.title}</div>
-            <div className="text-xl sm:text-2xl font-bold text-text font-mono">
-              {stat.value}
-            </div>
-            <div className="text-[11px] text-text-muted">{stat.description}</div>
-          </div>
-        ))}
-      </div>
+            {/* Sticky Table Header */}
+            <UITableHeader
+              sticky
+              className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs"
+            >
+              <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
+                <UITableHead sticky className="min-w-[220px]">Capability &amp; Action</UITableHead>
+                <UITableHead sticky className="min-w-[220px]">Permission Key</UITableHead>
+                <UITableHead sticky className="min-w-[150px]">Module Scope</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[110px]">Action Type</UITableHead>
+                <UITableHead sticky className="min-w-[140px]">Clearance Policy</UITableHead>
+                <UITableHead sticky className="min-w-[240px]">Operational Scope</UITableHead>
+              </UITableRow>
+            </UITableHeader>
 
-      {/* 3. Search and Module Filter Bar */}
-      <div className="bg-surface rounded-2xl p-3 sm:p-4 border border-border/60 shadow-2xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex-1 max-w-md">
-            <UISearchInput
-              placeholder="Search capability key or action (e.g. product:create)..."
-              value={filters.search}
-              onChange={handleSearchChange}
-              onClear={() => handleSearchChange({ target: { value: "" } })}
-              size="sm"
-            />
-          </div>
+            <UITableBody>
+              {isLoading && displayedPermissions.length === 0 ? (
+                <UITableLoading colSpan={6} rows={8} />
+              ) : displayedPermissions.length === 0 ? (
+                <UITableEmpty
+                  colSpan={6}
+                  title="No capabilities found"
+                  description={
+                    hasActiveFilters
+                      ? "No permission keys match your active filter criteria."
+                      : "No system permissions available in catalog."
+                  }
+                  action={
+                    hasActiveFilters ? (
+                      <UIButton variant="outline" size="sm" onClick={handleClearFilters}>
+                        Clear Filters
+                      </UIButton>
+                    ) : null
+                  }
+                />
+              ) : (
+                displayedPermissions.map((perm) => {
+                  const actionMeta = actionColorMap[perm.actionType] || actionColorMap.other;
+                  const ActionIcon = actionMeta.icon;
+                  const ModuleIcon = moduleIconMap[perm.moduleKey] || Layers;
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="w-44 sm:w-56">
-              <UISelect
-                size="sm"
-                value={filters.module}
-                onChange={(e) => handleFilterChange({ module: e.target.value })}
-                options={moduleOptions}
-              />
-            </div>
+                  return (
+                    <UITableRow
+                      key={perm.id}
+                      className="hover:bg-surface-alt/50 transition-colors"
+                    >
+                      {/* Capability & Action */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div
+                            className={cn(
+                              "p-1.5 rounded-lg border shrink-0",
+                              actionMeta.bg
+                            )}
+                          >
+                            <ActionIcon className="size-3.5" />
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-bold text-xs text-text block truncate">
+                              {perm.displayAction}
+                            </span>
+                            <span className="text-[10.5px] text-text-muted block truncate">
+                              {perm.displayPermission}
+                            </span>
+                          </div>
+                        </div>
+                      </UITableCell>
 
-            {(filters.search || filters.module !== "all") && (
-              <UIButton
-                variant="ghost"
-                size="xs"
-                onClick={handleClearFilters}
-                className="text-text-muted hover:text-text"
-              >
-                Clear Filters
-              </UIButton>
-            )}
-          </div>
-        </div>
+                      {/* Permission Key */}
+                      <UITableCell className="py-2.5 px-3">
+                        <code className="text-xs font-mono font-semibold text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md select-all">
+                          {perm.value}
+                        </code>
+                      </UITableCell>
 
-        {/* Quick Module Tags Strip */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-0.5 scrollbar-none text-xs">
-          <button
-            type="button"
-            onClick={() => handleFilterChange({ module: "all" })}
-            className={cn(
-              "px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border",
-              filters.module === "all"
-                ? "bg-primary text-text-inverse border-primary shadow-2xs"
-                : "bg-surface-alt/40 border-border/60 text-text-muted hover:text-text hover:bg-surface"
-            )}
-          >
-            All Modules ({allModules.length})
-          </button>
+                      {/* Module Scope */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-1.5">
+                          <ModuleIcon className="size-3.5 text-text-muted shrink-0" />
+                          <span className="text-xs font-medium text-text">
+                            {perm.displayModule}
+                          </span>
+                        </div>
+                      </UITableCell>
 
-          {allModules.map((mod) => {
-            const isSelected = filters.module === mod.moduleKey;
-            return (
-              <button
-                key={mod.moduleKey}
-                type="button"
-                onClick={() => handleFilterChange({ module: mod.moduleKey })}
-                className={cn(
-                  "px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border flex items-center gap-1.5",
-                  isSelected
-                    ? "bg-primary text-text-inverse border-primary shadow-2xs"
-                    : "bg-surface-alt/40 border-border/60 text-text-muted hover:text-text hover:bg-surface"
-                )}
-              >
-                <span>{mod.displayModule}</span>
-                <span className={cn("text-[10.5px] px-1 py-0.2 rounded font-mono", isSelected ? "bg-white/20 text-white" : "bg-surface-alt text-text-muted")}>
-                  {mod.totalPermissions}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 4. Module Capabilities Grid */}
-      {isLoading && !hasPermissions ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs space-y-3">
-              <UISkeleton className="h-6 w-40 rounded" />
-              <div className="grid grid-cols-2 gap-2 pt-2">
-                <UISkeleton className="h-14 rounded-xl" />
-                <UISkeleton className="h-14 rounded-xl" />
-                <UISkeleton className="h-14 rounded-xl" />
-                <UISkeleton className="h-14 rounded-xl" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : filteredModulesCount > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {permissionModules.map((mod) => {
-            const Icon = moduleIconMap[mod.moduleKey] || Layers;
-
-            return (
-              <div
-                key={mod.id}
-                className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs hover:border-border transition-all space-y-4"
-              >
-                {/* Module Header */}
-                <div className="flex items-center justify-between pb-3 border-b border-border/40">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <div className="size-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-                      <Icon className="size-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="text-sm font-bold text-text truncate">
-                        {mod.displayModule}
-                      </h2>
-                      <span className="text-[10.5px] font-mono text-text-muted block">
-                        scope: {mod.moduleKey}
-                      </span>
-                    </div>
-                  </div>
-
-                  
-                  <UIBadge variant="soft" color={mod.isAccessPolicy ? "purple" : "primary"} size="xs">
-                    {mod.isAccessPolicy ? "Access Policy • " : ""}{mod.totalPermissions} {mod.totalPermissions === 1 ? "Capability" : "Capabilities"}
-                  </UIBadge>
-                  
-                  
-                </div>
-
-                {/* Permissions List Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {mod.items.map((item) => {
-                    const actionMeta = actionColorMap[item.actionType] || actionColorMap.other;
-                    const ActionIcon = actionMeta.icon;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="p-2.5 rounded-xl border border-border/60 bg-surface-alt/40 hover:bg-surface hover:border-border transition-all flex items-start gap-2.5 select-none"
-                      >
-                        <div
+                      {/* Action Type */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        <span
                           className={cn(
-                            "size-6 rounded-lg border flex items-center justify-center shrink-0 mt-0.5",
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border",
                             actionMeta.bg
                           )}
                         >
                           <ActionIcon className="size-3" />
-                        </div>
+                          {actionMeta.label}
+                        </span>
+                      </UITableCell>
 
-                        <div className="min-w-0 flex-1">
-                          <span className="text-xs font-semibold text-text block truncate">
-                            {item.displayAction}
-                          </span>
-                          <span className="text-[10.5px] font-mono text-text-muted block truncate mt-0.5">
-                            {item.value}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="bg-surface rounded-2xl p-8 border border-border/60 shadow-2xs text-center space-y-3">
-          <UIEmptyState
-            icon={<FileKey className="size-10 text-text-muted/60" />}
-            title="No Capabilities Found"
-            description="No permission keys match your current filter query."
-            action={
-              <UIButton variant="outline" size="sm" onClick={handleClearFilters}>
-                Reset Filters
-              </UIButton>
-            }
+                      {/* Clearance Policy */}
+                      <UITableCell className="py-2.5 px-3">
+                        {perm.isAccessPolicy ? (
+                          <UIBadge variant="soft" color="purple" size="xs">
+                            Work Access Policy
+                          </UIBadge>
+                        ) : (
+                          <UIBadge variant="soft" color="neutral" size="xs">
+                            Resource Domain
+                          </UIBadge>
+                        )}
+                      </UITableCell>
+
+                      {/* Operational Scope */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="text-xs text-text-muted line-clamp-1">
+                          {perm.isAccessPolicy
+                            ? perm.moduleKey === "work-mode"
+                              ? "Strict explicit Work Mode policy (View & Operation modes)"
+                              : "Hierarchical Work Level clearance (Workspace > Company > Branch)"
+                            : `Granular access authorization for ${perm.displayModule} operations`}
+                        </span>
+                      </UITableCell>
+                    </UITableRow>
+                  );
+                })
+              )}
+            </UITableBody>
+          </UITable>
+
+          {/* Infinite Scroll sentinel */}
+          <UIInfiniteScroll
+            hasMore={hasMore}
+            isLoading={isLoadingMore}
+            onLoadMore={handleLoadMore}
+            scrollThreshold={0.8}
           />
-        </div>
-      )}
+        </UITableScrollArea>
+      </div>
     </div>
   );
 }

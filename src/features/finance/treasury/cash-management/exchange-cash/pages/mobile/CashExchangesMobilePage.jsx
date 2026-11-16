@@ -19,6 +19,7 @@ import {
   AppMenu,
 } from "@/components";
 import { formatDate } from "@/utils";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 
 const CashExchangesMobilePage = ({
   cashExchanges = [],
@@ -35,7 +36,11 @@ const CashExchangesMobilePage = ({
   handlePageSizeChange,
   handleViewDetails,
   handleCreateNew,
+  canCreateExchange = true,
   handleRefresh,
+  isCompanyLevel = false,
+  selectedBranchId = "all",
+  setSelectedBranchId,
 }) => {
   const hasFilteredExchanges = cashExchanges.length > 0;
   const shouldRenderPagination = hasFilteredExchanges && totalExchanges > pageSize;
@@ -80,7 +85,15 @@ const CashExchangesMobilePage = ({
         )}
 
         {/* Mobile Search */}
-        <div className="px-4 py-3 bg-bg">
+        <div className="px-4 py-3 bg-bg space-y-2">
+          {isCompanyLevel && (
+            <BranchFilterSelect
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              size="sm"
+              className="w-full"
+            />
+          )}
           <AppInput
             placeholder="Search exchanges..."
             value={searchParams.search}
@@ -137,9 +150,14 @@ const CashExchangesMobilePage = ({
                 {/* Header: Num, Status, Action */}
                 <div className="flex items-start justify-between px-4 py-3 border-b border-border bg-surface/50">
                   <div>
-                    <AppText size="sm" weight={700} sx={{ fontFamily: "monospace" }}>
-                      {row.exchangeNumber}
-                    </AppText>
+                    <div className="flex items-center gap-1.5">
+                      <AppText size="sm" weight={700} sx={{ fontFamily: "monospace" }}>
+                        {row.exchangeNumber}
+                      </AppText>
+                      {row.branchId && (
+                        <BranchBadge branch={row.branchId} />
+                      )}
+                    </div>
                     <AppText size="xs" sx={{ color: "var(--color-text-muted)" }}>
                       {formatDate(row.exchangeDate)}
                     </AppText>
@@ -213,15 +231,17 @@ const CashExchangesMobilePage = ({
         )}
       </div>
 
-      {/* Floating Action Button for Create */}
-      <div className="fixed bottom-6 right-4 z-20">
-        <button
-          onClick={handleCreateNew}
-          className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center shadow-xl shadow-primary/30 active:scale-95 transition-transform"
-        >
-          <FiPlus size={24} />
-        </button>
-      </div>
+      {/* Floating Action Button for Create (Branch level only) */}
+      {canCreateExchange && (
+        <div className="fixed bottom-6 right-4 z-20">
+          <button
+            onClick={handleCreateNew}
+            className="w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center shadow-xl shadow-primary/30 active:scale-95 transition-transform"
+          >
+            <FiPlus size={24} />
+          </button>
+        </div>
+      )}
     </section>
   );
 };

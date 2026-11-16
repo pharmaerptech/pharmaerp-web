@@ -150,6 +150,7 @@ const useCompany = () => {
 
     createCompany: submitCreateCompany,
     getWorkspaceCompanies: fetchWorkspaceCompanies,
+    getCompanies: fetchWorkspaceCompanies,
     getCompanyById: fetchCompanyById,
     getCompanyEmployees: fetchCompanyEmployees,
     updateCompany: submitUpdateCompany,

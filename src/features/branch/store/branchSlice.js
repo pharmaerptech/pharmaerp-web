@@ -101,9 +101,7 @@ const branchSlice = createSlice({
         state.getWorkspaceBranchesStatus = API_STATUS.SUCCESS;
         const list = Array.isArray(action.payload) ? action.payload : [];
         state.workspaceBranches = list;
-        if (!state.branches?.length) {
-          state.branches = list;
-        }
+        state.branches = list;
         state.currentBranch = state.currentBranch || null;
       })
       .addCase(getWorkspaceBranches.rejected, (state, action) => {

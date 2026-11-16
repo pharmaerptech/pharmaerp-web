@@ -1,9 +1,18 @@
 // src/layouts/app/mobile/AppMobileSidebar.jsx
 
 import { useMemo, useState } from "react";
-import { LogOut, X } from "lucide-react";
+import {
+  LogOut,
+  X,
+  Sparkles,
+  Building2,
+  Store,
+  Settings,
+  HelpCircle,
+} from "lucide-react";
 import { ROUTES } from "@/constants";
 import useAuth from "@/features/auth/hooks/useAuth";
+import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
@@ -33,12 +42,63 @@ const AppMobileSidebar = ({ open, onClose }) => {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { currentCompany } = useCompany();
   const { currentBranch } = useBranch();
-  const { isSetupComplete, companyCompleted, branchCompleted } = useSetupStatus();
+  const { currentWorkspace, activeWorkspace } = useWorkspace();
+  const workspaceName = currentWorkspace?.name || activeWorkspace?.name || "Pahuch ERP";
+  const { isSetupComplete, companyCompleted, branchCompleted, completedCount } = useSetupStatus();
   const { can, canAny, isOwner, workAccess } = usePermission();
   const { workMode } = useWorkMode();
   const { currentLevel } = useNavigationPipeline();
 
   const visibleNavGroups = useMemo(() => {
+    if (!isSetupComplete) {
+      return [
+        {
+          id: "setup-flow",
+          label: "Workspace Setup",
+          items: [
+            {
+              id: "setup-center",
+              label: "Setup Center",
+              path: ROUTES.SETUP_CENTER,
+              icon: Sparkles,
+              badge: `${completedCount}/2`,
+            },
+            {
+              id: "companies",
+              label: companyCompleted ? "Manage Companies" : "1. Create Company",
+              path: companyCompleted ? ROUTES.COMPANIES : ROUTES.CREATE_COMPANY,
+              icon: Building2,
+            },
+            {
+              id: "branches",
+              label: branchCompleted ? "Manage Branches" : "2. Create Branch",
+              path: branchCompleted ? ROUTES.BRANCHES : ROUTES.CREATE_BRANCH,
+              icon: Store,
+              disabled: !companyCompleted,
+            },
+          ],
+        },
+        {
+          id: "general-support",
+          label: "Support",
+          items: [
+            {
+              id: "settings",
+              label: "Settings",
+              path: ROUTES.SETTINGS,
+              icon: Settings,
+            },
+            {
+              id: "help",
+              label: "Help Center",
+              path: ROUTES.HELP_CENTER,
+              icon: HelpCircle,
+            },
+          ],
+        },
+      ];
+    }
+
     const pipelineFiltered = filterNavByPipeline(
       SIDEBAR_NAV_GROUPS,
       currentLevel,
@@ -62,6 +122,7 @@ const AppMobileSidebar = ({ open, onClose }) => {
     isSetupComplete,
     companyCompleted,
     branchCompleted,
+    completedCount,
     currentCompany,
     currentBranch,
   ]);
@@ -114,8 +175,34 @@ const AppMobileSidebar = ({ open, onClose }) => {
           open ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
-        {/* ── TOP: Brand Header (Choose Mode) OR Level Header ───────────────────── */}
-        {!workMode ? (
+        {/* ── TOP: Setup Header OR Brand Header (Choose Mode) OR Level Header ── */}
+        {!isSetupComplete ? (
+          <div className="relative flex h-13 shrink-0 items-center justify-between border-b border-border px-3 bg-surface">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex size-7.5 shrink-0 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shadow-2xs">
+                <Sparkles className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[13px] font-bold text-text leading-tight truncate">
+                  {workspaceName}
+                </div>
+                <div className="text-[10px] text-primary font-semibold truncate">
+                  Workspace Setup ({completedCount}/2)
+                </div>
+              </div>
+            </div>
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close sidebar"
+                className="ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-text-muted transition hover:bg-surface-hover hover:text-text active:scale-[0.95]"
+              >
+                <X className="size-4" />
+              </button>
+            )}
+          </div>
+        ) : !workMode ? (
           <div className="relative flex h-13 shrink-0 items-center justify-between border-b border-border px-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="flex size-7.5 shrink-0 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shadow-2xs">
@@ -190,7 +277,7 @@ const AppMobileSidebar = ({ open, onClose }) => {
 
         {/* ── BOTTOM: Work Mode Switcher & User Profile ───────────────────────────────────── */}
         <div className="shrink-0">
-          <SidebarWorkModeSwitcher collapsed={false} onModeChange={onClose} />
+          {isSetupComplete && <SidebarWorkModeSwitcher collapsed={false} onModeChange={onClose} />}
           <SidebarUserProfile
             user={user}
             collapsed={false}

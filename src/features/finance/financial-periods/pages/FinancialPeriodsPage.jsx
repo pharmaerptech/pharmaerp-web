@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useNavigate } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useCompanyFilter } from "@/hooks";
 
 import useFinancialPeriod from "../hooks/useFinancialPeriod";
 import FinancialPeriodsDesktopPage from "./desktop/FinancialPeriodsDesktopPage";
@@ -12,6 +12,7 @@ import FinancialPeriodDialog from "../components/FinancialPeriodDialog";
 const FinancialPeriodsPage = () => {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const companyFilter = useCompanyFilter();
   const hasFetchedRef = useRef(false);
 
   const {
@@ -63,6 +64,7 @@ const FinancialPeriodsPage = () => {
           search: searchParams.search || undefined,
           periodType: searchParams.periodType === "all" ? undefined : searchParams.periodType,
           status: searchParams.status === "all" ? undefined : searchParams.status,
+          companyId: companyFilter?.queryCompanyId,
         };
         await getFinancialPeriods(query);
       } catch (err) {
@@ -70,7 +72,7 @@ const FinancialPeriodsPage = () => {
       }
     };
     executeQuery();
-  }, [currentPage, pageSize, searchParams]);
+  }, [currentPage, pageSize, searchParams, companyFilter?.queryCompanyId]);
 
   const handleSearchChange = useCallback((value) => {
     setSearchParams((prev) => ({ ...prev, search: value }));
@@ -138,6 +140,7 @@ const FinancialPeriodsPage = () => {
   const pageProps = {
     financialPeriods: financialPeriods || [],
     searchParams,
+    companyFilter,
     currentPage,
     pageSize,
     totalPeriods,

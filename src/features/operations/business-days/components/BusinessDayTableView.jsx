@@ -17,6 +17,7 @@ import {
   UIIconButton,
   UIButton,
 } from "@/components/ui";
+import { BranchBadge } from "@/components/shared";
 
 const formatCurrency = (amount) => {
   if (amount === undefined || amount === null) return "₹0";
@@ -53,6 +54,7 @@ export const BusinessDayTableView = ({
           <UITableHeader>
             <UITableRow className="bg-surface-alt/60">
               <UITableHead className="min-w-[180px]">Business Day</UITableHead>
+              <UITableHead className="min-w-[140px]">Branch</UITableHead>
               <UITableHead className="min-w-[160px]">Business Date</UITableHead>
               <UITableHead className="min-w-[140px]">Opened At</UITableHead>
               <UITableHead className="min-w-[150px]">Opened By</UITableHead>
@@ -76,6 +78,7 @@ export const BusinessDayTableView = ({
                 "System";
               const shiftsCount = bd.shifts?.length || 0;
               const isOpen = bd.status === "open";
+              const isClosing = bd.status === "closing";
               const isClosed = bd.status === "closed";
 
               return (
@@ -85,6 +88,8 @@ export const BusinessDayTableView = ({
                   className={`cursor-pointer transition-colors ${
                     isOpen
                       ? "bg-emerald-500/[0.06] hover:bg-emerald-500/[0.1] border-l-4 border-l-emerald-500 font-medium"
+                      : isClosing
+                      ? "bg-amber-500/[0.08] hover:bg-amber-500/[0.12] border-l-4 border-l-amber-500 font-medium"
                       : "hover:bg-surface-hover/60"
                   }`}
                 >
@@ -95,6 +100,8 @@ export const BusinessDayTableView = ({
                         className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg font-bold text-xs uppercase border ${
                           isOpen
                             ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 ring-2 ring-emerald-500/20"
+                            : isClosing
+                            ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 ring-2 ring-amber-500/20"
                             : "bg-primary/10 text-primary border-primary/20"
                         }`}
                       >
@@ -111,9 +118,20 @@ export const BusinessDayTableView = ({
                               LIVE
                             </span>
                           )}
+                          {isClosing && (
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                              <span className="size-1.5 rounded-full bg-amber-500 animate-ping" />
+                              CLOSING
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
+                  </UITableCell>
+
+                  {/* Branch */}
+                  <UITableCell>
+                    <BranchBadge branch={bd.branchId} />
                   </UITableCell>
 
                   {/* Business Date */}
@@ -157,6 +175,11 @@ export const BusinessDayTableView = ({
                       <p className="text-xs font-mono font-bold text-primary tabular-nums">
                         {formatCurrency(bd.actualClosingCashAmount)}
                       </p>
+                    ) : isClosing ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                        <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Closing In Progress
+                      </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                         <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -167,15 +190,22 @@ export const BusinessDayTableView = ({
 
                   {/* Status */}
                   <UITableCell>
-                    <UIBadge
-                      variant="soft"
-                      color={isOpen ? "success" : isClosed ? "neutral" : "error"}
-                      className={`text-xs capitalize font-bold ${
-                        isOpen ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : ""
-                      }`}
-                    >
-                      {bd.status || "open"}
-                    </UIBadge>
+                    {isClosing ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                        <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" />
+                        Closing
+                      </span>
+                    ) : (
+                      <UIBadge
+                        variant="soft"
+                        color={isOpen ? "success" : isClosed ? "neutral" : "error"}
+                        className={`text-xs capitalize font-bold ${
+                          isOpen ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30" : ""
+                        }`}
+                      >
+                        {bd.status || "open"}
+                      </UIBadge>
+                    )}
                   </UITableCell>
 
                   {/* Actions: Direct "i" Info button & Lock icon button */}
@@ -192,14 +222,18 @@ export const BusinessDayTableView = ({
                         <Info className="h-4 w-4" />
                       </UIIconButton>
 
-                      {isOpen && (
+                      {(isOpen || isClosing) && (
                         <UIIconButton
                           variant="ghost"
                           size="sm"
-                          aria-label="Close Business Day"
-                          title="Close Business Day"
+                          aria-label={isClosing ? "Resume Closing Business Day" : "Start Closing Business Day"}
+                          title={isClosing ? "Resume Closing Business Day" : "Start Closing Business Day"}
                           onClick={() => onCloseDay?.(bd)}
-                          className="h-8 w-8 text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 border border-amber-500/30 rounded-lg shrink-0 transition-colors"
+                          className={`h-8 w-8 rounded-lg shrink-0 transition-colors ${
+                            isClosing
+                              ? "text-amber-700 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40"
+                              : "text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 border border-amber-500/30"
+                          }`}
                         >
                           <LockKeyhole className="h-4 w-4" />
                         </UIIconButton>

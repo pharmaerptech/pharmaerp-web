@@ -44,6 +44,7 @@ import {
   PermissionGate,
   uiToast,
 } from "@/components/ui";
+import { CompanyFilterSelect, CompanyBadge } from "@/components/shared";
 import { usePermission } from "@/hooks";
 import { cn } from "@/lib/utils";
 
@@ -161,6 +162,7 @@ export const BankAccountsDesktopPage = ({
   handleViewDetails,
   handleSetPrimary,
   handleDeleteAccount,
+  companyFilter,
   clearMessage,
 }) => {
   const { can } = usePermission();
@@ -347,6 +349,14 @@ export const BankAccountsDesktopPage = ({
           />
         </div>
 
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[160px] sm:w-[190px]"
+        />
+
         {/* Bank Select */}
         {bankSelectOptions.length > 2 && (
           <div className="w-[150px] sm:w-[170px]">
@@ -493,6 +503,7 @@ export const BankAccountsDesktopPage = ({
                                   Primary
                                 </span>
                               )}
+                              <CompanyBadge company={account.companyId} />
                             </div>
                             <span className="text-[11px] text-text-muted truncate mt-0.5">
                               {account.displayBank}

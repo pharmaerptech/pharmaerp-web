@@ -384,6 +384,7 @@ export default function WorkspaceMemberDetailsPage() {
     assignedBranches,
     accessSummary,
     isLoading,
+    handleBack,
     onOpenResetPassword: () => setIsResetPasswordOpen(true),
     onOpenAccessModal: () => {
       getWorkspaceBranches().catch(() => {});

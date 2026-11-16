@@ -37,6 +37,7 @@ export * from "./UITooltip";
 export * from "./UIDrawer";
 export * from "./UIFileUpload";
 export * from "./UIInfiniteScroll";
+export * from "./UITableScrollArea";
 export * from "./KeyboardShortcutsModal";
 export { default as ContextSwitchLoader } from "./ContextSwitchLoader";
 

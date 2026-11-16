@@ -24,6 +24,7 @@ export const ROUTES = {
 
   // Company
   COMPANIES: "/companies",
+  COMPANY_OPERATIONS_HUB: "/company-operations",
   CREATE_COMPANY: "/companies/create",
   EDIT_COMPANY: "/companies/:companyId/edit",
   COMPANY_DETAILS: "/companies/:companyId",
@@ -31,6 +32,7 @@ export const ROUTES = {
 
   // Branch
   BRANCHES: "/branches",
+  BRANCH_OPERATIONS_HUB: "/branch-operations",
   CREATE_BRANCH: "/branches/create",
   EDIT_BRANCH: "/branches/:branchId/edit",
   BRANCH_DETAILS: "/branches/:branchId",
@@ -297,11 +299,14 @@ export const ROUTES = {
   // Setup
   SETUP_CENTER: "/setup",
 
-  // Dashboard
+  // Dashboard & Default Starter Landing Pages
   DASHBOARD: "/dashboard",
   BRANCH_DASHBOARD: "/dashboard/branch",
   COMPANY_DASHBOARD: "/dashboard/company",
   WORKSPACE_DASHBOARD: "/dashboard/workspace",
+  WORKSPACE_OPERATIONS_STARTER: "/workspace-operations",
+  COMPANY_OPERATIONS_STARTER: "/company/operations",
+  BRANCH_OPERATIONS_STARTER: "/branch/operations",
 
   // User Profile
   PROFILE: "/me",

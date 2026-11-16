@@ -64,6 +64,30 @@ export const getBusinessDayById = createAsyncThunk(
   }
 );
 
+export const initiateBusinessDayClose = createAsyncThunk(
+  "businessDay/initiateBusinessDayClose",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await businessDayService.initiateBusinessDayClose(id);
+      return response.data?.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const abortBusinessDayClose = createAsyncThunk(
+  "businessDay/abortBusinessDayClose",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await businessDayService.abortBusinessDayClose(id);
+      return response.data?.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 export const closeBusinessDay = createAsyncThunk(
   "businessDay/closeBusinessDay",
   async ({ id, payload }, { rejectWithValue }) => {

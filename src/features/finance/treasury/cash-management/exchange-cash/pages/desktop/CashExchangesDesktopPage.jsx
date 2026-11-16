@@ -34,6 +34,7 @@ import {
   uiToast,
 } from "@/components/ui";
 import { usePermission } from "@/hooks";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 import { cn } from "@/lib/utils";
 
 const formatCurrency = (val) => {
@@ -65,7 +66,11 @@ export const CashExchangesDesktopPage = ({
   handleSearchChange,
   handleViewDetails,
   handleCreateNew,
+  canCreateExchange = true,
   handleRefresh,
+  isCompanyLevel = false,
+  selectedBranchId = "all",
+  setSelectedBranchId,
 }) => {
   const { can } = usePermission();
   const tableContainerRef = useRef(null);
@@ -275,6 +280,17 @@ export const CashExchangesDesktopPage = ({
 
       {/* ── 2. Table Filter Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
+        {/* Branch Filter (Company Level Only) */}
+        {isCompanyLevel && (
+          <div className="w-[180px] sm:w-[200px]">
+            <BranchFilterSelect
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              size="md"
+            />
+          </div>
+        )}
+
         {/* Search Input */}
         <div className="flex-1 min-w-[240px] sm:min-w-[280px]">
           <UIInput
@@ -325,18 +341,20 @@ export const CashExchangesDesktopPage = ({
         </UIButton>
 
         {/* Primary Action Button: New Cash Exchange Modal */}
-        <PermissionGate permission="cash-exchange:create">
-          <UIButton
-            type="button"
-            variant="primary"
-            size="md"
-            startIcon={<Plus className="size-4" />}
-            onClick={handleCreateNew}
-            className="h-10 px-4 font-bold shadow-xs shrink-0 cursor-pointer"
-          >
-            New Cash Exchange
-          </UIButton>
-        </PermissionGate>
+        {canCreateExchange && (
+          <PermissionGate permission="cash-exchange:create">
+            <UIButton
+              type="button"
+              variant="primary"
+              size="md"
+              startIcon={<Plus className="size-4" />}
+              onClick={handleCreateNew}
+              className="h-10 px-4 font-bold shadow-xs shrink-0 cursor-pointer"
+            >
+              New Cash Exchange
+            </UIButton>
+          </PermissionGate>
+        )}
       </div>
 
       {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ── */}
@@ -355,6 +373,11 @@ export const CashExchangesDesktopPage = ({
                 <UITableHead className="w-[190px] font-bold text-xs">
                   Exchange # & Date
                 </UITableHead>
+                {isCompanyLevel && (
+                  <UITableHead className="w-[140px] font-bold text-xs">
+                    Branch
+                  </UITableHead>
+                )}
                 <UITableHead className="w-[160px] font-bold text-xs">
                   Processed By
                 </UITableHead>
@@ -375,10 +398,10 @@ export const CashExchangesDesktopPage = ({
 
             <UITableBody>
               {isLoading && displayedExchanges.length === 0 ? (
-                <UITableLoading rows={7} columns={6} />
+                <UITableLoading rows={7} columns={isCompanyLevel ? 7 : 6} />
               ) : displayedExchanges.length === 0 ? (
                 <UITableEmpty
-                  colSpan={6}
+                  colSpan={isCompanyLevel ? 7 : 6}
                   title="No Cash Exchanges Found"
                   description={
                     hasActiveFilters
@@ -394,7 +417,7 @@ export const CashExchangesDesktopPage = ({
                       >
                         Clear Filters
                       </UIButton>
-                    ) : (
+                    ) : canCreateExchange ? (
                       <PermissionGate permission="cash-exchange:create">
                         <UIButton
                           variant="primary"
@@ -405,7 +428,7 @@ export const CashExchangesDesktopPage = ({
                           Record First Cash Exchange
                         </UIButton>
                       </PermissionGate>
-                    )
+                    ) : null
                   }
                 />
               ) : (
@@ -435,6 +458,13 @@ export const CashExchangesDesktopPage = ({
                           </span>
                         </div>
                       </UITableCell>
+
+                      {/* Branch (Company Level) */}
+                      {isCompanyLevel && (
+                        <UITableCell className="py-2.5">
+                          <BranchBadge branch={exchange.branchId} />
+                        </UITableCell>
+                      )}
 
                       {/* 2. Processed By */}
                       <UITableCell className="py-2">

@@ -1,6 +1,6 @@
 // src/features/workspace/components/ResetMemberPasswordModal.jsx
 
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   KeyRound,
   RefreshCw,
@@ -70,6 +70,16 @@ const ResetMemberPasswordModal = ({
   const [error, setError] = useState("");
   const [isRotating, setIsRotating] = useState(false);
 
+  // Generate a fresh secure password whenever the modal opens
+  useEffect(() => {
+    if (open) {
+      setPassword(generateSecurePassword());
+      setError("");
+      setCopied(false);
+      setShowPassword(false);
+    }
+  }, [open]);
+
   const handleGenerate = () => {
     setIsRotating(true);
     const newPwd = generateSecurePassword();
@@ -101,19 +111,31 @@ const ResetMemberPasswordModal = ({
     }
   };
 
-  if (!member) return null;
+  if (!open && !member) return null;
 
-  const displayName = member.displayName || member.user?.fullName || "Staff Member";
-  const loginIdentifier = member.displayPhone || member.displayEmail || member.user?.phone || member.user?.email;
-  const userCode = member.userCode || member.user?.userCode;
-  const roleName = member.displayRole || member.roleName || "Staff";
-  const initials = displayName
-    .split(" ")
-    .map((w) => w[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "ST";
+  const displayName =
+    member?.displayName ||
+    member?.user?.fullName ||
+    member?.userId?.fullName ||
+    member?.name ||
+    "Staff Member";
+  const loginIdentifier =
+    member?.displayPhone ||
+    member?.displayEmail ||
+    member?.user?.phone ||
+    member?.user?.email ||
+    member?.userId?.phone ||
+    member?.userId?.email;
+  const userCode = member?.userCode || member?.user?.userCode || member?.userId?.userCode;
+  const roleName = member?.displayRole || member?.roleName || member?.role?.name || "Staff";
+  const initials =
+    String(displayName)
+      .split(" ")
+      .map((w) => w[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "ST";
 
   const strength = getPasswordStrength(password);
 

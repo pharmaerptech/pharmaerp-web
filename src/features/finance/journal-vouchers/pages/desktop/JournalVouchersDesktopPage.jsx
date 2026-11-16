@@ -34,6 +34,7 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
@@ -43,6 +44,7 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { usePermission } from "@/hooks";
+import { CompanyFilterSelect } from "@/components/shared";
 
 const formatCurrency = (val) => {
   if (val === undefined || val === null || isNaN(Number(val))) return "0.00";
@@ -79,6 +81,7 @@ const TYPE_BADGE_MAP = {
 export const JournalVouchersDesktopPage = ({
   journalVouchers = [],
   searchParams = { search: "", voucherType: "all", status: "all" },
+  companyFilter,
   currentPage = 1,
   pageSize = 100,
   totalVouchers = 0,
@@ -238,6 +241,14 @@ export const JournalVouchersDesktopPage = ({
           />
         </div>
 
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
+
         {/* Voucher Type Select */}
         <div className="w-[180px] sm:w-[210px]">
           <UISelect
@@ -312,11 +323,8 @@ export const JournalVouchersDesktopPage = ({
       </div>
 
       {/* ── 3. Fixed Table Container with Internal Scroll ────────────────── */}
-      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-        <div
-          ref={tableContainerRef}
-          className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0 divide-y divide-border/60"
-        >
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
           <UITable
             stickyHeader
             containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -536,7 +544,7 @@ export const JournalVouchersDesktopPage = ({
               }
             />
           )}
-        </div>
+        </UITableScrollArea>
       </div>
     </div>
   );

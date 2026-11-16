@@ -58,8 +58,12 @@ export const CreateBankDepositSlipDialog = ({
   onClose,
   onSuccess,
   prefillDayClosingId = null,
+  defaultBranchId = null,
 }) => {
-  const { currentBranch } = useBranch();
+  const { currentBranch, branches = [] } = useBranch();
+  const [selectedBranchId, setSelectedBranchId] = useState(defaultBranchId || "");
+  const activeBranchId = currentBranch?._id || selectedBranchId || (branches.length > 0 ? branches[0]._id : "");
+
   const { bankAccounts = [], getBankAccounts } = useBankAccount();
   const { fetchBranchCash, currentBranchCash, frozenDenominations, frozenCash } = useBranchCash();
   const {
@@ -86,8 +90,10 @@ export const CreateBankDepositSlipDialog = ({
   // Load bank accounts and branch cash on open
   useEffect(() => {
     if (isOpen) {
-      if (currentBranch?._id) {
-        fetchBranchCash(currentBranch._id);
+      const bId = currentBranch?._id || defaultBranchId || (branches.length > 0 ? branches[0]._id : "");
+      if (bId) {
+        setSelectedBranchId(bId);
+        fetchBranchCash(bId);
         getBankAccounts({ all: true, isActive: true }).catch((err) =>
           console.error("Failed to load bank accounts:", err)
         );
@@ -101,7 +107,7 @@ export const CreateBankDepositSlipDialog = ({
       setValidationError("");
       if (typeof clearError === "function") clearError();
     }
-  }, [isOpen, currentBranch?._id, fetchBranchCash, getBankAccounts, prefillDayClosingId, clearError]);
+  }, [isOpen, currentBranch?._id, defaultBranchId, branches, fetchBranchCash, getBankAccounts, prefillDayClosingId, clearError]);
 
   // Map available denominations in frozen vault
   const availableDenominationsMap = useMemo(() => {
@@ -245,7 +251,7 @@ export const CreateBankDepositSlipDialog = ({
       .filter((d) => d.quantity > 0);
 
     const payload = {
-      branchId: currentBranch?._id,
+      branchId: activeBranchId,
       toBankAccountId,
       slipDate,
       depositBagReference: depositBagReference.trim() || undefined,
@@ -271,8 +277,9 @@ export const CreateBankDepositSlipDialog = ({
     }
   };
 
-  const branchName = currentBranch?.name || "Main Branch";
-  const branchCode = currentBranch?.code || "BR-01";
+  const selectedBranchObj = (branches || []).find((b) => b._id === activeBranchId);
+  const branchName = currentBranch?.name || selectedBranchObj?.name || "Main Branch";
+  const branchCode = currentBranch?.code || selectedBranchObj?.branchCode || "BR-01";
 
   return (
     <UIModal
@@ -320,14 +327,35 @@ export const CreateBankDepositSlipDialog = ({
           {/* ══════════ LEFT COLUMN: Branch, Vault Balance, Bank, Details (5 Cols) ══════════ */}
           <div className="lg:col-span-5 space-y-3.5">
             {/* Card 1: Branch */}
-            <div className="bg-surface rounded-2xl border border-border p-3.5 flex items-center gap-3 shadow-xs">
-              <div className="size-10 rounded-xl bg-surface-alt text-text-muted flex items-center justify-center shrink-0">
-                <Building2 className="size-5 text-text-muted" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[11px] font-medium text-text-muted">Branch</div>
-                <div className="text-sm font-bold text-text truncate">{branchName}</div>
-                <div className="text-[11px] text-text-muted font-mono">{branchCode}</div>
+            <div className="bg-surface rounded-2xl border border-border p-3.5 space-y-2 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-surface-alt text-text-muted flex items-center justify-center shrink-0">
+                  <Building2 className="size-5 text-text-muted" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-medium text-text-muted">Branch</div>
+                  {currentBranch?._id ? (
+                    <>
+                      <div className="text-sm font-bold text-text truncate">{branchName}</div>
+                      <div className="text-[11px] text-text-muted font-mono">{branchCode}</div>
+                    </>
+                  ) : (
+                    <UISelect
+                      size="sm"
+                      value={selectedBranchId || activeBranchId}
+                      onChange={(val) => {
+                        setSelectedBranchId(val);
+                        if (val) fetchBranchCash(val);
+                      }}
+                      options={(branches || []).map((b) => ({
+                        value: b._id,
+                        label: b.name || "Branch",
+                        description: b.branchCode ? `[${b.branchCode}]` : "",
+                      }))}
+                      placeholder="Select Branch"
+                    />
+                  )}
+                </div>
               </div>
             </div>
 

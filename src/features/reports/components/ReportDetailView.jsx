@@ -46,6 +46,7 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
   UIModal,
   UIModalHeader,
   UIModalTitle,
@@ -776,10 +777,10 @@ export const ReportDetailView = ({
         </div>
 
         {/* Full-width Data Table with Infinite Scrolling */}
-        <div className="w-full bg-surface rounded-2xl border border-border/80 shadow-2xs overflow-hidden flex flex-col">
-          <div
-            ref={tableContainerRef}
-            className="relative max-h-[520px] overflow-y-auto overflow-x-auto flex-1 min-h-0 divide-y divide-border/60"
+        <div className="w-full bg-surface rounded-2xl border border-border/80 shadow-2xs overflow-hidden flex flex-col relative">
+          <UITableScrollArea
+            containerRef={tableContainerRef}
+            className="max-h-[520px] divide-y divide-border/60"
           >
             <UITable
               stickyHeader
@@ -946,7 +947,7 @@ export const ReportDetailView = ({
                 }
               />
             )}
-          </div>
+          </UITableScrollArea>
         </div>
       </div>
 

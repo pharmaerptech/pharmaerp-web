@@ -49,8 +49,6 @@ const getPageTitle = (pathname) => {
   if (pathname.startsWith("/companies/create")) return "Create Company";
   if (pathname.startsWith("/companies/") && pathname.includes("/edit"))
     return "Edit Company";
-  if (pathname.startsWith("/companies/") && pathname.includes("/settings"))
-    return "Company Settings";
   if (pathname.startsWith("/companies/") && pathname.split("/").length > 2)
     return "Company Details";
   if (pathname.startsWith("/companies")) return "Companies";

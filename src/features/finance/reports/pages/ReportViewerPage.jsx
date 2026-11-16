@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useCompanyFilter } from "@/hooks";
 import useReports from "../hooks/useReports";
 import useAccount from "@/features/finance/chart-of-accounts/accounts/hooks/useAccount";
 import useCustomer from "@/features/parties/customers/hooks/useCustomer";
@@ -13,6 +13,7 @@ const ReportViewerPage = () => {
   const { reportType } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const companyFilter = useCompanyFilter();
 
   const {
     reportData,
@@ -100,19 +101,23 @@ const ReportViewerPage = () => {
       params.type = filters.gstType;
     }
 
+    if (companyFilter?.queryCompanyId) {
+      params.companyId = companyFilter.queryCompanyId;
+    }
+
     try {
       await fetchReport(reportType, params);
     } catch (err) {
       console.error("Failed to generate report:", err);
     }
-  }, [reportType, filters, fetchReport]);
+  }, [reportType, filters, fetchReport, companyFilter?.queryCompanyId]);
 
-  // Run report automatically on selection
+  // Run report automatically on selection or company filter change
   useEffect(() => {
     if (reportType) {
       runReport();
     }
-  }, [reportType]);
+  }, [reportType, companyFilter?.selectedCompanyId]);
 
   const accountOptions = useMemo(() => {
     return [
@@ -151,6 +156,7 @@ const ReportViewerPage = () => {
     error,
     message,
     filters,
+    companyFilter,
     accountOptions,
     customerOptions,
     supplierOptions,

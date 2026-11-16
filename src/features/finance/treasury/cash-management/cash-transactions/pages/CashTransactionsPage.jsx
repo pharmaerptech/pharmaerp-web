@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useBranchFilter } from "@/hooks";
 import useCashTransaction from "../hooks/useCashTransaction";
 import useBranch from "@/features/branch/hooks/useBranch";
 import CashTransactionsDesktopPage from "./desktop/CashTransactionsDesktopPage";
@@ -9,6 +9,14 @@ import CashTransactionsMobilePage from "./mobile/CashTransactionsMobilePage";
 const CashTransactionsPage = () => {
   const isMobile = useIsMobile();
   const { currentBranch } = useBranch();
+  const {
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
+    queryBranchId,
+  } = useBranchFilter();
+  const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
+
   const {
     cashTransactions,
     getCashTransactions,
@@ -38,13 +46,13 @@ const CashTransactionsPage = () => {
         transactionType:
           searchParams.transactionType === "all" ? undefined : searchParams.transactionType,
         partition: searchParams.partition === "all" ? undefined : searchParams.partition,
-        branchId: currentBranch?._id,
+        branchId: activeBranchId,
       };
       await getCashTransactions(query);
     } catch (err) {
       console.error("Failed to query cash transactions list:", err);
     }
-  }, [isMobile, currentPage, pageSize, searchParams, getCashTransactions, currentBranch?._id]);
+  }, [isMobile, currentPage, pageSize, searchParams, getCashTransactions, activeBranchId]);
 
   useEffect(() => {
     fetchTransactionsData();
@@ -62,6 +70,9 @@ const CashTransactionsPage = () => {
       pageSize={pageSize}
       totalTransactions={cashTransactions?.length || 0}
       isLoading={getCashTransactionsStatus === API_STATUS.LOADING}
+      isCompanyLevel={isCompanyLevel}
+      selectedBranchId={selectedBranchId}
+      setSelectedBranchId={setSelectedBranchId}
       error={error}
       clearError={clearError}
       handleSearchChange={(val) => {

@@ -24,14 +24,16 @@ import { PIPELINE_LEVELS, WORK_MODES } from "@/contexts/routePipelinePolicy";
 import authRoutes from "@/features/auth/routes/authRoutes";
 import userRoutes from "@/features/user/routes/userRoutes";
 
-import { AcceptInvitationPage } from "@/features/workspace/pages";
+import { AcceptInvitationPage, WorkspaceOperationsStarterPage } from "@/features/workspace/pages";
 import { RouteErrorBoundary } from "@/components/shared/RouteErrorBoundary";
 import workspaceRoutes from "@/features/workspace/routes/workspaceRoutes";
 import setupRoutes from "@/features/setup/routes/setupRoutes";
 import dashboardRoutes from "@/features/dashboard/routes/dashboardRoutes";
 
 import { createCompanyRoutes, existingCompanyRoutes } from "@/features/company/routes/companyRoutes";
-import branchRoutes from "@/features/branch/routes/branchRoutes";
+import { CompanyOperationsStarterPage } from "@/features/company/pages";
+import { createBranchRoutes, existingBranchRoutes } from "@/features/branch/routes/branchRoutes";
+import { BranchOperationsStarterPage } from "@/features/branch/pages";
 import accessControlRoutes from "@/features/access-control/routes/accessControlRoutes";
 import catalogRoutes from "@/features/catalog/routes/catalogRoutes";
 import subscriptionRoutes from "@/features/subscription/routes/subscriptionRoutes";
@@ -44,6 +46,7 @@ import HomePage from "@/pages/HomePage";
 import UIShowcasePage from "@/pages/UIShowcasePage";
 
 import { LandingPage } from "@/features/landing";
+import StockMetricsPage from "@/features/stock-metrics/pages/StockMetricsPage";
 import TransferOrdersPage from "@/pages/inventory/TransferOrdersPage";
 import CreateTransferOrderPage from "@/pages/inventory/CreateTransferOrderPage";
 import hsnMasterRoutes from "@/features/hsn-master/routes/hsnMasterRoutes";
@@ -87,6 +90,8 @@ import purchasesRoutes from "@/features/purchases/routes/purchasesRoutes";
 import helpCenterRoutes from "@/features/help-center/routes/helpCenterRoutes";
 import operationsRoutes from "@/features/operations/routes/operationsRoutes";
 import ChooseWorkModePage from "@/features/operations/pages/ChooseWorkModePage";
+import { BranchOperationsHubPage } from "@/features/branch-operations";
+import { CompanyOperationsHubPage } from "@/features/company-operations";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 /**
@@ -242,6 +247,25 @@ export const router = createBrowserRouter([
         ),
       })),
 
+      // ── Step 2 & Company Branch Creation (Requires active company selection) ──
+      {
+        element: <ActiveCompanyGuard />,
+        children: [
+          ...guardRouteList(createBranchRoutes, "branch").map((route) => ({
+            ...route,
+            element: (
+              <PipelineLevelGuard
+                allowedLevels={[PIPELINE_LEVELS.COMPANY]}
+                allowedModes={[WORK_MODES.OPERATION]}
+                allowDuringOnboarding
+              >
+                {route.element}
+              </PipelineLevelGuard>
+            ),
+          })),
+        ],
+      },
+
       // ── Guarded by CompanyRequiredGuard (Requires Step 1 Company to be created) ──
       {
         element: <CompanyRequiredGuard />,
@@ -258,11 +282,14 @@ export const router = createBrowserRouter([
           {
             element: (
               <PipelineLevelGuard
-                allowedLevels={[PIPELINE_LEVELS.COMPANY]}
+                allowedLevels={[
+                  PIPELINE_LEVELS.WORKSPACE,
+                  PIPELINE_LEVELS.COMPANY,
+                ]}
                 allowDuringOnboarding
               />
             ),
-            children: guardRouteList(branchRoutes, "branch"),
+            children: guardRouteList(existingBranchRoutes, "branch"),
           },
         ],
       },
@@ -326,6 +353,37 @@ export const router = createBrowserRouter([
               <PipelineLevelGuard allowedLevels={[PIPELINE_LEVELS.WORKSPACE]} />
             ),
             children: [
+              // Workspace Operations Starter (Default Landing in Operation Mode)
+              {
+                path: ROUTES.WORKSPACE_OPERATIONS_STARTER,
+                element: (
+                  <PipelineLevelGuard
+                    allowedLevels={[PIPELINE_LEVELS.WORKSPACE]}
+                    allowedModes={[WORK_MODES.OPERATION]}
+                  >
+                    <WorkspaceOperationsStarterPage />
+                  </PipelineLevelGuard>
+                ),
+              },
+
+              // Company Operations Hub (Workspace Multi-Company Portal)
+              {
+                path: ROUTES.COMPANY_OPERATIONS_HUB,
+                element: (
+                  <PermissionGuard
+                    permissions={[
+                      "company:view",
+                      "branch:view",
+                      "customer:view",
+                      "supplier:view",
+                      "account:view",
+                    ]}
+                  >
+                    <CompanyOperationsHubPage />
+                  </PermissionGuard>
+                ),
+              },
+
               // Organization & Members
               ...guardRouteList(workspaceRoutes, "workspace", {
                 [ROUTES.WORKSPACE_MEMBERS]: "workspace-member:view",
@@ -346,6 +404,9 @@ export const router = createBrowserRouter([
                   </PermissionGuard>
                 ),
               })),
+
+              // Custom Products (Workspace Product Master)
+              ...guardRouteList(workspaceProductRoutes, "product"),
             ],
           },
 
@@ -356,9 +417,47 @@ export const router = createBrowserRouter([
               // ── Company Level Routes (Floor 2) ──
               {
                 element: (
-                  <PipelineLevelGuard allowedLevels={[PIPELINE_LEVELS.COMPANY]} />
+                  <PipelineLevelGuard
+                    allowedLevels={[
+                      PIPELINE_LEVELS.WORKSPACE,
+                      PIPELINE_LEVELS.COMPANY,
+                    ]}
+                    allowDuringOnboarding
+                  />
                 ),
                 children: [
+                  // Company Operations Starter (Default Landing in Operation Mode)
+                  {
+                    path: ROUTES.COMPANY_OPERATIONS_STARTER,
+                    element: (
+                      <PipelineLevelGuard
+                        allowedLevels={[PIPELINE_LEVELS.COMPANY]}
+                        allowedModes={[WORK_MODES.OPERATION]}
+                        allowDuringOnboarding
+                      >
+                        <CompanyOperationsStarterPage />
+                      </PipelineLevelGuard>
+                    ),
+                  },
+
+                  // Branch Operations Hub (Company Multi-Branch Portal)
+                  {
+                    path: ROUTES.BRANCH_OPERATIONS_HUB,
+                    element: (
+                      <PermissionGuard
+                        permissions={[
+                          "bill:view",
+                          "sale:view",
+                          "purchase:view",
+                          "branch:view",
+                          "cash-account:view",
+                        ]}
+                      >
+                        <BranchOperationsHubPage />
+                      </PermissionGuard>
+                    ),
+                  },
+
                   // Parties
                   ...guardRouteList(customerRoutes, "customer"),
                   ...guardRouteList(supplierRoutes, "supplier"),
@@ -438,7 +537,6 @@ export const router = createBrowserRouter([
                   ...guardRouteList(bankAccountRoutes, "bank-account"),
                   ...guardRouteList(fundTransferRoutes, "fund-transfer"),
                   ...guardRouteList(chequeRoutes, "cheque"),
-                  ...guardRouteList(bankDepositSlipRoutes, "bank-deposit-slip"),
                   ...bankTransactionRoutes.map((route) => ({
                     ...route,
                     element: (
@@ -499,7 +597,123 @@ export const router = createBrowserRouter([
                 ],
               },
 
-              // ── Branch Level Routes (Floor 3 — Requires active branch selection) ──
+              // ── Shared Company & Branch Operational & Analytics Modules ──
+              {
+                element: (
+                  <PipelineLevelGuard
+                    allowedLevels={[
+                      PIPELINE_LEVELS.WORKSPACE,
+                      PIPELINE_LEVELS.COMPANY,
+                      PIPELINE_LEVELS.BRANCH,
+                    ]}
+                  />
+                ),
+                children: [
+                  // Reports Hub (Company & Branch View)
+                  {
+                    path: ROUTES.REPORTS_HUB,
+                    element: (
+                      <PermissionGuard permission="report:view">
+                        <ReportsHubPage />
+                      </PermissionGuard>
+                    ),
+                  },
+                  {
+                    path: "/reports/:category/:subReport",
+                    element: (
+                      <PermissionGuard permission="report:view">
+                        <ReportsHubPage />
+                      </PermissionGuard>
+                    ),
+                  },
+                  {
+                    path: "/reports/:reportKey",
+                    element: (
+                      <PermissionGuard permission="report:view">
+                        <ReportsHubPage />
+                      </PermissionGuard>
+                    ),
+                  },
+
+                  // Branch Cash & Counter Payments
+                  ...guardRouteList(branchCashRoutes, "cash-account"),
+                  ...guardRouteList(bankDepositSlipRoutes, "bank-deposit-slip"),
+                  ...guardRouteList(cashExchangeRoutes, "cash-exchange"),
+                  ...guardRouteList(paymentQrRoutes, "payment-qr"),
+                  ...cashTransactionRoutes.map((route) => ({
+                    ...route,
+                    element: (
+                      <PermissionGuard permission="cash-transaction:view">
+                        {route.element}
+                      </PermissionGuard>
+                    ),
+                  })),
+
+                  // Inventory & Stock
+                  {
+                    path: "/inventory",
+                    element: <Navigate to="/inventory/stock-metrics" replace />,
+                  },
+                  {
+                    path: "/inventory/stock-metrics",
+                    element: (
+                      <PermissionGuard
+                        permissions={[
+                          "stock:view",
+                          "product:view",
+                          "inventory:view",
+                        ]}
+                      >
+                        <StockMetricsPage />
+                      </PermissionGuard>
+                    ),
+                  },
+                  {
+                    path: "/stock-metrics",
+                    element: <Navigate to="/inventory/stock-metrics" replace />,
+                  },
+                  {
+                    path: "/inventory/transfer-orders",
+                    element: <TransferOrdersPage />,
+                  },
+                  {
+                    path: "/inventory/transfer-orders/create",
+                    element: <CreateTransferOrderPage />,
+                  },
+                  {
+                    path: "/inventory/transfer-orders/:id/edit",
+                    element: <CreateTransferOrderPage />,
+                  },
+
+                  // Marketplace
+                  ...guardRouteList(
+                    marketplaceStoreRoutes,
+                    "marketplace-store"
+                  ),
+                  ...guardRouteList(
+                    marketplaceProductRoutes,
+                    "marketplace-product"
+                  ),
+
+                  // Invoicing, Returns, Credit Notes & Purchases
+                  ...guardRouteList(billingRoutes, "bill"),
+                  ...guardRouteList(salesReturnRoutes, "bill"),
+                  ...guardRouteList(
+                    salesRoutes.filter(
+                      (r) =>
+                        r.path === ROUTES.CREDIT_NOTES ||
+                        r.path === "/sales/credit-notes"
+                    ),
+                    "bill"
+                  ),
+                  ...guardRouteList(purchasesRoutes, "purchase"),
+
+                  // Shifts & Closings
+                  ...operationsRoutes,
+                ],
+              },
+
+              // ── Branch Level Only Routes (Floor 3 — Requires active branch selection) ──
               {
                 element: <ActiveBranchGuard />,
                 children: [
@@ -510,82 +724,28 @@ export const router = createBrowserRouter([
                       />
                     ),
                     children: [
-                      // Reports Hub (Branch View)
+                      // Branch Operations Starter (Default Landing in Operation Mode)
                       {
-                        path: ROUTES.REPORTS_HUB,
+                        path: ROUTES.BRANCH_OPERATIONS_STARTER,
                         element: (
-                          <PermissionGuard permission="report:view">
-                            <ReportsHubPage />
-                          </PermissionGuard>
-                        ),
-                      },
-                      {
-                        path: "/reports/:category/:subReport",
-                        element: (
-                          <PermissionGuard permission="report:view">
-                            <ReportsHubPage />
-                          </PermissionGuard>
-                        ),
-                      },
-                      {
-                        path: "/reports/:reportKey",
-                        element: (
-                          <PermissionGuard permission="report:view">
-                            <ReportsHubPage />
-                          </PermissionGuard>
+                          <PipelineLevelGuard
+                            allowedLevels={[PIPELINE_LEVELS.BRANCH]}
+                            allowedModes={[WORK_MODES.OPERATION]}
+                          >
+                            <BranchOperationsStarterPage />
+                          </PipelineLevelGuard>
                         ),
                       },
 
-                      // Branch Cash & Counter Payments
-                      ...guardRouteList(branchCashRoutes, "cash-account"),
-                      ...guardRouteList(cashExchangeRoutes, "cash-exchange"),
-                      ...guardRouteList(paymentQrRoutes, "payment-qr"),
-                      ...cashTransactionRoutes.map((route) => ({
-                        ...route,
-                        element: (
-                          <PermissionGuard permission="cash-transaction:view">
-                            {route.element}
-                          </PermissionGuard>
-                        ),
-                      })),
-
-                      // Branch Inventory & Stock
-                      {
-                        path: "/inventory",
-                        element: <Navigate to={ROUTES.STOCK_METRICS} replace />,
-                      },
-                      {
-                        path: "/inventory/transfer-orders",
-                        element: <TransferOrdersPage />,
-                      },
-                      {
-                        path: "/inventory/transfer-orders/create",
-                        element: <CreateTransferOrderPage />,
-                      },
-                      {
-                        path: "/inventory/transfer-orders/:id/edit",
-                        element: <CreateTransferOrderPage />,
-                      },
-                      ...guardRouteList(workspaceProductRoutes, "product"),
-
-                      // Marketplace
+                      // Sales POS Counter (Strictly requires active branch till/session)
                       ...guardRouteList(
-                        marketplaceStoreRoutes,
-                        "marketplace-store"
+                        salesRoutes.filter(
+                          (r) =>
+                            r.path !== ROUTES.CREDIT_NOTES &&
+                            r.path !== "/sales/credit-notes"
+                        ),
+                        "pos"
                       ),
-                      ...guardRouteList(
-                        marketplaceProductRoutes,
-                        "marketplace-product"
-                      ),
-
-                      // Sales & POS, Invoicing & Purchases
-                      ...guardRouteList(salesRoutes, "pos"),
-                      ...guardRouteList(billingRoutes, "bill"),
-                      ...guardRouteList(salesReturnRoutes, "bill"),
-                      ...guardRouteList(purchasesRoutes, "purchase"),
-
-                      // Shifts & Closings
-                      ...operationsRoutes,
                     ],
                   },
                 ],

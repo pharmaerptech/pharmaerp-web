@@ -1,6 +1,7 @@
 // src/features/sales/components/SalesInvoicePreviewModal.jsx
 
 import React, { useEffect, useMemo } from "react";
+import { useSelector } from "react-redux";
 import {
   Receipt,
   ArrowLeft,
@@ -11,6 +12,7 @@ import {
   AlertCircle,
   Percent,
   RotateCcw,
+  Lock,
 } from "lucide-react";
 import {
   UIModal,
@@ -38,12 +40,26 @@ export const SalesInvoicePreviewModal = ({
   company: companyProp,
   cartGrandTotal = 0,
   isReturnInvoice = false,
+  activeShift: activeShiftProp,
+  openBusinessDay: openBusinessDayProp,
 }) => {
   const { currentBranch } = useBranch();
   const { currentCompany } = useCompany();
 
   const activeBranch = branchProp || currentBranch;
   const activeCompany = companyProp || currentCompany;
+
+  const storeShift = useSelector((state) => state.shift?.activeShift);
+  const storeBusinessDay = useSelector((state) => state.businessDay?.openBusinessDay);
+  const activeShift = activeShiftProp ?? storeShift;
+  const openBusinessDay = openBusinessDayProp ?? storeBusinessDay;
+
+  const isShiftOpen = activeShift?.status === "open";
+  const isDayOpen = openBusinessDay?.status === "open";
+  const isBillingBlocked = !isShiftOpen || !isDayOpen;
+  const billingBlockReason = !isShiftOpen
+    ? `Shift is currently ${activeShift?.status || "closed"}. Billing is locked.`
+    : `Business Day is currently ${openBusinessDay?.status || "closed"}. Billing is locked.`;
 
   // Keyboard shortcut listener: Enter to Checkout, Esc to Cancel Edit
   useEffect(() => {
@@ -55,13 +71,15 @@ export const SalesInvoicePreviewModal = ({
         onClose?.();
       } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey || !e.shiftKey)) {
         e.preventDefault();
-        onProceedToCheckout?.();
+        if (!isBillingBlocked) {
+          onProceedToCheckout?.();
+        }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose, onProceedToCheckout]);
+  }, [isOpen, onClose, onProceedToCheckout, isBillingBlocked]);
 
   // Format date once
   const formattedDate = useMemo(() => {
@@ -315,6 +333,22 @@ export const SalesInvoicePreviewModal = ({
             </div>
           </div>
         </UIModalHeader>
+
+        {/* ── Billing Locked Barrier Strip ── */}
+        {isBillingBlocked && (
+          <div className="mx-4 sm:mx-5 mt-3 bg-amber-500/15 border border-amber-500/35 rounded-xl px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 shadow-2xs">
+            <div className="flex items-center gap-2 min-w-0">
+              <Lock className="size-4 text-amber-600 shrink-0" />
+              <div className="font-semibold truncate">
+                <span className="font-bold">Billing Locked: </span>
+                {billingBlockReason}
+              </div>
+            </div>
+            <span className="text-[10px] uppercase font-mono font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 shrink-0">
+              Checkout Blocked
+            </span>
+          </div>
+        )}
 
         {/* ── TWO-COLUMN BODY: ZERO DIALOG SCROLLING ── */}
         <div className="flex-1 min-h-0 p-4 sm:p-5 overflow-hidden grid grid-cols-12 gap-5">
@@ -578,37 +612,44 @@ export const SalesInvoicePreviewModal = ({
 
             {/* Action Buttons: Checkout / Process Return + Cancel Edit */}
             <div className="space-y-2.5 pt-4">
-              <UIButton
-                type="button"
-                variant={isReturn ? "destructive" : "primary"}
-                size="lg"
-                onClick={onProceedToCheckout}
-                endIcon={
-                  isReturn ? (
-                    <RotateCcw className="size-4.5" />
-                  ) : (
-                    <CreditCard className="size-4.5" />
-                  )
-                }
-                className={cn(
-                  "w-full h-11.5 text-white font-bold text-sm shadow-md cursor-pointer rounded-xl flex items-center justify-center gap-2",
-                  isReturn
-                    ? "bg-error hover:bg-error-hover"
-                    : "bg-primary hover:bg-primary-hover"
-                )}
-                title={
-                  isReturn
-                    ? "Proceed to refund / credit settlement (Enter)"
-                    : "Proceed to checkout and collect payment (Enter)"
-                }
-              >
-                <span>
-                  {isReturn ? "Process Return · Refund" : "Checkout"} · ₹{payableTotal.toLocaleString("en-IN")}
-                </span>
-                <span className="text-[10px] opacity-75 font-mono px-1.5 py-0.5 rounded bg-white/20">
-                  Enter ↵
-                </span>
-              </UIButton>
+              {isBillingBlocked ? (
+                <div className="w-full p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300 flex items-center justify-center gap-2 text-xs font-bold shadow-xs text-center">
+                  <Lock className="size-4 text-amber-600 shrink-0" />
+                  <span>Checkout Disabled · {billingBlockReason}</span>
+                </div>
+              ) : (
+                <UIButton
+                  type="button"
+                  variant={isReturn ? "destructive" : "primary"}
+                  size="lg"
+                  onClick={onProceedToCheckout}
+                  endIcon={
+                    isReturn ? (
+                      <RotateCcw className="size-4.5" />
+                    ) : (
+                      <CreditCard className="size-4.5" />
+                    )
+                  }
+                  className={cn(
+                    "w-full h-11.5 text-white font-bold text-sm shadow-md cursor-pointer rounded-xl flex items-center justify-center gap-2",
+                    isReturn
+                      ? "bg-error hover:bg-error-hover"
+                      : "bg-primary hover:bg-primary-hover"
+                  )}
+                  title={
+                    isReturn
+                      ? "Proceed to refund / credit settlement (Enter)"
+                      : "Proceed to checkout and collect payment (Enter)"
+                  }
+                >
+                  <span>
+                    {isReturn ? "Process Return · Refund" : "Checkout"} · ₹{payableTotal.toLocaleString("en-IN")}
+                  </span>
+                  <span className="text-[10px] opacity-75 font-mono px-1.5 py-0.5 rounded bg-white/20">
+                    Enter ↵
+                  </span>
+                </UIButton>
+              )}
 
               <UIButton
                 type="button"

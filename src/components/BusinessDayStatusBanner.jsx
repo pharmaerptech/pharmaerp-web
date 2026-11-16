@@ -21,7 +21,7 @@ const BusinessDayStatusBanner = () => {
   const navigate = useNavigate();
   const { currentBranch } = useBranch();
   const { openBusinessDay } = useSelector((state) => state.businessDay);
-  const { currentShift } = useSelector((state) => state.shift);
+  const activeShift = useSelector((state) => state.shift?.activeShift || state.shift?.currentShift);
 
   useEffect(() => {
     if (currentBranch?._id) {
@@ -51,6 +51,24 @@ const BusinessDayStatusBanner = () => {
     year: "numeric",
   });
 
+  if (openBusinessDay.status === "closing") {
+    return (
+      <div
+        className="flex items-center gap-3 px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 text-xs cursor-pointer hover:bg-amber-500/15 transition-colors"
+        onClick={() => navigate("/operations/business-days")}
+        title="Business Day is currently closing. Click to review."
+      >
+        <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping flex-shrink-0" />
+        <CalendarDays className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+        <span className="font-semibold text-amber-700 dark:text-amber-300">
+          Business Day Closing in Progress ({displayDate})
+        </span>
+        <span className="text-amber-700/70 dark:text-amber-300/70 font-mono">{openBusinessDay.businessDayNo}</span>
+        <span className="ml-auto text-amber-700 dark:text-amber-300 font-medium">Operations Paused →</span>
+      </div>
+    );
+  }
+
   return (
     <div
       className="flex items-center gap-3 px-4 py-2 bg-primary/5 border-b border-primary/10 text-xs cursor-pointer hover:bg-primary/8 transition-colors"
@@ -62,7 +80,15 @@ const BusinessDayStatusBanner = () => {
       <span className="font-medium text-primary">{displayDate}</span>
       <span className="text-text-muted font-mono">{openBusinessDay.businessDayNo}</span>
       <span className="text-border mx-1">|</span>
-      {currentShift?.status === "open" ? (
+      {activeShift?.status === "closing" ? (
+        <>
+          <Clock className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+          <span className="text-amber-600 dark:text-amber-400 font-medium flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+            Shift Closing in Progress
+          </span>
+        </>
+      ) : activeShift?.status === "open" ? (
         <>
           <Clock className="w-3.5 h-3.5 text-success flex-shrink-0" />
           <span className="text-success font-medium">Shift Active</span>

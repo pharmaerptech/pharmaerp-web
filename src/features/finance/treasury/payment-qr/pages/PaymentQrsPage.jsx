@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { ROUTES, API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useBranchFilter } from "@/hooks";
 import useBranch from "@/features/branch/hooks/useBranch";
 
 import usePaymentQr from "../hooks/usePaymentQr";
@@ -54,6 +54,14 @@ const PaymentQrsPage = () => {
   } = usePaymentQr();
 
   const { currentBranch } = useBranch();
+  const {
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
+    queryBranchId,
+  } = useBranchFilter();
+  const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
+
   const [filters, setFilters] = useState(INITIAL_FILTERS);
   const [totalQrs, setTotalQrs] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -65,7 +73,7 @@ const PaymentQrsPage = () => {
           page: params.page || filters.page,
           limit: params.limit || filters.limit,
           search: params.search !== undefined ? params.search : filters.search,
-          branchId: currentBranch?._id || undefined,
+          branchId: activeBranchId,
         };
 
         if (params.status !== undefined) {
@@ -89,13 +97,13 @@ const PaymentQrsPage = () => {
         console.error("Failed to load payment QR database:", err);
       }
     },
-    [getPaymentQrs, filters, currentBranch?._id]
+    [getPaymentQrs, filters, activeBranchId]
   );
 
   // Initial load & filter changes
   useEffect(() => {
     fetchPaymentQrs();
-  }, [filters.page, filters.limit, filters.status, filters.provider, currentBranch?._id]);
+  }, [filters.page, filters.limit, filters.status, filters.provider, activeBranchId]);
 
   // Handle Search Input
   useEffect(() => {
@@ -292,6 +300,10 @@ const PaymentQrsPage = () => {
     clearError,
     clearMessage,
     currentBranch,
+    isCompanyLevel,
+    canCreateQr: !isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
   };
 
   return (

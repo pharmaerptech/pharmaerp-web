@@ -85,6 +85,7 @@ const AppMobileBottomNav = () => {
     if (currentLevel === PIPELINE_LEVELS.WORKSPACE) {
       items = isOp
         ? [
+            { label: "Starter", path: ROUTES.WORKSPACE_OPERATIONS_STARTER, icon: <FiHome />, end: true, level: "workspace", mode: "operation" },
             { label: "Companies", path: ROUTES.COMPANIES, icon: <FiBriefcase />, permission: "company:view", level: "workspace", mode: "operation" },
             { label: "Members", path: ROUTES.WORKSPACE_MEMBERS, icon: <FiUsers />, permission: "workspace-member:view", level: "workspace", mode: "operation" },
             { label: "Roles", path: ROUTES.ROLES, icon: <FiShield />, permission: "role:view", level: "workspace", mode: "operation" },
@@ -100,9 +101,9 @@ const AppMobileBottomNav = () => {
     } else if (currentLevel === PIPELINE_LEVELS.COMPANY) {
       items = isOp
         ? [
+            { label: "Starter", path: ROUTES.COMPANY_OPERATIONS_STARTER, icon: <FiHome />, end: true, level: "company", mode: "operation" },
             { label: "Branches", path: ROUTES.BRANCHES, icon: <FiMapPin />, permission: "branch:view", level: "company", mode: "operation" },
             { label: "Customers", path: ROUTES.CUSTOMERS, icon: <FiUsers />, permission: "customer:view", level: "company", mode: "operation" },
-            { label: "Suppliers", path: ROUTES.SUPPLIERS, icon: <FiBriefcase />, permission: "supplier:view", level: "company", mode: "operation" },
             { label: "Accounts", path: ROUTES.ACCOUNTS, icon: <FiFileText />, permission: "account:view", level: "company", mode: "operation" },
             { label: "Settings", path: ROUTES.SETTINGS, icon: <FiMoreHorizontal /> },
           ]
@@ -116,9 +117,9 @@ const AppMobileBottomNav = () => {
     } else {
       items = isOp
         ? [
+            { label: "Starter", path: ROUTES.BRANCH_OPERATIONS_STARTER, icon: <FiHome />, end: true, level: "branch", mode: "operation" },
             { label: "POS", path: ROUTES.SALES, icon: <FiShoppingCart />, permission: "sale:create", level: "branch", mode: "operation" },
             { label: "Invoices", path: ROUTES.BILLING, icon: <FiFileText />, permission: "sale:view", level: "branch", mode: "operation" },
-            { label: "Stock", path: ROUTES.WORKSPACE_PRODUCTS, icon: <FiBox />, permission: "product:view", level: "branch", mode: "operation" },
             { label: "Shifts", path: "/operations/shifts", icon: <FiClock />, permission: "sale:view", level: "branch", mode: "operation" },
             { label: "Settings", path: ROUTES.SETTINGS, icon: <FiMoreHorizontal /> },
           ]

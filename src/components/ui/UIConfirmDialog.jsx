@@ -1,4 +1,5 @@
 import React, { forwardRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertTriangle,
   Trash2,
@@ -46,6 +47,8 @@ export const UIConfirmDialog = forwardRef(
       icon,
       size = "md", // "sm" | "md" | "lg"
       className,
+      containerClassName,
+      zIndex = "z-[200]",
       ...props
     },
     ref
@@ -123,10 +126,16 @@ export const UIConfirmDialog = forwardRef(
       lg: "max-w-lg",
     };
 
-    return (
+    const dialogContent = (
       <AnimatePresence>
         {isOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-y-auto">
+          <div
+            className={cn(
+              "fixed inset-0 flex items-center justify-center p-4 overflow-y-auto",
+              zIndex || "z-[200]",
+              containerClassName
+            )}
+          >
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -134,7 +143,7 @@ export const UIConfirmDialog = forwardRef(
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
               onClick={!isLoading ? onClose : undefined}
-              className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+              className="fixed inset-0 bg-neutral-950/60 dark:bg-neutral-950/80 backdrop-blur-xs z-0"
             />
 
             {/* Modal Dialog Box */}
@@ -264,6 +273,12 @@ export const UIConfirmDialog = forwardRef(
         )}
       </AnimatePresence>
     );
+
+    if (typeof document === "undefined") {
+      return dialogContent;
+    }
+
+    return createPortal(dialogContent, document.body);
   }
 );
 UIConfirmDialog.displayName = "UIConfirmDialog";

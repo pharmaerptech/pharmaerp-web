@@ -1,36 +1,41 @@
-import React, { useMemo } from "react";
+// src/features/finance/financial-periods/pages/desktop/FinancialPeriodsDesktopPage.jsx
+
+import React, { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import {
-  FiPlus,
-  FiActivity,
-  FiLock,
-  FiCalendar,
-  FiChevronLeft,
-  FiChevronRight,
-  FiRefreshCw,
-} from "react-icons/fi";
+  Calendar,
+  Activity,
+  Lock,
+  CheckCircle2,
+  Search,
+  RotateCcw,
+  RefreshCw,
+  Plus,
+  Eye,
+  Unlock,
+  AlertCircle,
+} from "lucide-react";
 
 import {
-  AppBox,
-  AppBreadcrumb,
-  AppButton,
-  AppCard,
-  AppHeading,
-  AppSelect,
-  AppStack,
-  AppText,
-  AppTable,
-  AppTableSkeleton,
-  AppTag,
-  AppStatCard,
-  AppSearchInput,
-  AppIconButton,
-  AppMenu,
-  AppEmptyState,
-  AppAlert,
+  UIButton,
+  UIInput,
+  UISelect,
+  UIBadge,
+  UITable,
+  UITableHeader,
+  UITableBody,
+  UITableRow,
+  UITableHead,
+  UITableCell,
+  UITableEmpty,
+  UITableLoading,
+  UIInfiniteScroll,
+  UITableScrollArea,
   PermissionGate,
-} from "@/components";
+} from "@/components/ui";
 import { usePermission } from "@/hooks";
 import { formatDate } from "@/utils";
+import { CompanyFilterSelect } from "@/components/shared";
+import { cn } from "@/lib/utils";
 
 const typeOptions = [
   { label: "All Types", value: "all" },
@@ -47,18 +52,15 @@ const statusOptions = [
   { label: "Locked Period", value: "LOCKED" },
 ];
 
-const statusColorMap = {
-  OPEN: "success",
-  CLOSED: "warning",
-  LOCKED: "neutral",
-};
+const PAGE_LIMIT = 15;
 
 const FinancialPeriodsDesktopPage = ({
   financialPeriods = [],
-  searchParams,
-  currentPage,
-  pageSize,
-  totalPeriods,
+  searchParams = { search: "", periodType: "all", status: "all" },
+  companyFilter,
+  currentPage = 1,
+  pageSize = 25,
+  totalPeriods = 0,
   isLoading = false,
   isUpdating = false,
   error,
@@ -69,15 +71,47 @@ const FinancialPeriodsDesktopPage = ({
   handlePageSizeChange,
   handleUpdateStatus,
   handleCreate,
+  handleView,
   handleRefresh,
 }) => {
+  const tableContainerRef = useRef(null);
   const { can } = usePermission();
+
+  // Infinite Scroll state - incremental batches
+  const [visibleCount, setVisibleCount] = useState(PAGE_LIMIT);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Reset visible count and scroll to top on filter change
+  useEffect(() => {
+    setVisibleCount(PAGE_LIMIT);
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  }, [searchParams.search, searchParams.periodType, searchParams.status]);
+
+  const displayedPeriods = useMemo(() => {
+    return (financialPeriods || []).slice(0, visibleCount);
+  }, [financialPeriods, visibleCount]);
+
+  const hasMore = visibleCount < (financialPeriods || []).length;
+
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount((prev) =>
+        Math.min(prev + PAGE_LIMIT, (financialPeriods || []).length)
+      );
+      setIsLoadingMore(false);
+    }, 120);
+  }, [isLoadingMore, hasMore, financialPeriods]);
+
   const currentActivePeriod = useMemo(() => {
-    return financialPeriods.find((p) => p.isCurrent)?.periodCode || "-";
+    return financialPeriods.find((p) => p.isCurrent)?.periodCode || "—";
   }, [financialPeriods]);
 
   const stats = useMemo(() => {
-    const counts = { total: totalPeriods, open: 0, closed: 0, locked: 0 };
+    const counts = { total: totalPeriods || financialPeriods.length, open: 0, closed: 0, locked: 0 };
     financialPeriods.forEach((p) => {
       if (p.status === "OPEN") counts.open++;
       else if (p.status === "CLOSED") counts.closed++;
@@ -86,614 +120,422 @@ const FinancialPeriodsDesktopPage = ({
     return counts;
   }, [financialPeriods, totalPeriods]);
 
-  const statsList = useMemo(() => [
-    {
-      id: "total_periods",
-      title: "Defined Periods",
-      value: stats.total,
-      description: "Total periods in database",
-      colorVariant: "primary",
-      icon: <FiCalendar />,
-    },
-    {
-      id: "active_period",
-      title: "Active Period",
-      value: currentActivePeriod,
-      description: "Currently open period",
-      colorVariant: "success",
-      icon: <FiActivity />,
-    },
-    {
-      id: "closed_periods",
-      title: "Closed Periods",
-      value: stats.closed,
-      description: "Read-only periods",
-      colorVariant: "warning",
-      icon: <FiLock />,
-    },
-    {
-      id: "locked_periods",
-      title: "Locked Periods",
-      value: stats.locked,
-      description: "Fully frozen periods",
-      colorVariant: "neutral",
-      icon: <FiLock />,
-    },
-  ], [stats, currentActivePeriod]);
+  const statCards = useMemo(
+    () => [
+      {
+        id: "total_periods",
+        title: "Defined Periods",
+        value: stats.total,
+        subtitle: "Total fiscal calendars",
+        color: "text-indigo-600 dark:text-indigo-400",
+        bg: "bg-indigo-500/10",
+        border: "border-indigo-500/20",
+        icon: Calendar,
+      },
+      {
+        id: "current_active",
+        title: "Active Period",
+        value: currentActivePeriod,
+        subtitle: `${stats.open} open periods`,
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/20",
+        icon: Activity,
+      },
+      {
+        id: "closed_periods",
+        title: "Closed Periods",
+        value: stats.closed,
+        subtitle: "Awaiting audit & locking",
+        color: "text-amber-600 dark:text-amber-400",
+        bg: "bg-amber-500/10",
+        border: "border-amber-500/20",
+        icon: CheckCircle2,
+      },
+      {
+        id: "locked_periods",
+        title: "Locked Periods",
+        value: stats.locked,
+        subtitle: "Fully frozen books",
+        color: "text-rose-600 dark:text-rose-400",
+        bg: "bg-rose-500/10",
+        border: "border-rose-500/20",
+        icon: Lock,
+      },
+    ],
+    [stats, currentActivePeriod]
+  );
+
+  const hasActiveFilters = Boolean(
+    searchParams.search ||
+      (searchParams.periodType && searchParams.periodType !== "all") ||
+      (searchParams.status && searchParams.status !== "all")
+  );
+
+  const handleClearFilters = () => {
+    handleSearchChange("");
+    handleFilterChange("periodType", "all");
+    handleFilterChange("status", "all");
+  };
 
   const getStatusBadge = (status) => {
     const raw = String(status || "").toUpperCase();
-    return (
-      <AppTag
-        label={raw}
-        variant="soft"
-        colorVariant={statusColorMap[raw] || "neutral"}
-        rounded="md"
-        sx={statusBadgeSx}
-      />
-    );
+    switch (raw) {
+      case "OPEN":
+        return (
+          <UIBadge variant="soft" color="success" className="font-semibold text-xs">
+            Open Period
+          </UIBadge>
+        );
+      case "CLOSED":
+        return (
+          <UIBadge variant="soft" color="warning" className="font-semibold text-xs">
+            Closed Period
+          </UIBadge>
+        );
+      case "LOCKED":
+        return (
+          <UIBadge variant="soft" color="neutral" className="font-semibold text-xs">
+            Locked Period
+          </UIBadge>
+        );
+      default:
+        return (
+          <UIBadge variant="soft" color="neutral" className="font-semibold text-xs">
+            {raw}
+          </UIBadge>
+        );
+    }
   };
 
-  const columns = useMemo(() => [
-    {
-      id: "periodCode",
-      key: "periodCode",
-      label: "Period Code",
-      minWidth: 150,
-      render: (_, p) => (
-        <AppText variant="body2" sx={tableValueMonoSx}>
-          {p.periodCode}
-        </AppText>
-      ),
-    },
-    {
-      id: "periodType",
-      key: "periodType",
-      label: "Type",
-      minWidth: 150,
-      render: (_, p) => (
-        <AppText variant="body2" sx={tableValueSx}>
-          {p.periodType}
-        </AppText>
-      ),
-    },
-    {
-      id: "startDate",
-      key: "startDate",
-      label: "Start Date",
-      minWidth: 150,
-      render: (_, p) => (
-        <AppText variant="body2" sx={tableValueMutedSx}>
-          {formatDate(p.startDate)}
-        </AppText>
-      ),
-    },
-    {
-      id: "endDate",
-      key: "endDate",
-      label: "End Date",
-      minWidth: 150,
-      render: (_, p) => (
-        <AppText variant="body2" sx={tableValueMutedSx}>
-          {formatDate(p.endDate)}
-        </AppText>
-      ),
-    },
-    {
-      id: "isCurrent",
-      key: "isCurrent",
-      label: "Current Active",
-      minWidth: 150,
-      render: (_, p) => (
-        p.isCurrent ? (
-          <AppTag
-            label="ACTIVE PERIOD"
-            variant="soft"
-            colorVariant="success"
-            rounded="md"
-            sx={tagSx}
-          />
-        ) : (
-          <AppText variant="body2" sx={tableValueMutedSx}>-</AppText>
-        )
-      ),
-    },
-    {
-      id: "status",
-      key: "status",
-      label: "Status",
-      minWidth: 150,
-      render: (_, p) => getStatusBadge(p.status),
-    },
-    {
-      id: "actions",
-      key: "actions",
-      label: "Actions",
-      align: "center",
-      minWidth: 180,
-      render: (_, p) => {
-        if (!can("financial-period:update")) {
-          return <AppText variant="body2" sx={tableValueMutedSx}>-</AppText>;
-        }
-
-        return (
-          <AppStack direction="row" gap={1} justify="center" align="center">
-            {p.status === "OPEN" && (
-              <AppButton
-                size="tiny"
-                variant="outlined"
-                colorVariant="warning"
-                onClick={() => handleUpdateStatus(p._id, "CLOSED")}
-                disabled={isUpdating}
-              >
-                Close Period
-              </AppButton>
-            )}
-
-            {p.status === "CLOSED" && (
-              <>
-                <AppButton
-                  size="tiny"
-                  variant="outlined"
-                  colorVariant="danger"
-                  onClick={() => handleUpdateStatus(p._id, "LOCKED")}
-                  disabled={isUpdating}
-                >
-                  Lock Period
-                </AppButton>
-                <AppButton
-                  size="tiny"
-                  variant="outlined"
-                  colorVariant="neutral"
-                  onClick={() => handleUpdateStatus(p._id, "OPEN")}
-                  disabled={isUpdating}
-                >
-                  Re-Open
-                </AppButton>
-              </>
-            )}
-
-            {p.status === "LOCKED" && (
-              <AppButton
-                size="tiny"
-                variant="outlined"
-                colorVariant="neutral"
-                onClick={() => handleUpdateStatus(p._id, "OPEN")}
-                disabled={isUpdating}
-              >
-                Unlock to Open
-              </AppButton>
-            )}
-          </AppStack>
-        );
-      },
-    },
-  ], [isUpdating, handleUpdateStatus, can]);
-
   return (
-    <section className="min-h-[calc(100vh-58px)] bg-bg px-5 py-4">
-      <div className="mx-auto w-full max-w-[1500px]">
-        {/* Page Header */}
-        <AppBox
-          display="flex"
-          alignItems="flex-start"
-          justifyContent="space-between"
-          sx={pageHeaderSx}
-        >
-          <AppBox sx={pageHeaderContentSx}>
-            <AppHeading level={1} weight={650}>
-              Financial Periods
-            </AppHeading>
-            <AppText variant="body2" sx={pageHeaderSubtitleSx}>
-              Manage fiscal periods, freeze account postings, or open new adjustment periods.
-            </AppText>
-            <AppBreadcrumb
-              size="small"
-              variant="text"
-              items={[
-                { label: "Dashboard", href: "/" },
-                { label: "Finance & Accounting", href: "/finance" },
-                { label: "Financial Periods", current: true },
-              ]}
-              sx={breadcrumbSx}
-              itemSx={breadcrumbItemSx}
-              currentItemSx={breadcrumbCurrentSx}
-            />
-          </AppBox>
-
-          <AppStack
-            direction="row"
-            align="center"
-            justify="flex-end"
-            gap={1.1}
-            sx={{ flexShrink: 0 }}
-          >
-            <AppButton
-              type="button"
-              variant="outlined"
-              colorVariant="neutral"
-              rounded="md"
-              size="small"
-              startIcon={<FiRefreshCw />}
-              onClick={handleRefresh}
-              loading={isLoading}
-              disabled={isLoading}
-              sx={secondaryButtonSx}
-            >
-              Refresh
-            </AppButton>
-            <PermissionGate permission="financial-period:create">
-              <AppButton
-                type="button"
-                variant="contained"
-                colorVariant="primary"
-                rounded="md"
-                size="small"
-                startIcon={<FiPlus />}
-                onClick={handleCreate}
-                disabled={isLoading}
-                sx={primaryButtonSx}
+    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-2 sm:px-3 pt-0 pb-1 gap-2.5 text-text font-sans transition-colors overflow-hidden select-none">
+      {/* ── 1. Compact 4-Card Statistics Grid ───────────────────────────── */}
+      <div className="shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.id}
+                className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors"
               >
-                Create Period
-              </AppButton>
-            </PermissionGate>
-          </AppStack>
-        </AppBox>
+                <div
+                  className={cn(
+                    "size-9 rounded-lg flex items-center justify-center shrink-0 border",
+                    stat.bg,
+                    stat.border,
+                    stat.color
+                  )}
+                >
+                  <Icon className="size-4.5 stroke-[1.8]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11.5px] font-medium text-text-muted truncate">
+                    {stat.title}
+                  </div>
+                  <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums truncate">
+                    {stat.value}
+                  </div>
+                  <div className="text-[10px] text-text-muted truncate mt-0.5">
+                    {stat.subtitle}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-        {/* Stats Grid */}
-        <div className="mt-4 grid grid-cols-4 gap-3">
-          {statsList.map((stat) => (
-            <AppStatCard
-              key={stat.id}
-              title={stat.title}
-              value={stat.value}
-              subtitle={stat.description}
-              icon={stat.icon}
-              colorVariant={stat.colorVariant}
-              variant="default"
-              sx={statCardSx}
-              iconSx={statIconSx}
-            />
-          ))}
+      {/* ── 2. Streamlined Single-Row Toolbar ────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {/* Search Input */}
+        <div className="flex-1 min-w-[220px] sm:min-w-[260px]">
+          <UIInput
+            type="text"
+            value={searchParams.search || ""}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search period code (e.g. FY-2024-25, Q1)..."
+            startIcon={<Search className="size-4 text-text-muted" />}
+            size="md"
+            variant="outline"
+            isClearable
+            onClear={() => handleSearchChange("")}
+            className="w-full"
+          />
         </div>
 
-        {/* Error Alert */}
-        {error && (
-          <AppAlert
-            severity="error"
-            variant="soft"
-            title="Something went wrong"
-            closable
-            onClose={clearError}
-            sx={alertSx}
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
+
+        {/* Period Type Select */}
+        <div className="w-[150px] sm:w-[170px]">
+          <UISelect
+            value={searchParams.periodType || "all"}
+            onChange={(val) => handleFilterChange("periodType", val)}
+            options={typeOptions}
+            placeholder="All Types"
+            size="md"
+          />
+        </div>
+
+        {/* Status Select */}
+        <div className="w-[130px] sm:w-[150px]">
+          <UISelect
+            value={searchParams.status || "all"}
+            onChange={(val) => handleFilterChange("status", val)}
+            options={statusOptions}
+            placeholder="All Statuses"
+            size="md"
+          />
+        </div>
+
+        {/* Quick Reset */}
+        {hasActiveFilters && (
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
+            onClick={handleClearFilters}
+            startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+            className="h-10 px-2.5 text-xs text-text-muted hover:text-text"
+            title="Reset all filters"
           >
-            {error}
-          </AppAlert>
+            Reset
+          </UIButton>
         )}
 
-        {/* Table & Filters Card */}
-        <AppCard
-          variant="default"
-          rounded="lg"
-          bordered
-          shadow="sm"
-          padding="none"
-          sx={tableCardSx}
-        >
-          {/* Filters Toolbar */}
-          <div className="border-b border-border px-3.5 py-3">
-            <div className="grid grid-cols-[minmax(0,1fr)_160px_160px] items-center gap-3">
-              <AppSearchInput
-                name="search"
-                value={searchParams.search}
-                onChange={handleSearchChange}
-                placeholder="Search period code..."
-                clearable
-                onClear={() => handleSearchChange("")}
-                size="small"
-                variant="bordered"
-                rounded="md"
-                sx={searchSx}
-                inputSx={filterInputSx}
-              />
-
-              <AppSelect
-                name="periodType"
-                value={searchParams.periodType}
-                onChange={(e) => handleFilterChange("periodType", e.target.value)}
-                options={typeOptions}
-                size="small"
-                variant="bordered"
-                rounded="md"
-                sx={selectSx}
-                inputSx={filterInputSx}
-              />
-
-              <AppSelect
-                name="status"
-                value={searchParams.status}
-                onChange={(e) => handleFilterChange("status", e.target.value)}
-                options={statusOptions}
-                size="small"
-                variant="bordered"
-                rounded="md"
-                sx={selectSx}
-                inputSx={filterInputSx}
-              />
-            </div>
-          </div>
-
-          {/* Table Container */}
-          {isLoading ? (
-            <AppTableSkeleton rows={8} columns={7} showHeader={false} />
-          ) : financialPeriods.length === 0 ? (
-            <AppEmptyState
-              title="No Financial Periods Defined"
-              description='Click "Create Period" to initialize new fiscal calendar slots.'
-              icon={<FiCalendar />}
-              action={
-                <AppButton
-                  variant="contained"
-                  colorVariant="primary"
-                  rounded="md"
-                  startIcon={<FiPlus />}
-                  onClick={handleCreate}
-                  sx={primaryButtonSx}
-                >
-                  Create Period
-                </AppButton>
-              }
-              size="page"
-              sx={stateSx}
+        {/* Action Cluster (Right) */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
+            disabled={isLoading}
+            onClick={handleRefresh}
+            className="h-10 w-10 p-0 text-text-muted hover:text-text cursor-pointer"
+            title="Refresh financial periods"
+          >
+            <RefreshCw
+              className={cn(
+                "size-4 text-text-muted hover:text-primary",
+                isLoading && "animate-spin text-primary"
+              )}
             />
-          ) : (
-            <AppTable
-              columns={columns}
-              rows={financialPeriods}
-              getRowId={(row) => row._id}
-              dense
-              bordered={false}
-              rounded={false}
-              hover
-              stickyHeader
-              minWidth={1150}
-              maxHeight="calc(100vh - 340px)"
-              sx={tableSx}
-              headSx={tableHeadSx}
-              cellSx={tableCellSx}
+          </UIButton>
+
+          <PermissionGate permission="financial-period:create">
+            <UIButton
+              type="button"
+              variant="primary"
+              size="md"
+              startIcon={<Plus className="size-4" />}
+              onClick={handleCreate}
+              className="h-10 px-3.5 text-xs font-semibold shadow-xs"
+            >
+              Add Period
+            </UIButton>
+          </PermissionGate>
+        </div>
+      </div>
+
+      {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ── */}
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
+          <UITable
+            stickyHeader
+            containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
+            className="w-full"
+          >
+            {/* Sticky Table Header */}
+            <UITableHeader
+              sticky
+              className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs"
+            >
+              <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
+                <UITableHead sticky className="min-w-[170px]">Period Code</UITableHead>
+                <UITableHead sticky className="min-w-[130px]">Type</UITableHead>
+                <UITableHead sticky className="min-w-[120px]">Start Date</UITableHead>
+                <UITableHead sticky className="min-w-[120px]">End Date</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[130px]">Current Active</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[120px]">Status</UITableHead>
+                <UITableHead sticky align="right" className="min-w-[180px]">Actions</UITableHead>
+              </UITableRow>
+            </UITableHeader>
+
+            <UITableBody>
+              {isLoading ? (
+                <UITableLoading colSpan={7} rows={8} />
+              ) : displayedPeriods.length === 0 ? (
+                <UITableEmpty
+                  colSpan={7}
+                  title="No financial periods found"
+                  description={
+                    hasActiveFilters
+                      ? "Try clearing filters to find defined fiscal periods."
+                      : "Define new financial years, quarters or monthly accounting periods."
+                  }
+                />
+              ) : (
+                displayedPeriods.map((p) => {
+                  return (
+                    <UITableRow
+                      key={p._id || p.id}
+                      className="hover:bg-surface-alt/50 transition-colors"
+                    >
+                      {/* Period Code */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="font-mono text-xs font-bold text-text">
+                          {p.periodCode}
+                        </div>
+                        {p.periodName && (
+                          <div className="text-[10px] text-text-muted truncate max-w-[200px]">
+                            {p.periodName}
+                          </div>
+                        )}
+                      </UITableCell>
+
+                      {/* Type */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-surface-alt border border-border text-text">
+                          {p.periodType}
+                        </span>
+                      </UITableCell>
+
+                      {/* Start Date */}
+                      <UITableCell className="py-2.5 px-3 font-mono text-xs text-text-muted">
+                        {formatDate(p.startDate)}
+                      </UITableCell>
+
+                      {/* End Date */}
+                      <UITableCell className="py-2.5 px-3 font-mono text-xs text-text-muted">
+                        {formatDate(p.endDate)}
+                      </UITableCell>
+
+                      {/* Current Active */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        {p.isCurrent ? (
+                          <UIBadge variant="soft" color="success" className="text-[10px] font-semibold">
+                            ACTIVE PERIOD
+                          </UIBadge>
+                        ) : (
+                          <span className="text-text-muted text-xs font-mono">—</span>
+                        )}
+                      </UITableCell>
+
+                      {/* Status */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        {getStatusBadge(p.status)}
+                      </UITableCell>
+
+                      {/* Actions */}
+                      <UITableCell align="right" className="py-2.5 px-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {handleView && (
+                            <UIButton
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 w-7 p-0 text-text-muted hover:text-text cursor-pointer"
+                              title="View Details"
+                              onClick={() => handleView(p)}
+                            >
+                              <Eye className="size-3.5" />
+                            </UIButton>
+                          )}
+
+                          {can("financial-period:update") && (
+                            <>
+                              {p.status === "OPEN" && (
+                                <UIButton
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleUpdateStatus(p._id, "CLOSED")}
+                                  disabled={isUpdating}
+                                  className="h-7 px-2 text-[11px] font-medium border-amber-500/30 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+                                >
+                                  Close Period
+                                </UIButton>
+                              )}
+
+                              {p.status === "CLOSED" && (
+                                <>
+                                  <UIButton
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleUpdateStatus(p._id, "LOCKED")}
+                                    disabled={isUpdating}
+                                    className="h-7 px-2 text-[11px] font-medium border-rose-500/30 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                                  >
+                                    <Lock className="size-3 mr-1" />
+                                    Lock Period
+                                  </UIButton>
+                                  <UIButton
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleUpdateStatus(p._id, "OPEN")}
+                                    disabled={isUpdating}
+                                    className="h-7 px-2 text-[11px] font-medium text-text-muted hover:text-text"
+                                  >
+                                    <Unlock className="size-3 mr-1" />
+                                    Reopen
+                                  </UIButton>
+                                </>
+                              )}
+
+                              {p.status === "LOCKED" && (
+                                <UIButton
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleUpdateStatus(p._id, "CLOSED")}
+                                  disabled={isUpdating}
+                                  className="h-7 px-2 text-[11px] font-medium text-text-muted hover:text-text"
+                                >
+                                  <Unlock className="size-3 mr-1" />
+                                  Unlock
+                                </UIButton>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </UITableCell>
+                    </UITableRow>
+                  );
+                })
+              )}
+            </UITableBody>
+          </UITable>
+
+          {/* Infinite Scroll trigger */}
+          {!isLoading && (
+            <UIInfiniteScroll
+              onLoadMore={handleLoadMore}
+              hasMore={hasMore}
+              isLoading={isLoadingMore}
+              rootRef={tableContainerRef}
+              rootMargin="160px"
+              endMessage={
+                !hasMore && (financialPeriods || []).length > 0 ? (
+                  <span className="font-mono text-[11px] text-text-muted select-none">
+                    ✓ All {(financialPeriods || []).length} financial periods loaded
+                  </span>
+                ) : null
+              }
             />
           )}
-
-          {/* Table Footer */}
-          {totalPeriods > pageSize ? (
-            <TableFooter
-              totalPeriods={totalPeriods}
-              currentPage={currentPage}
-              pageSize={pageSize}
-              handlePageChange={handlePageChange}
-              handlePageSizeChange={handlePageSizeChange}
-            />
-          ) : null}
-        </AppCard>
+        </UITableScrollArea>
       </div>
-    </section>
-  );
-};
-
-const TableFooter = ({
-  totalPeriods,
-  currentPage,
-  pageSize,
-  handlePageChange,
-  handlePageSizeChange,
-}) => {
-  const startEntry = (currentPage - 1) * pageSize + 1;
-  const endEntry = Math.min(currentPage * pageSize, totalPeriods);
-  const totalPages = Math.ceil(totalPeriods / pageSize) || 1;
-
-  return (
-    <div className="flex items-center justify-between border-t border-border px-3.5 py-3">
-      <AppText variant="body2" sx={footerTextSx}>
-        Showing {startEntry} to {endEntry} of {totalPeriods} periods
-      </AppText>
-
-      <AppStack direction="row" align="center" gap={1}>
-        <AppMenu
-          trigger={
-            <AppButton
-              type="button"
-              variant="outlined"
-              colorVariant="neutral"
-              rounded="md"
-              size="small"
-              endIcon={<FiChevronRight className="rotate-90" />}
-              sx={pageSizeButtonSx}
-            >
-              {pageSize} per page
-            </AppButton>
-          }
-          items={[
-            { id: "10", label: "10 per page", onClick: () => handlePageSizeChange(10) },
-            { id: "20", label: "20 per page", onClick: () => handlePageSizeChange(20) },
-            { id: "50", label: "50 per page", onClick: () => handlePageSizeChange(50) },
-            { id: "100", label: "100 per page", onClick: () => handlePageSizeChange(100) },
-          ]}
-          dense
-          minWidth={120}
-        />
-
-        <AppIconButton
-          icon={<FiChevronLeft />}
-          variant="outlined"
-          colorVariant="neutral"
-          size="small"
-          rounded="md"
-          disabled={currentPage === 1}
-          onClick={() => handlePageChange(currentPage - 1)}
-        />
-
-        <span className="flex h-[31px] min-w-[31px] items-center justify-center rounded-md bg-primary px-2 text-[12px] font-bold text-text-inverse">
-          {currentPage}
-        </span>
-
-        <AppIconButton
-          icon={<FiChevronRight />}
-          variant="outlined"
-          colorVariant="neutral"
-          size="small"
-          rounded="md"
-          disabled={currentPage === totalPages}
-          onClick={() => handlePageChange(currentPage + 1)}
-        />
-      </AppStack>
     </div>
   );
 };
-
-// Styling variables
-const pageHeaderSx = { width: "100%" };
-const pageHeaderSubtitleSx = {
-  mt: 0.55,
-  fontSize: "13px",
-  lineHeight: "20px",
-  color: "var(--app-color-text-muted)",
-};
-const pageHeaderContentSx = {
-  minWidth: 0,
-  "& h1, & h2, & h3, & h4": {
-    m: 0,
-    fontSize: "25px",
-    lineHeight: 1.15,
-    letterSpacing: "-0.45px",
-    color: "var(--app-color-text)",
-  },
-};
-
-const breadcrumbSx = { mt: 1 };
-const breadcrumbItemSx = {
-  fontSize: "12px",
-  color: "var(--app-color-text-muted)",
-};
-const breadcrumbCurrentSx = {
-  fontSize: "12px",
-  fontWeight: 650,
-  color: "var(--app-color-text)",
-};
-
-const primaryButtonSx = {
-  height: 36,
-  px: 1.6,
-  fontSize: "12px",
-  fontWeight: 700,
-};
-const secondaryButtonSx = {
-  height: 36,
-  minWidth: 92,
-  px: 1.4,
-  fontSize: "12px",
-  fontWeight: 650,
-};
-
-const alertSx = { mt: 3 };
-
-const statCardSx = {
-  minHeight: 88,
-  bgcolor: "var(--app-color-surface)",
-  borderColor: "var(--app-color-border)",
-  p: 1.5,
-  "& p:first-of-type": { fontSize: "11px" },
-  "& h1, & h2, & h3, & h4": { fontSize: "18px" },
-  "& p:last-of-type": { fontSize: "11px" },
-};
-const statIconSx = {
-  width: 38,
-  height: 38,
-  minWidth: 38,
-  borderRadius: "11px",
-};
-
-const tableCardSx = {
-  mt: 3,
-  overflow: "hidden",
-  bgcolor: "var(--app-color-surface)",
-  borderColor: "var(--app-color-border)",
-  "& > div": { minWidth: 0 },
-};
-
-const searchSx = { width: "100%" };
-const selectSx = { width: "100%" };
-const filterInputSx = {
-  height: 36,
-  fontSize: "12px",
-  bgcolor: "var(--app-color-surface)",
-};
-
-const tableSx = {
-  "& .MuiTableContainer-root": {
-    borderRadius: 0,
-    scrollbarWidth: "none",
-    msOverflowStyle: "none",
-    "&::-webkit-scrollbar": { display: "none" },
-  },
-};
-const tableHeadSx = {
-  bgcolor: "var(--app-color-surface-alt)",
-  "& .MuiTableCell-root": {
-    fontSize: "11.2px",
-    fontWeight: 750,
-    color: "var(--app-color-text-muted)",
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-  },
-};
-const tableCellSx = {
-  py: 1.2,
-  fontSize: "12px",
-  borderColor: "var(--app-color-border)",
-};
-
-const tableValueSx = {
-  fontSize: "12px",
-  fontWeight: 650,
-  color: "var(--app-color-text)",
-};
-const tableValueMonoSx = {
-  fontSize: "12px",
-  fontWeight: 700,
-  fontFamily: "var(--font-mono, monospace)",
-  color: "var(--app-color-text)",
-};
-const tableValueMutedSx = {
-  fontSize: "12px",
-  fontWeight: 550,
-  color: "var(--app-color-text-muted)",
-};
-
-const tagSx = {
-  width: "fit-content",
-  height: 22,
-  px: 0.8,
-  fontSize: "10.5px",
-  fontWeight: 700,
-};
-
-const statusBadgeSx = {
-  width: "fit-content",
-  height: 22,
-  px: 1.5,
-  fontSize: "10.5px",
-  fontWeight: 700,
-  textTransform: "uppercase",
-};
-
-const footerTextSx = { fontSize: "12px", color: "var(--app-color-text-muted)" };
-const pageSizeButtonSx = {
-  height: 34,
-  minWidth: 122,
-  px: 1.2,
-  fontSize: "12px",
-  fontWeight: 600,
-};
-const stateSx = { minHeight: 430 };
 
 export default FinancialPeriodsDesktopPage;

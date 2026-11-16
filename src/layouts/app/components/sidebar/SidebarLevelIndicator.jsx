@@ -598,10 +598,12 @@ export const SidebarLevelIndicator = ({
           <button
             ref={triggerRef}
             type="button"
+            data-sidebar-expand="true"
             onClick={handleCollapsedExpand}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
-            aria-label={`${collapsedConfig.title} — Expand sidebar`}
+            aria-label={`${collapsedConfig.title} — Click to expand sidebar`}
+            title="Expand sidebar"
             className={cn(
               "relative flex size-9 cursor-pointer items-center justify-center rounded-xl border shadow-2xs transition-all hover:scale-105 active:scale-[0.96]",
               collapsedConfig.color
@@ -621,6 +623,7 @@ export const SidebarLevelIndicator = ({
           {(onExpand || onToggleCollapse) && (
             <button
               type="button"
+              data-sidebar-expand="true"
               onClick={handleCollapsedExpand}
               aria-label="Expand sidebar"
               title="Expand sidebar"

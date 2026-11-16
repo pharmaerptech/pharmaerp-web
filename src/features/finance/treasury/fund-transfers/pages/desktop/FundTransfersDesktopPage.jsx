@@ -50,6 +50,7 @@ import {
   uiToast,
 } from "@/components/ui";
 import { usePermission } from "@/hooks";
+import { CompanyFilterSelect } from "@/components/shared";
 import { cn } from "@/lib/utils";
 
 const formatCurrency = (val) => {
@@ -88,6 +89,7 @@ export const FundTransfersDesktopPage = ({
   handleViewDetails,
   handleCreateNew,
   handleRefresh,
+  companyFilter,
 }) => {
   const { can } = usePermission();
   const tableContainerRef = useRef(null);
@@ -370,17 +372,6 @@ export const FundTransfersDesktopPage = ({
 
       {/* ── 2. Table Filter Toolbar ── */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
-        {/* Transfer Type Selector */}
-        <div className="w-[180px] sm:w-[200px]">
-          <UISelect
-            value={searchParams.transferType || "all"}
-            onChange={(val) => handleFilterChange("transferType", val)}
-            options={TRANSFER_TYPE_OPTIONS}
-            placeholder="Transfer Type"
-            size="md"
-          />
-        </div>
-
         {/* Search Input */}
         <div className="flex-1 min-w-[220px] sm:min-w-[260px]">
           <UIInput
@@ -396,6 +387,23 @@ export const FundTransfersDesktopPage = ({
             className="w-full"
           />
         </div>
+
+        {/* Transfer Type Selector */}
+        <div className="w-[180px] sm:w-[200px]">
+          <UISelect
+            value={searchParams.transferType || "all"}
+            onChange={(val) => handleFilterChange("transferType", val)}
+            options={TRANSFER_TYPE_OPTIONS}
+            placeholder="Transfer Type"
+            size="md"
+          />
+        </div>
+
+        {/* Workspace Company Filter */}
+        <CompanyFilterSelect
+          companyFilter={companyFilter}
+          className="w-[180px] sm:w-[200px]"
+        />
 
         {/* Status Selector */}
         <div className="w-[150px]">

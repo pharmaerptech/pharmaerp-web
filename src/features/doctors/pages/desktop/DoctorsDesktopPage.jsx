@@ -38,6 +38,7 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
@@ -45,6 +46,7 @@ import {
   UIDropdownDivider,
   PermissionGate,
 } from "@/components/ui";
+import { CompanyFilterSelect, CompanyBadge } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { DoctorFilterModal, SPECIALTY_FILTER_OPTIONS } from "../../components/DoctorFilterModal";
 
@@ -79,6 +81,7 @@ export const DoctorsDesktopPage = ({
   onOpenEditDialog,
   onOpenViewDialog,
   onOpenDeleteConfirm,
+  companyFilter,
 }) => {
   const tableContainerRef = useRef(null);
   const [copiedKey, setCopiedKey] = useState(null);
@@ -207,6 +210,14 @@ export const DoctorsDesktopPage = ({
           />
         </div>
 
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
+
         {/* Filter Modal Trigger Button */}
         <UIButton
           type="button"
@@ -288,12 +299,8 @@ export const DoctorsDesktopPage = ({
       </div>
 
       {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ────── */}
-      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-        {/* Internal Scroll Container: Definitive scroll parent */}
-        <div
-          ref={tableContainerRef}
-          className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0"
-        >
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef}>
           <UITable
             stickyHeader
             containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -380,8 +387,11 @@ export const DoctorsDesktopPage = ({
                             {initials}
                           </div>
                           <div className="min-w-0">
-                            <div className="text-xs sm:text-[13px] font-bold text-text group-hover:text-primary transition-colors truncate max-w-[200px] sm:max-w-[240px]">
-                              {doc.name}
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <div className="text-xs sm:text-[13px] font-bold text-text group-hover:text-primary transition-colors truncate max-w-[200px] sm:max-w-[240px]">
+                                {doc.name}
+                              </div>
+                              <CompanyBadge company={doc.companyId} />
                             </div>
                             <div className="text-[11px] text-text-muted font-mono flex items-center gap-1.5 mt-0.5">
                               {doc.doctorCode ? (
@@ -552,7 +562,7 @@ export const DoctorsDesktopPage = ({
               rootRef={tableContainerRef}
             />
           )}
-        </div>
+        </UITableScrollArea>
       </div>
 
       {/* ── Filter Modal Dialog ──────────────────────────────────────────────── */}

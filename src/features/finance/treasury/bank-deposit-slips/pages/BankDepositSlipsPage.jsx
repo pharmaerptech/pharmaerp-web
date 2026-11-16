@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useBranchFilter } from "@/hooks";
 import { uiToast } from "@/components/ui";
 import useBranch from "@/features/branch/hooks/useBranch";
 
@@ -18,6 +18,14 @@ const BankDepositSlipsPage = () => {
   const isMobile = useIsMobile();
   const [searchParamsUrl, setSearchParamsUrl] = useSearchParams();
   const { currentBranch } = useBranch();
+  const {
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
+    queryBranchId,
+  } = useBranchFilter();
+
+  const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
 
   const {
     bankDepositSlips,
@@ -78,13 +86,13 @@ const BankDepositSlipsPage = () => {
         limit: 100, // Fetch comprehensive dataset for infinite scroll
         search: searchParams.search || undefined,
         status: searchParams.status === "all" ? undefined : searchParams.status,
-        branchId: currentBranch?._id || undefined,
+        branchId: activeBranchId,
       };
       await getBankDepositSlips(query);
     } catch (err) {
       console.error("Failed to load bank deposit slips:", err);
     }
-  }, [searchParams, currentBranch?._id, getBankDepositSlips]);
+  }, [searchParams, activeBranchId, getBankDepositSlips]);
 
   useEffect(() => {
     fetchSlipsData();
@@ -177,6 +185,10 @@ const BankDepositSlipsPage = () => {
     handleViewDetails,
     handleCreateNew,
     handleRefresh,
+    isCompanyLevel,
+    canCreateSlip: !isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
   };
 
   return (
@@ -196,6 +208,7 @@ const BankDepositSlipsPage = () => {
           setActionMessage("Bank deposit slip created successfully.");
         }}
         prefillDayClosingId={prefillDayClosingId}
+        defaultBranchId={isCompanyLevel && selectedBranchId !== "all" ? selectedBranchId : undefined}
       />
 
       {/* In-Dialog View Slip Details */}

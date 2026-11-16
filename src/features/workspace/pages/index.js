@@ -6,6 +6,7 @@ export { default as WorkspaceMemberDetailsPage } from "./WorkspaceMemberDetailsP
 export { default as WorkspaceInvitationsPage } from "./WorkspaceInvitationsPage";
 export { default as InviteWorkspaceMemberPage } from "./InviteWorkspaceMemberPage";
 export { default as AcceptInvitationPage } from "./AcceptInvitationPage";
+export { default as WorkspaceOperationsStarterPage } from "./WorkspaceOperationsStarterPage";
 
 export * from "./desktop";
 export * from "./mobile";

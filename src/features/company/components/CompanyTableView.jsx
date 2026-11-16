@@ -1,13 +1,11 @@
 // src/features/company/components/CompanyTableView.jsx
 
-import React from "react";
 import {
   Building2,
   Users,
   MoreHorizontal,
   Eye,
   Edit3,
-  Settings,
   Trash2,
   Mail,
   Phone,
@@ -61,7 +59,6 @@ export const CompanyTableView = ({
   companies = [],
   onView,
   onEdit,
-  onSettings,
   onViewEmployees,
   onDelete,
   stickyHeader = true,
@@ -123,9 +120,16 @@ export const CompanyTableView = ({
 
                   {/* Type / Industry */}
                   <UITableCell>
-                    <UIBadge variant="soft" color="primary" className="text-xs font-semibold capitalize">
-                      {type}
-                    </UIBadge>
+                    <div className="flex flex-col gap-1 items-start">
+                      <UIBadge variant="soft" color="primary" className="text-xs font-semibold capitalize">
+                        {type}
+                      </UIBadge>
+                      {company.industry && (
+                        <span className="text-[11px] text-text-muted capitalize truncate max-w-[150px]">
+                          {company.industry.replace(/_/g, " ")}
+                        </span>
+                      )}
+                    </div>
                   </UITableCell>
 
                   {/* Owner */}
@@ -187,12 +191,12 @@ export const CompanyTableView = ({
                         </UIIconButton>
                       </UIDropdownTrigger>
 
-                      <UIDropdownMenu width="w-48">
+                      <UIDropdownMenu width="w-44">
                         <UIDropdownItem
                           icon={<Eye className="w-4 h-4" />}
                           onClick={() => onView?.(company)}
                         >
-                          View Details
+                          View Company
                         </UIDropdownItem>
                         <UIDropdownItem
                           icon={<Edit3 className="w-4 h-4" />}
@@ -200,20 +204,18 @@ export const CompanyTableView = ({
                         >
                           Edit Company
                         </UIDropdownItem>
-                        <UIDropdownItem
-                          icon={<Users className="w-4 h-4" />}
-                          onClick={() => onViewEmployees?.(company)}
-                        >
-                          Staff & Access
-                        </UIDropdownItem>
-                        <UIDropdownDivider />
-                        <UIDropdownItem
-                          destructive
-                          icon={<Trash2 className="w-4 h-4" />}
-                          onClick={() => onDelete?.(company)}
-                        >
-                          Delete Profile
-                        </UIDropdownItem>
+                        {onDelete && (
+                          <>
+                            <UIDropdownDivider />
+                            <UIDropdownItem
+                              destructive
+                              icon={<Trash2 className="w-4 h-4" />}
+                              onClick={() => onDelete?.(company)}
+                            >
+                              Delete Company
+                            </UIDropdownItem>
+                          </>
+                        )}
                       </UIDropdownMenu>
                     </UIDropdown>
                   </UITableCell>

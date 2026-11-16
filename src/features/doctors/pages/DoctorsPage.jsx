@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useIsMobile } from "@/hooks";
 import { UIConfirmDialog } from "@/components/ui";
+import { useNavigationPipeline, PIPELINE_LEVELS } from "@/contexts/NavigationPipelineContext";
+import { useCompanyFilter } from "@/hooks";
 import useCompany from "@/features/company/hooks/useCompany";
 import doctorService from "../services/doctorService";
 import useDoctor from "../hooks/useDoctor";
@@ -19,6 +21,11 @@ const INITIAL_FILTERS = {
 
 export const DoctorsPage = () => {
   const isMobile = useIsMobile();
+  const { currentLevel } = useNavigationPipeline();
+  const isWorkspaceLevel =
+    currentLevel === PIPELINE_LEVELS.WORKSPACE || currentLevel === "workspace";
+  const companyFilter = useCompanyFilter();
+
   const { currentCompany } = useCompany();
   const companyId = currentCompany?._id;
 
@@ -64,7 +71,7 @@ export const DoctorsPage = () => {
 
   const fetchBatch = useCallback(
     async (pageToLoad = 1, isAppend = false) => {
-      if (!companyId) return;
+      if (!isWorkspaceLevel && !companyId) return;
 
       if (isAppend) {
         setIsLoadingMore(true);
@@ -77,6 +84,10 @@ export const DoctorsPage = () => {
         limit: 20,
         sort: filters.sort || "createdAt-desc",
       };
+
+      if (isWorkspaceLevel && companyFilter.queryCompanyId) {
+        params.companyId = companyFilter.queryCompanyId;
+      }
 
       if (debouncedSearch) params.search = debouncedSearch;
       if (filters.specialty && filters.specialty !== "all") {
@@ -119,13 +130,21 @@ export const DoctorsPage = () => {
         setIsLoadingMore(false);
       }
     },
-    [companyId, debouncedSearch, filters.specialty, filters.status, filters.sort]
+    [
+      companyId,
+      isWorkspaceLevel,
+      companyFilter.queryCompanyId,
+      debouncedSearch,
+      filters.specialty,
+      filters.status,
+      filters.sort,
+    ]
   );
 
   // Initial load and filter change trigger (resets to page 1)
   useEffect(() => {
     fetchBatch(1, false);
-  }, [fetchBatch]);
+  }, [fetchBatch, companyFilter.selectedCompanyId]);
 
   // Infinite scroll load more handler
   const handleLoadMore = useCallback(() => {
@@ -219,6 +238,7 @@ export const DoctorsPage = () => {
     onOpenEditDialog: handleOpenEditDialog,
     onOpenViewDialog: handleOpenViewDialog,
     onOpenDeleteConfirm: handleOpenDeleteConfirm,
+    companyFilter,
   };
 
   return (

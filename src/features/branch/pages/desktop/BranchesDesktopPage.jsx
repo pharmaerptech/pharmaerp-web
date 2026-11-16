@@ -1,7 +1,6 @@
 // src/features/branch/pages/desktop/BranchesDesktopPage.jsx
 
-import React, { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   GitBranch,
   Building2,
@@ -10,42 +9,46 @@ import {
   AlertTriangle,
   Plus,
   RefreshCw,
-  Copy,
+  RotateCcw,
+  Search,
   MapPin,
-  Mail,
-  Phone,
-  Users,
-  ShieldCheck,
-  Settings,
   Edit3,
   Trash2,
-  MoreHorizontal,
-  Wallet,
-  Calendar,
+  MoreVertical,
+  Eye,
   Store,
   Warehouse,
   Hospital,
-  ArrowUpRight,
 } from "lucide-react";
+
 import {
   UIButton,
+  UIInput,
+  UISelect,
   UIBadge,
-  UIEmptyState,
-  UIAlert,
-  UISkeleton,
-  PermissionGate,
+  UITable,
+  UITableHeader,
+  UITableBody,
+  UITableRow,
+  UITableHead,
+  UITableCell,
+  UITableEmpty,
+  UITableLoading,
+  UIInfiniteScroll,
+  UITableScrollArea,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
   UIDropdownItem,
   UIDropdownDivider,
-  UIIconButton,
-  uiToast,
+  PermissionGate,
 } from "@/components/ui";
+import { CompanyFilterSelect } from "@/components/shared";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { cn } from "@/lib/utils";
-
 import { BranchEmployeesDrawer } from "../../components";
+
+const PAGE_LIMIT = 20;
 
 const formatBranchTypeLabel = (type) => {
   if (!type) return "Retail Pharmacy";
@@ -62,521 +65,504 @@ const getBranchTypeIcon = (type) => {
   return Store;
 };
 
+const statusBadgeVariant = (status) => {
+  switch (status) {
+    case "active":
+      return { variant: "soft", color: "success", label: "Active" };
+    case "inactive":
+      return { variant: "soft", color: "neutral", label: "Inactive" };
+    case "suspended":
+      return { variant: "soft", color: "danger", label: "Suspended" };
+    default:
+      return { variant: "soft", color: "neutral", label: status || "Unknown" };
+  }
+};
+
 export const BranchesDesktopPage = ({
   branches = [],
-  isLoading,
-  hasError,
-  error,
-  message,
+  allBranches = [],
+  stats = [],
+
+  filters = { search: "", status: "all", company: "all", type: "all" },
+  statusOptions = [],
+  branchTypeOptions = [],
+  companyFilter,
+
+  isLoading = false,
+
+  handleFilterChange,
+  handleSearchChange,
+  handleClearFilters,
+  canCreateBranch = true,
+  canDeleteBranch = true,
+
   handleRefresh,
   handleCreateBranch,
   handleViewBranch,
   handleEditBranch,
-  handleOpenSettings,
-  handleViewEmployees,
   handleDeleteBranch,
+
   selectedBranchForEmployees,
   isEmployeeDrawerOpen,
   handleCloseEmployeesDrawer,
-  clearMessage,
 }) => {
-  const navigate = useNavigate();
-  const { currentBranch, setCurrentBranch } = useBranch();
+  const tableContainerRef = useRef(null);
+  const { currentBranch } = useBranch();
 
-  const handleCopy = useCallback((text, label) => {
-    if (!text || text === "-") return;
-    navigator.clipboard.writeText(text);
-    uiToast.success(`${label} Copied`, `"${text}" copied to clipboard.`);
-  }, []);
+  // Infinite Scroll state - incremental client-side batches
+  const [visibleCount, setVisibleCount] = useState(PAGE_LIMIT);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const handleSwitchBranch = useCallback(
-    (branch) => {
-      if (!branch?._id) return;
-      if (currentBranch?._id === branch._id) return;
-      setCurrentBranch(branch);
-      uiToast.success(
-        "Active Branch Switched",
-        `Now operating under "${branch.displayName || branch.name}".`
+  // Reset visible count and scroll to top on filter change
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisibleCount(PAGE_LIMIT);
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  }, [filters.search, filters.status, filters.company, filters.type]);
+
+  const displayedBranches = useMemo(() => {
+    return (branches || []).slice(0, visibleCount);
+  }, [branches, visibleCount]);
+
+  const hasMore = visibleCount < (branches || []).length;
+
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount((prev) =>
+        Math.min(prev + PAGE_LIMIT, (branches || []).length)
       );
-    },
-    [currentBranch?._id, setCurrentBranch]
+      setIsLoadingMore(false);
+    }, 120);
+  }, [isLoadingMore, hasMore, branches]);
+
+  const hasActiveFilters = Boolean(
+    filters.search ||
+      (filters.status && filters.status !== "all") ||
+      (filters.type && filters.type !== "all") ||
+      (filters.company && filters.company !== "all")
   );
 
-  return (
-    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-3 sm:px-4 lg:px-5 pt-1 pb-2 gap-3 text-text font-sans overflow-hidden select-none">
-      {/* ── Global Error Banner ── */}
-      {error && !hasError && (
-        <UIAlert
-          intent="danger"
-          title="Something went wrong"
-          description={error}
-          onClose={clearMessage}
-        />
-      )}
+  // 4 Top Stat Cards
+  const statCards = useMemo(() => {
+    const list = allBranches.length ? allBranches : branches;
+    const total = list.length;
+    const active = list.filter((b) => b.displayStatus === "active").length;
+    const inactive = list.filter((b) => b.displayStatus === "inactive").length;
+    const suspended = list.filter((b) => b.displayStatus === "suspended").length;
 
-      {/* ── Slim Executive Header Bar ── */}
-      <div className="flex items-center justify-between gap-3 shrink-0 py-1 border-b border-border/60">
-        <div className="flex items-center gap-3">
-          <div className="size-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
-            <GitBranch className="size-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold text-text tracking-tight">
-                Branch Locations & Dispensing Outlets
-              </h1>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-alt border border-border text-[11px] font-semibold text-text font-mono">
-                {branches.length} {branches.length === 1 ? "Location" : "Locations"}
-              </span>
-            </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Physical retail pharmacies, hospital dispensaries, and warehouse distribution centers
-            </p>
-          </div>
+    return [
+      {
+        id: "total",
+        title: "Total Branches",
+        value: stats.find((s) => s.id === "total")?.value ?? total,
+        subtitle: "Operating store locations",
+        icon: GitBranch,
+        color: "text-indigo-600 dark:text-indigo-400",
+        bg: "bg-indigo-500/10",
+        border: "border-indigo-500/20",
+      },
+      {
+        id: "active",
+        title: "Active Outlets",
+        value: stats.find((s) => s.id === "active")?.value ?? active,
+        subtitle: "Live dispensing counters",
+        icon: CheckCircle2,
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/20",
+      },
+      {
+        id: "inactive",
+        title: "Inactive Outlets",
+        value: stats.find((s) => s.id === "inactive")?.value ?? inactive,
+        subtitle: "Dormant or temporary off",
+        icon: Clock,
+        color: "text-amber-600 dark:text-amber-400",
+        bg: "bg-amber-500/10",
+        border: "border-amber-500/20",
+      },
+      {
+        id: "suspended",
+        title: "Suspended",
+        value: stats.find((s) => s.id === "suspended")?.value ?? suspended,
+        subtitle: "Regulatory audit holds",
+        icon: AlertTriangle,
+        color: "text-rose-600 dark:text-rose-400",
+        bg: "bg-rose-500/10",
+        border: "border-rose-500/20",
+      },
+    ];
+  }, [allBranches, branches, stats]);
+
+  return (
+    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-2 sm:px-3 pt-0 pb-1 gap-2.5 text-text font-sans transition-colors overflow-hidden select-none">
+      {/* ── 1. Top Stat Cards Grid ───────────────────────────────────────── */}
+      <div className="shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.id}
+                className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors"
+              >
+                <div
+                  className={cn(
+                    "size-9 rounded-lg flex items-center justify-center shrink-0 border",
+                    stat.bg,
+                    stat.border,
+                    stat.color
+                  )}
+                >
+                  <Icon className="size-4.5 stroke-[1.8]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11.5px] font-medium text-text-muted truncate">
+                    {stat.title}
+                  </div>
+                  <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                    {stat.value}
+                  </div>
+                  <div className="text-[10px] text-text-muted truncate mt-0.5">
+                    {stat.subtitle}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── 2. Streamlined Single-Row Toolbar ────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {/* Search Input */}
+        <div className="flex-1 min-w-[200px] sm:min-w-[240px]">
+          <UIInput
+            type="text"
+            value={filters.search || ""}
+            onChange={(e) => handleSearchChange?.(e.target.value)}
+            placeholder="Search branch by name, code, manager, city..."
+            startIcon={<Search className="size-4 text-text-muted" />}
+            size="md"
+            variant="outline"
+            isClearable
+            onClear={() => handleSearchChange?.("")}
+            className="w-full"
+          />
         </div>
 
-        {/* Action Cluster */}
-        <div className="flex items-center gap-2 ml-auto">
+        {/* Company Filter (Workspace Level Only - zero width at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
+
+        {/* Branch Type Select */}
+        <div className="w-[150px] sm:w-[170px]">
+          <UISelect
+            value={filters.type || "all"}
+            onChange={(val) => handleFilterChange?.({ type: val })}
+            options={branchTypeOptions}
+            placeholder="All Types"
+            size="md"
+          />
+        </div>
+
+        {/* Status Select */}
+        <div className="w-[130px] sm:w-[145px]">
+          <UISelect
+            value={filters.status || "all"}
+            onChange={(val) => handleFilterChange?.({ status: val })}
+            options={statusOptions}
+            placeholder="All Status"
+            size="md"
+          />
+        </div>
+
+        {/* Quick Reset */}
+        {hasActiveFilters && (
           <UIButton
             type="button"
             variant="ghost"
-            size="sm"
+            size="md"
+            onClick={handleClearFilters}
+            startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+            className="h-10 px-2.5 text-xs text-text-muted hover:text-text"
+            title="Reset all filters"
+          >
+            Reset
+          </UIButton>
+        )}
+
+        {/* Action Cluster (Right) */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
             disabled={isLoading}
             onClick={handleRefresh}
-            className="h-9 px-3 text-xs font-semibold text-text-muted hover:text-text cursor-pointer"
+            className="h-10 w-10 p-0 text-text-muted hover:text-text cursor-pointer"
             title="Refresh branch records"
           >
             <RefreshCw
               className={cn(
-                "size-3.5 mr-1.5",
+                "size-4 text-text-muted hover:text-primary",
                 isLoading && "animate-spin text-primary"
               )}
             />
-            Refresh
           </UIButton>
 
-          <PermissionGate permission="branch:create">
-            <UIButton
-              type="button"
-              variant="primary"
-              size="sm"
-              startIcon={<Plus className="size-4" />}
-              onClick={handleCreateBranch}
-              className="h-9 px-3.5 text-xs font-semibold shadow-xs"
-            >
-              Add Branch
-            </UIButton>
-          </PermissionGate>
+          {canCreateBranch && (
+            <PermissionGate permission="branch:create">
+              <UIButton
+                type="button"
+                variant="primary"
+                size="md"
+                startIcon={<Plus className="size-4" />}
+                onClick={handleCreateBranch}
+                className="h-10 px-3.5 text-xs font-semibold shadow-xs"
+              >
+                Add Branch
+              </UIButton>
+            </PermissionGate>
+          )}
         </div>
       </div>
 
-      {/* ── Main Scrollable Area ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
-        {hasError ? (
-          <div className="m-auto py-16 px-6 text-center space-y-3 max-w-md">
-            <AlertTriangle className="size-10 text-error mx-auto" />
-            <h3 className="text-base font-bold text-text">
-              Unable to load branch locations
-            </h3>
-            <p className="text-xs text-text-muted">
-              {error || "An error occurred while connecting to the branch database. Please retry."}
-            </p>
-            <UIButton
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              className="mt-2"
-            >
-              Retry Connection
-            </UIButton>
-          </div>
-        ) : isLoading && !branches.length ? (
-          /* Shimmer Loading Cards */
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {Array.from({ length: 2 }).map((_, idx) => (
-              <div
-                key={idx}
-                className="bg-surface rounded-2xl p-5 border border-border shadow-xs space-y-4 animate-pulse"
-              >
-                <div className="flex items-center gap-3">
-                  <UISkeleton className="size-12 rounded-xl" />
-                  <div className="space-y-2 flex-1">
-                    <UISkeleton className="h-5 w-48 rounded" />
-                    <UISkeleton className="h-3.5 w-32 rounded" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/40">
-                  <UISkeleton className="h-16 rounded-xl" />
-                  <UISkeleton className="h-16 rounded-xl" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : branches.length === 0 ? (
-          /* Empty State */
-          <div className="m-auto py-16">
-            <UIEmptyState
-              icon={<GitBranch className="size-12 text-primary" />}
-              title="No branch outlets configured"
-              description="Register physical dispensing stores, hospital counters, or warehouse locations for this company."
-              primaryAction={
-                <PermissionGate permission="branch:create">
-                  <UIButton
-                    variant="primary"
-                    size="sm"
-                    startIcon={<Plus className="size-4" />}
-                    onClick={handleCreateBranch}
-                  >
-                    Register First Branch
-                  </UIButton>
-                </PermissionGate>
-              }
-            />
-          </div>
-        ) : (
-          /* ── Branch Operational Hub Cards ── */
-          <div
-            className={cn(
-              "grid gap-4",
-              branches.length === 1
-                ? "grid-cols-1 max-w-4xl mx-auto"
-                : "grid-cols-1 xl:grid-cols-2"
-            )}
+      {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ── */}
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
+          <UITable
+            stickyHeader
+            containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
+            className="w-full"
           >
-            {branches.map((branch) => {
-              const isCurrent = currentBranch?._id === branch._id;
-              const name = branch.displayName || branch.name || "Untitled Branch";
-              const code = branch.code || branch.branchCode || "N/A";
-              const type = branch.type || "retail";
-              const typeLabel = formatBranchTypeLabel(type);
-              const TypeIcon = getBranchTypeIcon(type);
+            {/* Sticky Table Header */}
+            <UITableHeader
+              sticky
+              className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs"
+            >
+              <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
+                <UITableHead sticky className="min-w-[280px]">Branch Outlet &amp; Code</UITableHead>
+                <UITableHead sticky className="min-w-[150px]">Company Scope</UITableHead>
+                <UITableHead sticky className="min-w-[140px]">Branch Type</UITableHead>
+                <UITableHead sticky className="min-w-[170px]">Manager / Pharmacist</UITableHead>
+                <UITableHead sticky className="min-w-[210px]">Location &amp; City</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[90px]">Status</UITableHead>
+                <UITableHead sticky align="right" className="w-14 min-w-[56px] text-right">Actions</UITableHead>
+              </UITableRow>
+            </UITableHeader>
 
-              const manager =
-                branch.displayManager ||
-                branch.pharmacist?.name ||
-                branch.manager?.name ||
-                "-";
-              const license =
-                branch.drugLicense ||
-                branch.pharmacist?.regNo ||
-                branch.pharmacist?.licenseNo ||
-                branch.gstin ||
-                "-";
-              const email = branch.email || branch.contactEmail || "-";
-              const phone = branch.phones?.mobile || branch.phone || "-";
-              const location =
-                branch.locationSummary ||
-                branch.address?.addressLine1 ||
-                branch.addressLine1 ||
-                [branch.address?.city, branch.address?.state].filter(Boolean).join(", ") ||
-                "Storefront Location Not Set";
-              const memberCount =
-                branch.memberCount ?? branch.staffCount ?? branch.membersCount ?? 0;
-
-              return (
-                <div
-                  key={branch._id}
-                  className={cn(
-                    "rounded-2xl border bg-surface transition-all duration-200 flex flex-col overflow-hidden shadow-2xs hover:shadow-xs",
-                    isCurrent
-                      ? "border-primary/40 ring-1 ring-primary/25"
-                      : "border-border hover:border-border/90"
-                  )}
-                >
-                  {/* Card Banner / Accent Line */}
-                  {isCurrent && (
-                    <div className="h-1.5 w-full bg-gradient-to-r from-primary via-primary/80 to-primary/40" />
-                  )}
-
-                  {/* Card Header */}
-                  <div className="p-4 sm:p-5 flex items-start justify-between gap-3 border-b border-border/60">
-                    <div className="flex items-start gap-3.5 min-w-0">
-                      {/* Avatar / Branch Type Icon */}
-                      <div className="size-11 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20 shadow-2xs">
-                        <TypeIcon className="size-5" />
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2
-                            onClick={() => handleViewBranch?.(branch)}
-                            className="text-base sm:text-[17px] font-bold text-text truncate hover:text-primary cursor-pointer transition-colors"
-                            title={name}
-                          >
-                            {name}
-                          </h2>
-
-                          {/* Code Badge */}
-                          <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-surface-alt border border-border text-text-muted">
-                            {code}
-                          </span>
-
-                          {/* Type Pill */}
-                          <UIBadge
-                            variant="soft"
-                            color="primary"
-                            className="text-[11px] font-semibold capitalize"
-                          >
-                            {typeLabel}
-                          </UIBadge>
-                        </div>
-
-                        {/* Status Strip & Active Context Indicator */}
-                        <div className="flex items-center gap-2 mt-1">
-                          {isCurrent ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
-                              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              Active Branch Session
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-alt text-text-muted text-[11px] font-medium border border-border/60">
-                              Secondary Location
-                            </span>
-                          )}
-
-                          <span className="text-[11px] text-text-muted">
-                            • Status:{" "}
-                            <strong className="text-text capitalize font-semibold">
-                              {branch.displayStatus || branch.status || "active"}
-                            </strong>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Actions Menu */}
-                    <UIDropdown align="right" usePortal={true}>
-                      <UIDropdownTrigger asChild>
-                        <UIIconButton
-                          variant="ghost"
-                          size="sm"
-                          aria-label="Actions"
-                          className="h-8 w-8 text-text-muted hover:text-text hover:bg-surface-hover shrink-0"
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </UIIconButton>
-                      </UIDropdownTrigger>
-
-                      <UIDropdownMenu width="w-48">
-                        <UIDropdownItem
-                          icon={<Edit3 className="size-4" />}
-                          onClick={() => handleEditBranch?.(branch)}
-                        >
-                          Edit Branch Details
-                        </UIDropdownItem>
-                        <UIDropdownItem
-                          icon={<Users className="size-4" />}
-                          onClick={() => handleViewEmployees?.(branch)}
-                        >
-                          Manage Branch Staff
-                        </UIDropdownItem>
-                        <UIDropdownItem
-                          icon={<Settings className="size-4" />}
-                          onClick={() => handleOpenSettings?.(branch)}
-                        >
-                          Branch Settings
-                        </UIDropdownItem>
-                        <UIDropdownDivider />
-                        <UIDropdownItem
-                          destructive
-                          icon={<Trash2 className="size-4" />}
-                          onClick={() => handleDeleteBranch?.(branch)}
-                        >
-                          Delete Branch
-                        </UIDropdownItem>
-                      </UIDropdownMenu>
-                    </UIDropdown>
-                  </div>
-
-                  {/* Operational Metrics Strip */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 divide-x divide-border/60 border-b border-border/60 bg-surface-alt/40 text-xs">
-                    {/* Metric 1: Branch Cash Vault */}
-                    <div
-                      onClick={() => navigate("/finance/treasury/branch-cash")}
-                      className="p-3 text-center cursor-pointer hover:bg-surface-hover/70 transition-colors group"
-                      title="Jump to Branch Cash Vault"
-                    >
-                      <div className="text-[11px] font-medium text-text-muted flex items-center justify-center gap-1 group-hover:text-primary">
-                        <Wallet className="size-3.5" />
-                        Cash Vault
-                      </div>
-                      <div className="text-xs font-bold text-text group-hover:text-primary mt-1 flex items-center justify-center gap-1">
-                        <span>Open Vault</span>
-                        <ArrowUpRight className="size-3 opacity-70" />
-                      </div>
-                    </div>
-
-                    {/* Metric 2: Branch Staff Access */}
-                    <div
-                      onClick={() => handleViewEmployees?.(branch)}
-                      className="p-3 text-center cursor-pointer hover:bg-surface-hover/70 transition-colors group"
-                      title="Click to view assigned staff"
-                    >
-                      <div className="text-[11px] font-medium text-text-muted flex items-center justify-center gap-1 group-hover:text-primary">
-                        <Users className="size-3.5" />
-                        Staff On Duty
-                      </div>
-                      <div className="text-base font-bold text-text font-mono tabular-nums mt-0.5 group-hover:text-primary">
-                        {memberCount} {memberCount === 1 ? "Staff" : "Staff"}
-                      </div>
-                    </div>
-
-                    {/* Metric 3: Pharmacist in Charge */}
-                    <div className="p-3 text-center col-span-2 sm:col-span-1 border-t sm:border-t-0 border-border/60">
-                      <div className="text-[11px] font-medium text-text-muted flex items-center justify-center gap-1">
-                        <ShieldCheck className="size-3.5" />
-                        Pharmacist
-                      </div>
-                      <div className="text-xs font-bold text-text mt-1 truncate" title={manager}>
-                        {manager}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Two-Column Structured Intel Section */}
-                  <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 text-xs">
-                    {/* Column 1: Storefront & Location */}
-                    <div className="space-y-3 bg-surface-alt/30 p-3.5 rounded-xl border border-border/50">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5 pb-1 border-b border-border/40">
-                        <MapPin className="size-3.5 text-primary" />
-                        Store Location & Address
-                      </div>
-
-                      {/* Address */}
-                      <div className="flex items-start gap-2">
-                        <span className="text-text-muted font-medium shrink-0">Address:</span>
-                        <span
-                          className="text-text font-medium leading-relaxed truncate"
-                          title={location}
-                        >
-                          {location}
-                        </span>
-                      </div>
-
-                      {/* City & State */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium">Jurisdiction:</span>
-                        <span className="font-semibold text-text truncate">
-                          {branch.address?.city || branch.city || "Urban District"}
-                          {branch.address?.state ? `, ${branch.address.state}` : ""}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Column 2: Licensing & Direct Communication */}
-                    <div className="space-y-3 bg-surface-alt/30 p-3.5 rounded-xl border border-border/50">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5 pb-1 border-b border-border/40">
-                        <ShieldCheck className="size-3.5 text-info" />
-                        Licensing & Direct Line
-                      </div>
-
-                      {/* Drug License / Tax ID */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium">License / ID:</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-text select-all">
-                            {license}
-                          </span>
-                          {license !== "-" && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(license, "License")}
-                              className="p-1 rounded hover:bg-surface text-text-muted hover:text-primary transition-colors cursor-pointer"
-                              title="Copy License ID"
-                            >
-                              <Copy className="size-3" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Phone */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium flex items-center gap-1">
-                          <Phone className="size-3 text-text-muted" /> Dispense Desk:
-                        </span>
-                        <span className="font-mono font-semibold text-text">
-                          {phone}
-                        </span>
-                      </div>
-
-                      {/* Email */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium flex items-center gap-1">
-                          <Mail className="size-3 text-text-muted" /> Email:
-                        </span>
-                        <span
-                          className="font-medium text-text truncate max-w-[160px]"
-                          title={email}
-                        >
-                          {email}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Action Bar (Footer) */}
-                  <div className="p-3 sm:px-4 bg-surface-alt/50 border-t border-border/60 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {isCurrent ? (
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-xs border border-emerald-500/20 select-none">
-                          <CheckCircle2 className="size-3.5" />
-                          Currently Active Branch
-                        </div>
-                      ) : (
+            <UITableBody>
+              {isLoading && displayedBranches.length === 0 ? (
+                <UITableLoading colSpan={7} rows={8} />
+              ) : displayedBranches.length === 0 ? (
+                <UITableEmpty
+                  colSpan={7}
+                  title="No branches found"
+                  description={
+                    hasActiveFilters
+                      ? "No branch outlets match your active search or filter criteria."
+                      : "Register physical dispensing stores, hospital counters, or warehouse locations."
+                  }
+                  action={
+                    hasActiveFilters ? (
+                      <UIButton variant="outline" size="sm" onClick={handleClearFilters}>
+                        Clear Filters
+                      </UIButton>
+                    ) : canCreateBranch ? (
+                      <PermissionGate permission="branch:create">
                         <UIButton
-                          type="button"
-                          variant="outline"
+                          variant="primary"
                           size="sm"
-                          onClick={() => handleSwitchBranch(branch)}
-                          className="h-8 px-3 text-xs font-semibold hover:border-primary hover:text-primary cursor-pointer shadow-2xs"
+                          onClick={handleCreateBranch}
+                          startIcon={<Plus className="size-4" />}
                         >
-                          Switch to this Branch
+                          Register First Branch
                         </UIButton>
+                      </PermissionGate>
+                    ) : null
+                  }
+                />
+              ) : (
+                displayedBranches.map((branch) => {
+                  const isCurrent = currentBranch?._id === branch._id;
+                  const name = branch.displayName || branch.name || "Untitled Branch";
+                  const code = branch.displayCode || branch.branchCode || "N/A";
+                  const typeLabel = formatBranchTypeLabel(branch.type);
+                  const TypeIcon = getBranchTypeIcon(branch.type);
+                  const companyName = branch.displayCompany || "Company";
+                  const manager = branch.displayManager || "Unassigned";
+                  const managerRole = branch.displayManagerRole || "Manager";
+                  const location =
+                    branch.locationSummary ||
+                    branch.addressLine1 ||
+                    [branch.address?.city, branch.address?.state].filter(Boolean).join(", ") ||
+                    "Location Not Set";
+                  const statusMeta = statusBadgeVariant(branch.displayStatus);
+
+                  return (
+                    <UITableRow
+                      key={branch._id}
+                      onClick={() => handleViewBranch?.(branch)}
+                      className={cn(
+                        "hover:bg-surface-alt/50 transition-colors cursor-pointer",
+                        isCurrent && "bg-primary/[0.03]"
                       )}
+                    >
+                      {/* Branch Name & Code */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20 shadow-2xs">
+                            <TypeIcon className="size-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                onClick={() => handleViewBranch?.(branch)}
+                                className="font-bold text-xs text-text hover:text-primary transition-colors cursor-pointer truncate"
+                                title={name}
+                              >
+                                {name}
+                              </span>
+                              <span className="font-mono text-[10.5px] font-bold px-1.5 py-0.2 rounded bg-surface-alt border border-border text-text-muted">
+                                {code}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {isCurrent ? (
+                                <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  Active Store
+                                </span>
+                              ) : (
+                                <span className="text-[10.5px] text-text-muted">
+                                  {branch.memberCount ? `${branch.memberCount} Staff Assigned` : "Physical Dispensing Unit"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </UITableCell>
 
-                      <UIButton
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewEmployees?.(branch)}
-                        startIcon={<Users className="size-3.5 text-text-muted" />}
-                        className="h-8 px-2.5 text-xs text-text-muted hover:text-text cursor-pointer"
-                      >
-                        Staff On Duty
-                      </UIButton>
-                    </div>
+                      {/* Company Scope */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-1.5 text-xs text-text truncate max-w-[140px]" title={companyName}>
+                          <Building2 className="size-3 text-text-muted shrink-0" />
+                          <span className="font-medium truncate">{companyName}</span>
+                        </div>
+                      </UITableCell>
 
-                    <div className="flex items-center gap-1.5 ml-auto">
-                      <UIButton
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => navigate("/finance/treasury/branch-cash")}
-                        startIcon={<Wallet className="size-3.5 text-text-muted" />}
-                        className="h-8 px-3 text-xs font-semibold hover:border-primary hover:text-primary shadow-2xs"
-                      >
-                        Branch Cash
-                      </UIButton>
+                      {/* Branch Type */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-surface-alt border border-border/60 text-text">
+                          <TypeIcon className="size-3 text-primary shrink-0" />
+                          <span>{typeLabel}</span>
+                        </span>
+                      </UITableCell>
 
-                      <UIButton
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenSettings?.(branch)}
-                        startIcon={<Settings className="size-3.5 text-text-muted" />}
-                        className="h-8 px-3 text-xs font-semibold shadow-2xs"
+                      {/* Manager / Pharmacist */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="space-y-0.5 text-xs">
+                          <span className="font-medium text-text block truncate max-w-[150px]">
+                            {manager}
+                          </span>
+                          <span className="text-[10.5px] text-text-muted block">
+                            {managerRole}
+                          </span>
+                        </div>
+                      </UITableCell>
+
+                      {/* Location & City */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-1.5 text-xs text-text-muted max-w-[200px] truncate" title={location}>
+                          <MapPin className="size-3 text-text-muted shrink-0" />
+                          <span className="truncate">{location}</span>
+                        </div>
+                      </UITableCell>
+
+                      {/* Status */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        <UIBadge
+                          variant={statusMeta.variant}
+                          color={statusMeta.color}
+                          size="xs"
+                        >
+                          {statusMeta.label}
+                        </UIBadge>
+                      </UITableCell>
+
+                      {/* Actions */}
+                      <UITableCell
+                        align="right"
+                        className="py-2.5 px-3 w-14 min-w-[56px]"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        Settings
-                      </UIButton>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                        <div className="flex items-center justify-end">
+                          {/* Overflow Menu */}
+                          <UIDropdown>
+                            <UIDropdownTrigger asChild>
+                              <UIButton
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                className="size-7 p-0 text-text-muted hover:text-text cursor-pointer"
+                                title="More options"
+                              >
+                                <MoreVertical className="size-3.5" />
+                              </UIButton>
+                            </UIDropdownTrigger>
+                            <UIDropdownMenu align="end" className="w-44">
+                              <UIDropdownItem
+                                icon={<Eye className="size-4" />}
+                                onClick={() => handleViewBranch?.(branch)}
+                              >
+                                View Branch
+                              </UIDropdownItem>
+                              <UIDropdownItem
+                                icon={<Edit3 className="size-4" />}
+                                onClick={() => handleEditBranch?.(branch)}
+                              >
+                                Edit Branch
+                              </UIDropdownItem>
+                              {canDeleteBranch && (
+                                <>
+                                  <UIDropdownDivider />
+                                  <UIDropdownItem
+                                    destructive
+                                    icon={<Trash2 className="size-4" />}
+                                    onClick={() => handleDeleteBranch?.(branch)}
+                                  >
+                                    Delete Branch
+                                  </UIDropdownItem>
+                                </>
+                              )}
+                            </UIDropdownMenu>
+                          </UIDropdown>
+                        </div>
+                      </UITableCell>
+                    </UITableRow>
+                  );
+                })
+              )}
+            </UITableBody>
+          </UITable>
+
+          {/* Infinite Scroll sentinel */}
+          <UIInfiniteScroll
+            hasMore={hasMore}
+            isLoading={isLoadingMore}
+            onLoadMore={handleLoadMore}
+            scrollThreshold={0.8}
+          />
+        </UITableScrollArea>
       </div>
 
       {/* ── Slide-over Branch Employees & Access Drawer ── */}

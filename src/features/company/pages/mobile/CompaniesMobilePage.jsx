@@ -1,20 +1,16 @@
 // src/features/company/pages/mobile/CompaniesMobilePage.jsx
 
-import React, { useState } from "react";
 import {
   Building2,
   Plus,
-  Filter,
   Download,
   RotateCcw,
   Search,
   MoreHorizontal,
   Eye,
   Edit3,
-  Settings,
   Users,
   Trash2,
-  X,
   MapPin,
   LayoutGrid,
   List,
@@ -29,7 +25,6 @@ import {
   UIDropdownMenu,
   UIDropdownItem,
   UIDropdownDivider,
-  UIDrawer,
   UISelect,
   UIPagination,
   UISkeleton,
@@ -64,8 +59,6 @@ export const CompaniesMobilePage = ({
   paginatedCompanies = [],
   stats = [],
   filters,
-  sortBy,
-  onSortChange,
   viewMode = VIEW_MODES.GRID,
   onViewModeChange,
   statusOptions = [],
@@ -82,12 +75,12 @@ export const CompaniesMobilePage = ({
   handlePageSizeChange,
   handleFilterChange,
   handleSearchChange,
-  handleRemoveFilter,
   handleClearFilters,
+  canCreateCompany = true,
+  canDeleteCompany = true,
   handleCreateCompany,
   handleViewCompany,
   handleEditCompany,
-  handleOpenSettings,
   handleViewEmployees,
   handleDeleteCompany,
   handleRefresh,
@@ -96,8 +89,6 @@ export const CompaniesMobilePage = ({
   isEmployeeDrawerOpen,
   handleCloseEmployeesDrawer,
 }) => {
-  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
-
   const activeCount =
     stats.find((s) => s.id === "active")?.value ??
     companies.filter((c) => c.status === "active").length;
@@ -167,17 +158,19 @@ export const CompaniesMobilePage = ({
             </div>
           </div>
 
-          <PermissionGate permission="company:create">
-            <UIButton
-              type="button"
-              variant="primary"
-              size="sm"
-              startIcon={<Plus className="size-3.5" />}
-              onClick={handleCreateCompany}
-            >
-              Add Company
-            </UIButton>
-          </PermissionGate>
+          {canCreateCompany && (
+            <PermissionGate permission="company:create">
+              <UIButton
+                type="button"
+                variant="primary"
+                size="sm"
+                startIcon={<Plus className="size-3.5" />}
+                onClick={handleCreateCompany}
+              >
+                Add Company
+              </UIButton>
+            </PermissionGate>
+          )}
         </div>
 
         {/* Action Toolbar */}
@@ -344,9 +337,8 @@ export const CompaniesMobilePage = ({
           companies={displayList}
           onView={handleViewCompany}
           onEdit={handleEditCompany}
-          onSettings={handleOpenSettings}
           onViewEmployees={handleViewEmployees}
-          onDelete={handleDeleteCompany}
+          onDelete={canDeleteCompany ? handleDeleteCompany : undefined}
         />
       ) : (
         <div className="space-y-2.5">
@@ -409,7 +401,7 @@ export const CompaniesMobilePage = ({
                           icon={<Eye className="size-4 text-primary" />}
                           onClick={() => handleViewCompany(company)}
                         >
-                          View Details
+                          View Company
                         </UIDropdownItem>
                         <UIDropdownItem
                           icon={<Edit3 className="size-4" />}
@@ -417,20 +409,18 @@ export const CompaniesMobilePage = ({
                         >
                           Edit Company
                         </UIDropdownItem>
-                        <UIDropdownItem
-                          icon={<Users className="size-4" />}
-                          onClick={() => handleViewEmployees?.(company)}
-                        >
-                          Staff & Access
-                        </UIDropdownItem>
-                        <UIDropdownDivider />
-                        <UIDropdownItem
-                          destructive
-                          icon={<Trash2 className="size-4" />}
-                          onClick={() => handleDeleteCompany(company)}
-                        >
-                          Delete Profile
-                        </UIDropdownItem>
+                        {canDeleteCompany && (
+                          <>
+                            <UIDropdownDivider />
+                            <UIDropdownItem
+                              destructive
+                              icon={<Trash2 className="size-4" />}
+                              onClick={() => handleDeleteCompany(company)}
+                            >
+                              Delete Company
+                            </UIDropdownItem>
+                          </>
+                        )}
                       </UIDropdownMenu>
                     </UIDropdown>
                   </div>

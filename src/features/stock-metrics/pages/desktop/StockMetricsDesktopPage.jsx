@@ -28,10 +28,14 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import useBranch from "@/features/branch/hooks/useBranch";
+import useCompany from "@/features/company/hooks/useCompany";
 import useUser from "@/features/user/hooks/useUser";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
+import { useBranchFilter } from "@/hooks";
 import workspaceProductService from "@/features/workspace-products/services/workspaceProductService";
 
 /**
@@ -211,9 +215,14 @@ const PAGE_LIMIT = 25;
 
 export const StockMetricsDesktopPage = () => {
   const tableContainerRef = useRef(null);
+  const { isCompanyLevel, selectedBranchId, setSelectedBranchId, queryBranchId } = useBranchFilter("all");
   const { activeBranchId: userBranchId, activeCompanyId } = useUser();
+  const { currentCompany } = useCompany();
   const { currentBranch } = useBranch();
-  const activeBranchId = currentBranch?._id || currentBranch?.id || userBranchId;
+  const effectiveCompanyId = currentCompany?._id || currentCompany?.id || activeCompanyId;
+  const resolvedFacility = isCompanyLevel
+    ? queryBranchId
+    : (currentBranch?._id || currentBranch?.id || userBranchId);
 
   // Filter & Search states
   const [searchQuery, setSearchQuery] = useState("");
@@ -301,12 +310,12 @@ export const StockMetricsDesktopPage = () => {
         const payload = {
           page: 1,
           limit: PAGE_LIMIT,
-          companyId: activeCompanyId,
+          companyId: effectiveCompanyId,
           filters: { inStockOnly: true },
         };
-        // Always scoped exclusively to current branch
-        if (activeBranchId) {
-          payload.filters.facility = activeBranchId;
+        // Scoped to facility if selected or branch level
+        if (resolvedFacility) {
+          payload.filters.facility = resolvedFacility;
         }
         if (lowStockFilter) {
           payload.filters.lowStock = true;
@@ -333,7 +342,7 @@ export const StockMetricsDesktopPage = () => {
         setIsLoading(false);
       }
     },
-    [activeCompanyId, activeBranchId, lowStockFilter, debouncedSearch, flattenBatchList]
+    [effectiveCompanyId, resolvedFacility, lowStockFilter, debouncedSearch, flattenBatchList]
   );
 
   // Load More (Infinite Scroll)
@@ -348,8 +357,8 @@ export const StockMetricsDesktopPage = () => {
         companyId: activeCompanyId,
         filters: { inStockOnly: true },
       };
-      if (activeBranchId) {
-        payload.filters.facility = activeBranchId;
+      if (resolvedFacility) {
+        payload.filters.facility = resolvedFacility;
       }
       if (lowStockFilter) {
         payload.filters.lowStock = true;
@@ -386,7 +395,7 @@ export const StockMetricsDesktopPage = () => {
     hasMore,
     currentPage,
     activeCompanyId,
-    activeBranchId,
+    resolvedFacility,
     lowStockFilter,
     debouncedSearch,
     totalCount,
@@ -666,6 +675,14 @@ export const StockMetricsDesktopPage = () => {
           />
         </div>
 
+        {/* Branch Filter (Company Level Only) */}
+        <BranchFilterSelect
+          value={selectedBranchId}
+          onChange={setSelectedBranchId}
+          size="md"
+          className="w-[180px] sm:w-[200px]"
+        />
+
         {/* Expiry Segmented Clickable Tabs */}
         <div className="flex items-center p-0.5 rounded-xl bg-surface-alt border border-border/80 gap-1 select-none overflow-x-auto">
           {EXPIRY_TABS.map((tab) => {
@@ -778,11 +795,8 @@ export const StockMetricsDesktopPage = () => {
       </div>
 
       {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ────── */}
-      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-        <div
-          ref={tableContainerRef}
-          className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0"
-        >
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef}>
           <UITable
             stickyHeader
             containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -927,7 +941,7 @@ export const StockMetricsDesktopPage = () => {
               isLoading={isLoadingMore}
             />
           )}
-        </div>
+        </UITableScrollArea>
       </div>
     </div>
   );

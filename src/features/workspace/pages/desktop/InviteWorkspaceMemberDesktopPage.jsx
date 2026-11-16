@@ -159,7 +159,7 @@ export default function InviteWorkspaceMemberDesktopPage({
     : (formData.companyIds || []).length;
 
   return (
-    <div className="min-h-screen bg-bg text-text p-3 sm:p-4 lg:p-5 max-w-[1440px] mx-auto space-y-4">
+    <div className="w-full max-w-[1440px] mx-auto space-y-4 pb-16 text-text">
       {/* Feedback Alerts */}
       {formErrors.submit && (
         <UIAlert

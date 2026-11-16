@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 
 import { API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useCompanyFilter } from "@/hooks";
 
 import useJournalVoucher from "../hooks/useJournalVoucher";
 import useAccount from "@/features/finance/chart-of-accounts/accounts/hooks/useAccount";
@@ -11,6 +11,7 @@ import JournalVoucherDialog from "../components/JournalVoucherDialog";
 
 const JournalVouchersPage = () => {
   const isMobile = useIsMobile();
+  const companyFilter = useCompanyFilter();
   const hasFetchedAccountsRef = useRef(false);
 
   const {
@@ -59,6 +60,7 @@ const JournalVouchersPage = () => {
           search: searchParams.search || undefined,
           status: searchParams.status === "all" ? undefined : searchParams.status,
           voucherType: searchParams.voucherType === "all" ? undefined : searchParams.voucherType,
+          companyId: companyFilter?.queryCompanyId,
         };
         await getJournalVouchers(query);
       } catch (err) {
@@ -66,7 +68,7 @@ const JournalVouchersPage = () => {
       }
     };
     loadVouchers();
-  }, [currentPage, pageSize, searchParams]);
+  }, [currentPage, pageSize, searchParams, companyFilter?.queryCompanyId]);
 
   const handleSearchChange = useCallback((value) => {
     setSearchParams((prev) => ({ ...prev, search: value }));
@@ -131,6 +133,7 @@ const JournalVouchersPage = () => {
   const pageProps = {
     journalVouchers: journalVouchers || [],
     searchParams,
+    companyFilter,
     currentPage,
     pageSize,
     totalVouchers,

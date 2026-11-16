@@ -6,6 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
 import { UIConfirmDialog } from "@/components/ui";
+import { useNavigationPipeline, PIPELINE_LEVELS } from "@/contexts/NavigationPipelineContext";
+import { useCompanyFilter } from "@/hooks";
 
 import useSupplier from "../hooks/useSupplier";
 import useCompany from "@/features/company/hooks/useCompany";
@@ -65,6 +67,11 @@ const mapSupplierForView = (supplier) => {
 const SuppliersPage = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { currentLevel } = useNavigationPipeline();
+  const isWorkspaceLevel =
+    currentLevel === PIPELINE_LEVELS.WORKSPACE || currentLevel === "workspace";
+  const companyFilter = useCompanyFilter();
+
   const { currentCompany } = useCompany();
   const companyId = currentCompany?._id;
 
@@ -108,16 +115,19 @@ const SuppliersPage = () => {
         queryParams.supplierType = queryParams.type;
         delete queryParams.type;
       }
+      if (isWorkspaceLevel && companyFilter.queryCompanyId) {
+        queryParams.companyId = companyFilter.queryCompanyId;
+      }
       await getSuppliers(queryParams);
     } catch {
       // Regulated by store selectors
     }
-  }, [getSuppliers, filters]);
+  }, [getSuppliers, filters, isWorkspaceLevel, companyFilter.queryCompanyId]);
 
   useEffect(() => {
-    if (!companyId) return;
+    if (!isWorkspaceLevel && !companyId) return;
     fetchSuppliers();
-  }, [fetchSuppliers, companyId]);
+  }, [fetchSuppliers, companyId, isWorkspaceLevel, companyFilter.selectedCompanyId]);
 
   useEffect(() => {
     if (!message) return undefined;
@@ -324,6 +334,7 @@ const SuppliersPage = () => {
     handleEditSupplier,
     handleDeleteSupplier: handleRequestDeleteSupplier,
     handleRefresh,
+    companyFilter,
 
     clearMessage,
   };

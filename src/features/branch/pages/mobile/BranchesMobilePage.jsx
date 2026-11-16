@@ -1,6 +1,5 @@
 // src/features/branch/pages/mobile/BranchesMobilePage.jsx
 
-import React from "react";
 import {
   GitBranch,
   Plus,
@@ -10,7 +9,6 @@ import {
   MoreHorizontal,
   Eye,
   Edit3,
-  Settings,
   Users,
   Trash2,
   MapPin,
@@ -57,8 +55,6 @@ export const BranchesMobilePage = ({
   paginatedBranches = [],
   stats = [],
   filters,
-  sortBy,
-  onSortChange,
   viewMode = VIEW_MODES.GRID,
   onViewModeChange,
   statusOptions = [],
@@ -75,12 +71,12 @@ export const BranchesMobilePage = ({
   handlePageSizeChange,
   handleFilterChange,
   handleSearchChange,
-  handleRemoveFilter,
   handleClearFilters,
+  canCreateBranch = true,
+  canDeleteBranch = true,
   handleCreateBranch,
   handleViewBranch,
   handleEditBranch,
-  handleOpenSettings,
   handleViewEmployees,
   handleDeleteBranch,
   handleRefresh,
@@ -161,17 +157,19 @@ export const BranchesMobilePage = ({
             </div>
           </div>
 
-          <PermissionGate permission="branch:create">
-            <UIButton
-              type="button"
-              variant="primary"
-              size="sm"
-              startIcon={<Plus className="size-3.5" />}
-              onClick={handleCreateBranch}
-            >
-              Add Branch
-            </UIButton>
-          </PermissionGate>
+          {canCreateBranch && (
+            <PermissionGate permission="branch:create">
+              <UIButton
+                type="button"
+                variant="primary"
+                size="sm"
+                startIcon={<Plus className="size-3.5" />}
+                onClick={handleCreateBranch}
+              >
+                Add Branch
+              </UIButton>
+            </PermissionGate>
+          )}
         </div>
 
         {/* Action Toolbar */}
@@ -311,16 +309,18 @@ export const BranchesMobilePage = ({
             title="No branches yet"
             description="Add branch locations or dispensaries to manage operations."
             primaryAction={
-              <PermissionGate permission="branch:create">
-                <UIButton
-                  variant="primary"
-                  size="sm"
-                  startIcon={<Plus className="size-3.5" />}
-                  onClick={handleCreateBranch}
-                >
-                  Add Branch
-                </UIButton>
-              </PermissionGate>
+              canCreateBranch ? (
+                <PermissionGate permission="branch:create">
+                  <UIButton
+                    variant="primary"
+                    size="sm"
+                    startIcon={<Plus className="size-3.5" />}
+                    onClick={handleCreateBranch}
+                  >
+                    Add Branch
+                  </UIButton>
+                </PermissionGate>
+              ) : undefined
             }
           />
         </div>
@@ -342,9 +342,8 @@ export const BranchesMobilePage = ({
           branches={displayList}
           onView={handleViewBranch}
           onEdit={handleEditBranch}
-          onSettings={handleOpenSettings}
           onViewEmployees={handleViewEmployees}
-          onDelete={handleDeleteBranch}
+          onDelete={canDeleteBranch ? handleDeleteBranch : undefined}
         />
       ) : (
         <div className="space-y-2.5">
@@ -407,7 +406,7 @@ export const BranchesMobilePage = ({
                           icon={<Eye className="size-4 text-primary" />}
                           onClick={() => handleViewBranch(branch)}
                         >
-                          View Details
+                          View Branch
                         </UIDropdownItem>
                         <UIDropdownItem
                           icon={<Edit3 className="size-4" />}
@@ -415,20 +414,18 @@ export const BranchesMobilePage = ({
                         >
                           Edit Branch
                         </UIDropdownItem>
-                        <UIDropdownItem
-                          icon={<Users className="size-4" />}
-                          onClick={() => handleViewEmployees?.(branch)}
-                        >
-                          Staff & Access
-                        </UIDropdownItem>
-                        <UIDropdownDivider />
-                        <UIDropdownItem
-                          destructive
-                          icon={<Trash2 className="size-4" />}
-                          onClick={() => handleDeleteBranch(branch)}
-                        >
-                          Delete Branch
-                        </UIDropdownItem>
+                        {canDeleteBranch && (
+                          <>
+                            <UIDropdownDivider />
+                            <UIDropdownItem
+                              destructive
+                              icon={<Trash2 className="size-4" />}
+                              onClick={() => handleDeleteBranch(branch)}
+                            >
+                              Delete Branch
+                            </UIDropdownItem>
+                          </>
+                        )}
                       </UIDropdownMenu>
                     </UIDropdown>
                   </div>

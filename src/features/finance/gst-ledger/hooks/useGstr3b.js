@@ -51,6 +51,7 @@ export const useGstr3b = () => {
   // Default to September of current FY or first month
   const [selectedPeriod, setSelectedPeriod] = useState("2026-09");
   const [branchId, setBranchId] = useState(currentBranch?._id || "all");
+  const [companyId, setCompanyId] = useState("all");
 
   const [summaryData, setSummaryData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -93,7 +94,8 @@ export const useGstr3b = () => {
     const params = {
       startDate,
       endDate,
-      branchId: branchId || undefined,
+      branchId: branchId === "all" ? undefined : branchId,
+      companyId: companyId === "all" ? undefined : companyId,
       fy: selectedFy,
       returnPeriod: selectedPeriod,
     };
@@ -133,7 +135,7 @@ export const useGstr3b = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedPeriod, selectedFy, branchId, currentCompany?.gstin]);
+  }, [selectedPeriod, selectedFy, branchId, companyId, currentCompany?.gstin]);
 
   useEffect(() => {
     fetchSummary();
@@ -386,6 +388,8 @@ export const useGstr3b = () => {
     branches,
     branchId,
     setBranchId,
+    companyId,
+    setCompanyId,
     currentBranch,
     summaryData,
     loading,

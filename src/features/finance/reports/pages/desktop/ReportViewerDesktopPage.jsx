@@ -32,6 +32,7 @@ import {
 } from "@/components";
 import { formatDate } from "@/utils";
 import { API_STATUS, ROUTES } from "@/constants";
+import { CompanyFilterSelect } from "@/components/shared";
 
 // 9 report modules metadata
 const REPORT_MODULES = [
@@ -98,6 +99,7 @@ const ReportViewerDesktopPage = ({
   error,
   message,
   filters,
+  companyFilter,
   accountOptions = [],
   customerOptions = [],
   supplierOptions = [],
@@ -251,6 +253,16 @@ const ReportViewerDesktopPage = ({
             <AppCard variant="default" rounded="lg" bordered shadow="sm">
               <div className="p-4 flex flex-wrap items-end justify-between gap-4">
                 <div className="flex flex-wrap items-end gap-3">
+                  {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+                  <CompanyFilterSelect
+                    value={companyFilter?.selectedCompanyId || "all"}
+                    onChange={companyFilter?.setSelectedCompanyId}
+                    size="sm"
+                    label="Company Scope"
+                    showLabel
+                    className="w-[180px]"
+                  />
+
                   {/* Trial Balance & Balance Sheet Date */}
                   {(reportType === "trial-balance" ||
                     reportType === "balance-sheet") && (

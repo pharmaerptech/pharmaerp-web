@@ -3,14 +3,11 @@ import {
   FiArrowLeft,
   FiArrowRight,
   FiBriefcase,
-  FiCalendar,
   FiCheck,
   FiCheckCircle,
   FiEdit3,
   FiFileText,
   FiMapPin,
-  FiMail,
-  FiPhone,
   FiRefreshCw,
   FiShield,
   FiUser,
@@ -28,12 +25,68 @@ import {
   AppText,
 } from "@/components";
 
+/* ==========================================================================
+   MOBILE SKELETON LOADER
+   ========================================================================== */
+
+const EditBranchMobileSkeleton = () => (
+  <section className="relative w-full overflow-hidden bg-bg p-3 select-none animate-pulse space-y-3 font-sans">
+    {/* Header Title Block Skeleton */}
+    <div className="bg-surface border border-border/80 rounded-2xl p-4 space-y-2">
+      <div className="h-3 w-20 bg-surface-alt rounded" />
+      <div className="flex items-center justify-between">
+        <div className="h-6 w-36 bg-surface-alt rounded" />
+        <div className="h-7 w-16 bg-surface-alt rounded-md" />
+      </div>
+      <div className="h-3 w-56 bg-surface-alt/70 rounded mt-1" />
+    </div>
+
+    {/* Stepper Skeleton */}
+    <div className="bg-surface border border-border/80 rounded-xl p-3 flex items-center justify-between">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex items-center gap-1.5 flex-1 last:flex-none">
+          <div className="size-7 rounded-lg bg-surface-alt shrink-0" />
+          {i < 5 && <div className="h-0.5 flex-1 bg-surface-alt" />}
+        </div>
+      ))}
+    </div>
+
+    {/* Form Card Skeleton */}
+    <div className="bg-surface border border-border/80 rounded-2xl p-4 space-y-4">
+      <div className="h-4 w-36 bg-surface-alt rounded" />
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <div className="h-3 w-24 bg-surface-alt/70 rounded" />
+          <div className="h-9 w-full bg-surface-alt/50 rounded-lg border border-border/50" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-20 bg-surface-alt/70 rounded" />
+          <div className="h-9 w-full bg-surface-alt/50 rounded-lg border border-border/50" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-28 bg-surface-alt/70 rounded" />
+          <div className="h-9 w-full bg-surface-alt/50 rounded-lg border border-border/50" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-32 bg-surface-alt/70 rounded" />
+          <div className="h-9 w-full bg-surface-alt/50 rounded-lg border border-border/50" />
+        </div>
+      </div>
+      <div className="pt-3 border-t border-border/60 flex items-center justify-between">
+        <div className="h-8 w-20 bg-surface-alt/50 rounded-lg" />
+        <div className="h-8 w-24 bg-primary/20 rounded-lg" />
+      </div>
+    </div>
+  </section>
+);
+
 const EditBranchMobilePage = memo(
   ({
     formData,
     formErrors = {},
     isLoading = false,
     isDataFetching = false,
+    isFetching = false,
     currentStep = 1,
     branchCode = "",
 
@@ -49,6 +102,8 @@ const EditBranchMobilePage = memo(
     handleSaveDraft,
     handleReload,
   }) => {
+    const isBusyFetching = isDataFetching || isFetching;
+
     // Reset wizard sequence and trigger live record reloading handler
     const handleResetAndRefresh = useCallback(() => {
       handleStepChange?.(1);
@@ -56,6 +111,10 @@ const EditBranchMobilePage = memo(
         handleReload();
       }
     }, [handleReload, handleStepChange]);
+
+    if (isBusyFetching) {
+      return <EditBranchMobileSkeleton />;
+    }
 
     return (
       <section className="relative w-full overflow-hidden bg-bg">
@@ -113,76 +172,52 @@ const EditBranchMobilePage = memo(
               </AppText>
             )}
 
-            {isDataFetching ? (
-              <AppCard
-                variant="default"
-                rounded="lg"
-                bordered
-                shadow="none"
-                padding="none"
-                sx={formCardContainerSx}
-              >
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <FiRefreshCw className="animate-spin text-[24px] text-success mb-2" />
-                  <AppText
-                    variant="caption"
-                    weight={600}
-                    sx={{ color: "var(--app-color-text-muted)" }}
-                  >
-                    Retrieving branch configuration models...
-                  </AppText>
-                </div>
-              </AppCard>
-            ) : (
-              <>
-                {currentStep === 1 && (
-                  <MobileStepBranchDetails
-                    formData={formData}
-                    formErrors={formErrors}
-                    branchTypeOptions={branchTypeOptions}
-                    booleanOptions={booleanOptions}
-                    statusOptions={statusOptions}
-                    handleChange={handleChange}
-                    isLoading={isLoading}
-                  />
-                )}
+            {currentStep === 1 && (
+              <MobileStepBranchDetails
+                formData={formData}
+                formErrors={formErrors}
+                branchTypeOptions={branchTypeOptions}
+                booleanOptions={booleanOptions}
+                statusOptions={statusOptions}
+                handleChange={handleChange}
+                isLoading={isLoading}
+              />
+            )}
 
-                {currentStep === 2 && (
-                  <MobileStepAddressDetails
-                    formData={formData}
-                    formErrors={formErrors}
-                    handleChange={handleChange}
-                    isLoading={isLoading}
-                  />
-                )}
+            {currentStep === 2 && (
+              <MobileStepAddressDetails
+                formData={formData}
+                formErrors={formErrors}
+                handleChange={handleChange}
+                isLoading={isLoading}
+              />
+            )}
 
-                {currentStep === 3 && (
-                  <MobileStepLicenseDetails
-                    formData={formData}
-                    formErrors={formErrors}
-                    handleChange={handleChange}
-                    isLoading={isLoading}
-                  />
-                )}
+            {currentStep === 3 && (
+              <MobileStepLicenseDetails
+                formData={formData}
+                formErrors={formErrors}
+                handleChange={handleChange}
+                isLoading={isLoading}
+              />
+            )}
 
-                {currentStep === 4 && (
-                  <MobileStepComplianceContacts
-                    formData={formData}
-                    formErrors={formErrors}
-                    handleChange={handleChange}
-                    isLoading={isLoading}
-                  />
-                )}
+            {currentStep === 4 && (
+              <MobileStepComplianceContacts
+                formData={formData}
+                formErrors={formErrors}
+                handleChange={handleChange}
+                isLoading={isLoading}
+              />
+            )}
 
-                {currentStep === 5 && (
-                  <MobileStepReviewAndDeploy
-                    formData={formData}
-                    branchCode={branchCode}
-                    branchTypeOptions={branchTypeOptions}
-                    onEditSection={handleStepChange}
-                  />
-                )}
-              </>
+            {currentStep === 5 && (
+              <MobileStepReviewAndDeploy
+                formData={formData}
+                branchCode={branchCode}
+                branchTypeOptions={branchTypeOptions}
+                onEditSection={handleStepChange}
+              />
             )}
           </AppBox>
 
@@ -239,7 +274,8 @@ const EditBranchMobilePage = memo(
                   rounded="md"
                   startIcon={<FiCheckCircle />}
                   onClick={handleSubmit}
-                  loading={isLoading}
+                  isLoading={isLoading}
+                  loadingText="Updating Branch..."
                   disabled={isLoading || isDataFetching}
                   sx={actionButtonRightSx}
                 >
@@ -621,7 +657,6 @@ const MobileStepAddressDetails = ({
 
 const MobileStepLicenseDetails = ({
   formData,
-  formErrors,
   handleChange,
   isLoading,
 }) => (
@@ -1135,11 +1170,6 @@ const mobileInputSx = {
   "& input::placeholder": {
     fontSize: "12px",
   },
-};
-
-const mobileResetBtnSx2 = {
-  fontSize: "12.5px",
-  bgcolor: "var(--app-color-surface-alt)",
 };
 
 const subSectionDividerLabelSx = {

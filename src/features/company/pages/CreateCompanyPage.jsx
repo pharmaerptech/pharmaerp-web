@@ -1,10 +1,11 @@
 // src/features/company/pages/CreateCompanyPage.jsx
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { API_STATUS } from "@/constants";
+import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 
 import useCompany from "../hooks/useCompany";
 
@@ -72,6 +73,11 @@ const industryOptions = [
   { label: "Retail Pharmacy", value: "retail_pharmacy" },
   { label: "Wholesale Distribution", value: "wholesale_distribution" },
   { label: "Medical Devices", value: "medical_devices" },
+  { label: "Hospital & Clinical", value: "hospital_clinical" },
+  { label: "Biotechnology", value: "biotechnology" },
+  { label: "Nutraceuticals", value: "nutraceuticals" },
+  { label: "Ayurveda & Herbal", value: "ayurveda_herbal" },
+  { label: "Other", value: "other" },
 ];
 
 const licenseStatusOptions = [
@@ -231,6 +237,14 @@ const validateStepData = (step, formData) => {
 const CreateCompanyPage = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { isSetupComplete, companyCompleted } = useSetupStatus();
+
+  // Enforce Sequential Setup: Cannot create second company until branch setup is complete
+  useEffect(() => {
+    if (!isSetupComplete && companyCompleted) {
+      navigate(ROUTES.SETUP_CENTER, { replace: true });
+    }
+  }, [isSetupComplete, companyCompleted, navigate]);
 
   const {
     createCompany,
@@ -269,8 +283,12 @@ const CreateCompanyPage = () => {
   );
 
   const handleBackToCompanies = useCallback(() => {
-    navigate("/companies");
-  }, [navigate]);
+    if (!isSetupComplete) {
+      navigate(ROUTES.SETUP_CENTER);
+    } else {
+      navigate("/companies");
+    }
+  }, [navigate, isSetupComplete]);
 
   const handleStepChange = useCallback(
     (step) => {
@@ -314,8 +332,12 @@ const CreateCompanyPage = () => {
 
   const handleSaveDraft = useCallback(() => {
     setFormErrors({});
-    navigate("/companies");
-  }, [navigate]);
+    if (!isSetupComplete) {
+      navigate(ROUTES.SETUP_CENTER);
+    } else {
+      navigate("/companies");
+    }
+  }, [navigate, isSetupComplete]);
 
   const handleResetAndRefresh = useCallback(() => {
     setCurrentStep(1);
@@ -364,7 +386,11 @@ const CreateCompanyPage = () => {
       try {
         const payload = buildCompanyPayload(formData);
         await createCompany(payload);
-        navigate("/companies", { replace: true });
+        if (!isSetupComplete) {
+          navigate(ROUTES.SETUP_CENTER, { replace: true });
+        } else {
+          navigate("/companies", { replace: true });
+        }
       } catch (error) {
         setFormErrors({
           submit:
@@ -374,7 +400,7 @@ const CreateCompanyPage = () => {
         });
       }
     },
-    [createCompany, formData, navigate],
+    [createCompany, formData, navigate, isSetupComplete],
   );
 
   const pageProps = useMemo(

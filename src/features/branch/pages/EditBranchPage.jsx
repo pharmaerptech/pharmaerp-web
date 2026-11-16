@@ -220,8 +220,10 @@ const EditBranchPage = () => {
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [formErrors, setFormErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(1);
+  const [loadedBranchId, setLoadedBranchId] = useState(null);
 
-  const isDataFetching = getBranchStatus === API_STATUS.LOADING;
+  const isDataFetching =
+    getBranchStatus === API_STATUS.LOADING || loadedBranchId !== branchId;
   const isSubmitting = updateBranchStatus === API_STATUS.LOADING;
 
   const loadBranchData = useCallback(async () => {
@@ -265,8 +267,10 @@ const EditBranchPage = () => {
           emergencyContactRelationship:
             data.emergencyContact?.relationship || "",
         });
+        setLoadedBranchId(branchId);
       }
-    } catch (err) {
+    } catch {
+      setLoadedBranchId(branchId);
       setFormErrors({
         submit: "Unable to retrieve branch records. Returning to dashboard.",
       });
@@ -274,11 +278,11 @@ const EditBranchPage = () => {
         navigate("/branches");
       }, 2500);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, navigate]);
+  }, [branchId, getBranchById, navigate]);
 
   // Trigger load action exclusively on branchId parameter shifting
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadBranchData();
   }, [branchId, loadBranchData]);
 
@@ -413,11 +417,17 @@ const EditBranchPage = () => {
     [branchId, formData, navigate],
   );
 
+  const handleReload = useCallback(() => {
+    setLoadedBranchId(null);
+    loadBranchData();
+  }, [loadBranchData]);
+
   const desktopProps = useMemo(
     () => ({
       formData,
       formErrors,
       isLoading: isSubmitting,
+      isFetching: isDataFetching,
       isDataFetching,
       currentStep,
       branchCode: managedBranch?.branchCode || "",
@@ -433,7 +443,7 @@ const EditBranchPage = () => {
       handleStepChange,
       handleSaveDraft,
       handleCancel: handleBackToBranches,
-      handleReload: loadBranchData,
+      handleReload,
     }),
     [
       formData,
@@ -449,7 +459,7 @@ const EditBranchPage = () => {
       handleStepChange,
       handleSaveDraft,
       handleBackToBranches,
-      loadBranchData,
+      handleReload,
     ],
   );
 

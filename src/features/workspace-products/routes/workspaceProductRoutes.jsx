@@ -1,7 +1,5 @@
 import { ROUTES } from "@/constants";
 
-import { StockMetricsPage } from "@/features/stock-metrics";
-
 import {
   WorkspaceProductsPage,
   CreateWorkspaceProductPage,
@@ -12,10 +10,6 @@ import {
 } from "../pages";
 
 const workspaceProductRoutes = [
-  {
-    path: ROUTES.STOCK_METRICS,
-    element: <StockMetricsPage />,
-  },
   {
     path: ROUTES.WORKSPACE_PRODUCTS,
     element: <WorkspaceProductsPage />,

@@ -24,6 +24,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { ShiftTableView, ShiftCard, CreateShiftDialog, ViewShiftDialog, CloseShiftDialog } from "../../components";
 import CloseBusinessDayDialog from "@/features/operations/business-days/components/CloseBusinessDayDialog";
+import { BranchFilterSelect } from "@/components/shared";
 import { cn } from "@/lib/utils";
 
 export const ShiftsMobilePage = ({
@@ -52,6 +53,9 @@ export const ShiftsMobilePage = ({
   handleClearFilters,
   handleRefresh,
   activeFilterChips = [],
+  isCompanyLevel = false,
+  selectedBranchId = "all",
+  setSelectedBranchId,
   openBusinessDay,
   isCreateOpen,
   setIsCreateOpen,
@@ -195,6 +199,14 @@ export const ShiftsMobilePage = ({
 
       {/* Filter & View Switcher */}
       <div className="bg-surface border border-border/60 rounded-xl p-2.5 shadow-2xs space-y-2">
+        {isCompanyLevel && (
+          <BranchFilterSelect
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            size="sm"
+            className="w-full"
+          />
+        )}
         <div className="flex items-center gap-2">
           <div className="flex-1 min-w-0">
             <UISearchInput
@@ -360,7 +372,7 @@ export const ShiftsMobilePage = ({
         onClose={() => setCloseShift(null)}
         shift={closeShift}
         onOpenNewShift={() => setIsCreateOpen(true)}
-        onCreateDayClosing={() => setIsCloseBusinessDayOpen(true)}
+        onCreateDayClosing={() => navigate("/operations/business-days")}
       />
       <CloseBusinessDayDialog
         isOpen={isCloseBusinessDayOpen}

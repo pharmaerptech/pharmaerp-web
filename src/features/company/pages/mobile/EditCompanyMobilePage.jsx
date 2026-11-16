@@ -2,12 +2,10 @@ import { memo, useCallback } from "react";
 import {
   FiArrowLeft,
   FiArrowRight,
-  FiBriefcase,
   FiCheck,
   FiCheckCircle,
   FiEdit3,
   FiFileText,
-  FiGlobe,
   FiMapPin,
   FiMail,
   FiPhone,
@@ -31,6 +29,61 @@ import {
   AppText,
 } from "@/components";
 
+/* ==========================================================================
+   MOBILE SKELETON LOADER
+   ========================================================================== */
+
+const EditCompanyMobileSkeleton = () => (
+  <section className="relative w-full overflow-hidden bg-bg p-3 select-none animate-pulse space-y-3 font-sans">
+    {/* Header Title Block Skeleton */}
+    <div className="bg-surface border border-border/80 rounded-2xl p-4 space-y-2">
+      <div className="h-3 w-20 bg-surface-alt rounded" />
+      <div className="flex items-center justify-between">
+        <div className="h-6 w-36 bg-surface-alt rounded" />
+        <div className="h-7 w-16 bg-surface-alt rounded-md" />
+      </div>
+      <div className="h-3 w-56 bg-surface-alt/70 rounded mt-1" />
+    </div>
+
+    {/* Stepper Skeleton */}
+    <div className="bg-surface border border-border/80 rounded-xl p-3 flex items-center justify-between">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="flex items-center gap-1.5 flex-1 last:flex-none">
+          <div className="size-7 rounded-lg bg-surface-alt shrink-0" />
+          {i < 5 && <div className="h-0.5 flex-1 bg-surface-alt" />}
+        </div>
+      ))}
+    </div>
+
+    {/* Form Card Skeleton */}
+    <div className="bg-surface border border-border/80 rounded-2xl p-4 space-y-4">
+      <div className="h-4 w-36 bg-surface-alt rounded" />
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <div className="h-3 w-24 bg-surface-alt/70 rounded" />
+          <div className="h-9 w-full bg-surface-alt/50 rounded-lg border border-border/50" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-20 bg-surface-alt/70 rounded" />
+          <div className="h-9 w-full bg-surface-alt/50 rounded-lg border border-border/50" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-28 bg-surface-alt/70 rounded" />
+          <div className="h-9 w-full bg-surface-alt/50 rounded-lg border border-border/50" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-32 bg-surface-alt/70 rounded" />
+          <div className="h-9 w-full bg-surface-alt/50 rounded-lg border border-border/50" />
+        </div>
+      </div>
+      <div className="pt-3 border-t border-border/60 flex items-center justify-between">
+        <div className="h-8 w-20 bg-surface-alt/50 rounded-lg" />
+        <div className="h-8 w-24 bg-primary/20 rounded-lg" />
+      </div>
+    </div>
+  </section>
+);
+
 const EditCompanyMobilePage = memo(
   ({
     formData,
@@ -40,6 +93,7 @@ const EditCompanyMobilePage = memo(
     currentStep = 1,
 
     companyTypeOptions = [],
+    industryOptions = [],
     licenseStatusOptions = [],
 
     handleChange,
@@ -57,6 +111,10 @@ const EditCompanyMobilePage = memo(
         handleReload();
       }
     }, [handleReload, handleStepChange]);
+
+    if (isFetching) {
+      return <EditCompanyMobileSkeleton />;
+    }
 
     return (
       <section className="relative w-full overflow-hidden bg-bg">
@@ -112,33 +170,13 @@ const EditCompanyMobilePage = memo(
               </AppText>
             )}
 
-            {isFetching ? (
-              <AppCard
-                variant="default"
-                rounded="lg"
-                bordered
-                shadow="none"
-                padding="none"
-                sx={formCardContainerSx}
-              >
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <FiRefreshCw className="animate-spin text-[24px] text-success mb-2" />
-                  <AppText
-                    variant="caption"
-                    weight={600}
-                    sx={{ color: "var(--app-color-text-muted)" }}
-                  >
-                    Retrieving corporate index models...
-                  </AppText>
-                </div>
-              </AppCard>
-            ) : (
-              <>
-                {currentStep === 1 && (
+            <>
+              {currentStep === 1 && (
                   <MobileStepCompanyDetails
                     formData={formData}
                     formErrors={formErrors}
                     companyTypeOptions={companyTypeOptions}
+                    industryOptions={industryOptions}
                     handleChange={handleChange}
                     isLoading={isLoading}
                   />
@@ -176,11 +214,11 @@ const EditCompanyMobilePage = memo(
                   <MobileStepReviewAndSave
                     formData={formData}
                     companyTypeOptions={companyTypeOptions}
+                    industryOptions={industryOptions}
                     onEditSection={handleStepChange}
                   />
                 )}
               </>
-            )}
           </AppBox>
 
           {/* Section 4: Data Security Privacy Advice Card Block */}
@@ -236,7 +274,8 @@ const EditCompanyMobilePage = memo(
                   rounded="md"
                   startIcon={<FiCheckCircle />}
                   onClick={handleSubmit}
-                  loading={isLoading}
+                  isLoading={isLoading}
+                  loadingText="Saving Changes..."
                   disabled={isLoading || isFetching}
                   sx={actionButtonRightSx}
                 >
@@ -384,6 +423,7 @@ const MobileStepCompanyDetails = ({
   formData,
   formErrors,
   companyTypeOptions,
+  industryOptions = [],
   handleChange,
   isLoading,
 }) => (
@@ -427,6 +467,20 @@ const MobileStepCompanyDetails = ({
         required
         error={Boolean(formErrors.companyType)}
         helperText={formErrors.companyType}
+        labelSx={mobileLabelSx}
+        inputSx={mobileInputSx}
+      />
+
+      <AppSelect
+        label="Industry"
+        name="industry"
+        value={formData.industry || ""}
+        onChange={handleChange}
+        disabled={isLoading}
+        options={industryOptions}
+        required
+        error={Boolean(formErrors.industry)}
+        helperText={formErrors.industry}
         labelSx={mobileLabelSx}
         inputSx={mobileInputSx}
       />
@@ -844,12 +898,18 @@ const MobileStepLicenseDetails = ({
 const MobileStepReviewAndSave = ({
   formData,
   companyTypeOptions,
+  industryOptions = [],
   onEditSection,
 }) => {
   const resolvedType =
     companyTypeOptions.find((opt) => opt.value === formData.companyType)
       ?.label ||
     formData.companyType ||
+    "";
+
+  const resolvedIndustry =
+    industryOptions.find((opt) => opt.value === formData.industry)?.label ||
+    formData.industry ||
     "";
 
   return (
@@ -908,6 +968,7 @@ const MobileStepReviewAndSave = ({
         <AppStack direction="column" gap={0.8}>
           <ReviewGridRow label="Company Name" value={formData.companyName} />
           <ReviewGridRow label="Company Type" value={resolvedType} />
+          <ReviewGridRow label="Industry" value={resolvedIndustry} />
           <ReviewGridRow label="Email Address" value={formData.companyEmail} />
           <ReviewGridRow
             label="Phone Number"

@@ -3,6 +3,7 @@
 import React from "react";
 import { Eye, LockKeyhole, Calendar, Clock } from "lucide-react";
 import { UIBadge, UIButton } from "@/components/ui";
+import { BranchBadge } from "@/components/shared";
 
 const formatDate = (val) => {
   if (!val) return "-";
@@ -68,6 +69,7 @@ const getShiftTitle = (shift) => {
 export const ShiftCard = ({ shift, onView, onCloseShift }) => {
   const shiftTitle = getShiftTitle(shift);
   const isShiftOpen = shift.status === "open";
+  const isShiftClosing = shift.status === "closing";
   const isCancelled = shift.status === "cancelled";
 
   const cashierName =
@@ -82,7 +84,11 @@ export const ShiftCard = ({ shift, onView, onCloseShift }) => {
     shift.businessDate || shift.date || shift.openedAt
   );
   const openTime = formatTime(shift.openedAt || shift.createdAt);
-  const closeTime = isShiftOpen ? "Open" : formatTime(shift.closedAt);
+  const closeTime = isShiftOpen
+    ? "Open"
+    : isShiftClosing
+    ? "Closing..."
+    : formatTime(shift.closedAt);
 
   const openingFloat = formatCurrency(shift.openingFloatAmount);
   const cashSalesAmount =
@@ -108,7 +114,11 @@ export const ShiftCard = ({ shift, onView, onCloseShift }) => {
   return (
     <div
       onClick={() => onView?.(shift)}
-      className="bg-surface rounded-xl border border-border p-5 shadow-xs hover:border-border-strong hover:shadow-sm transition-all cursor-pointer flex flex-col justify-between space-y-4"
+      className={`bg-surface rounded-xl border p-5 shadow-xs hover:border-border-strong hover:shadow-sm transition-all cursor-pointer flex flex-col justify-between space-y-4 ${
+        isShiftClosing
+          ? "border-amber-400/80 ring-2 ring-amber-400/20 bg-amber-500/[0.02]"
+          : "border-border"
+      }`}
     >
       {/* Top Header Row */}
       <div className="flex items-start justify-between gap-3">
@@ -120,6 +130,9 @@ export const ShiftCard = ({ shift, onView, onCloseShift }) => {
             <span className="font-mono text-xs px-2 py-0.5 rounded bg-surface-alt text-text-muted border border-border">
               {shift.shiftNo || "SFT-000"}
             </span>
+            {shift.branchId && (
+              <BranchBadge branch={shift.branchId} />
+            )}
           </div>
           <div className="flex items-center gap-2 text-xs text-text-muted mt-1">
             <span className="flex items-center gap-1">
@@ -139,6 +152,11 @@ export const ShiftCard = ({ shift, onView, onCloseShift }) => {
             <UIBadge variant="dot" color="success">
               Open
             </UIBadge>
+          ) : isShiftClosing ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+              <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+              Closing...
+            </span>
           ) : isCancelled ? (
             <UIBadge variant="dot" color="error">
               Cancelled
@@ -150,6 +168,22 @@ export const ShiftCard = ({ shift, onView, onCloseShift }) => {
           )}
         </div>
       </div>
+
+      {/* Closing alert banner if closing initiated */}
+      {isShiftClosing && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between">
+          <span className="flex items-center gap-1.5 font-medium">
+            <span className="size-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+            Closing initiated
+            {shift.closingInitiatedBy?.fullName ? ` by ${shift.closingInitiatedBy.fullName}` : ""}
+          </span>
+          {shift.closingInitiatedAt && (
+            <span className="text-[10px] text-amber-700/80 dark:text-amber-400/80 font-mono">
+              {formatTime(shift.closingInitiatedAt)}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Cashier Info */}
       <div className="flex items-center gap-2.5 pt-1">
@@ -239,16 +273,20 @@ export const ShiftCard = ({ shift, onView, onCloseShift }) => {
           View Details
         </UIButton>
 
-        {isShiftOpen && (
+        {(isShiftOpen || isShiftClosing) && (
           <UIButton
             type="button"
-            variant="secondary"
+            variant={isShiftClosing ? "primary" : "secondary"}
             size="sm"
             onClick={() => onCloseShift?.(shift)}
-            startIcon={<LockKeyhole className="size-3.5 text-warning" />}
-            className="h-8 text-xs text-warning hover:bg-warning-soft"
+            startIcon={<LockKeyhole className={`size-3.5 ${isShiftClosing ? "text-amber-100" : "text-warning"}`} />}
+            className={`h-8 text-xs ${
+              isShiftClosing
+                ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-xs"
+                : "text-warning hover:bg-warning-soft"
+            }`}
           >
-            Close Shift
+            {isShiftClosing ? "Resume Closing" : "Start Closing"}
           </UIButton>
         )}
       </div>

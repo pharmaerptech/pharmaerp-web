@@ -3,7 +3,7 @@
 // Filters navigation groups and items based on the active Work Mode
 // ('operation' vs 'view' vs null for Default/Choose Mode).
 
-import { Settings, HelpCircle } from "lucide-react";
+import { HelpCircle } from "lucide-react";
 import { ROUTES } from "@/constants";
 import { WORK_MODES, getSafeWorkMode } from "@/contexts/WorkModeContext";
 
@@ -50,7 +50,7 @@ const filterItemByMode = (item, currentMode) => {
 export const filterNavByWorkMode = (groups = [], workMode = null) => {
   const activeMode = getSafeWorkMode(workMode);
 
-  // In Default / Choose Mode (null): Strictly return ONLY Settings and Help & Support
+  // In Default / Choose Mode (null): Strictly return ONLY Help & Support
   // No business operations, products, suppliers, doctors, or reports are visible until mode is chosen.
   if (!activeMode) {
     return [
@@ -58,13 +58,6 @@ export const filterNavByWorkMode = (groups = [], workMode = null) => {
         id: "general",
         label: "General",
         items: [
-          {
-            id: "settings",
-            label: "Settings",
-            path: ROUTES.SETTINGS,
-            icon: Settings,
-            keywords: ["settings", "preferences", "account"],
-          },
           {
             id: "help",
             label: "Help & Support",

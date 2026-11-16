@@ -7,6 +7,7 @@ import { UI_TOOLBAR_VIEWS } from "@/components/ui";
 import { listShifts } from "../store/shiftThunk";
 import { clearShiftError, clearShiftMessage } from "../store/shiftSlice";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { useBranchFilter } from "@/hooks";
 import {
   getOpenBusinessDay,
   listBusinessDays,
@@ -51,6 +52,7 @@ const ShiftsPage = () => {
     (state) => state.shift
   );
   const { currentBranch } = useBranch();
+  const { isCompanyLevel, selectedBranchId, setSelectedBranchId, queryBranchId } = useBranchFilter();
   const { openBusinessDay, businessDays } = useSelector((state) => state.businessDay);
 
   const [filters, setFilters] = useState(initialFilters);
@@ -106,12 +108,13 @@ const ShiftsPage = () => {
 
   const fetchShiftsData = useCallback(() => {
     const params = {};
-    if (currentBranch?._id) params.branchId = currentBranch._id;
+    const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
+    if (activeBranchId) params.branchId = activeBranchId;
     if (filters.date) params.date = filters.date;
     if (filters.status !== "all") params.status = filters.status;
     params.sort = sortBy;
     dispatch(listShifts(params));
-  }, [dispatch, currentBranch?._id, filters.date, filters.status, sortBy]);
+  }, [dispatch, isCompanyLevel, queryBranchId, currentBranch?._id, filters.date, filters.status, sortBy]);
 
   useEffect(() => {
     fetchShiftsData();
@@ -332,6 +335,11 @@ const ShiftsPage = () => {
     handleClearFilters,
     handleRefresh,
     clearMessage: () => dispatch(clearShiftMessage()),
+
+    // Branch filter state (Company Level Only)
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
 
     // Dialog state handlers
     openBusinessDay,

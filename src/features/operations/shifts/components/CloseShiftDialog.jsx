@@ -2,14 +2,18 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import {
   UIModal,
   UIButton,
   UIBadge,
   UIAlert,
+  UIConfirmDialog,
 } from "@/components/ui";
-import { updateShiftStatus, listShifts } from "../store/shiftThunk";
-import { API_STATUS } from "@/constants";
+import { updateShiftStatus, listShifts, initiateShiftClose, abortShiftClose } from "../store/shiftThunk";
+import { API_STATUS, TOKEN_KEY } from "@/constants";
+import { storage } from "@/utils";
+import env from "@/config/env";
 import { apiClient } from "@/services";
 import { useBranchCash } from "@/features/finance/treasury/cash-management/branch-cash/hooks/useBranchCash";
 import { useHoldBills } from "@/features/sales/hooks/useHoldBills";
@@ -90,6 +94,7 @@ export const CloseShiftDialog = ({
   onCreateDayClosing,
 }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
   const { updateShiftStatusStatus, error: shiftError } = useSelector(
     (state) => state.shift
   );
@@ -100,6 +105,8 @@ export const CloseShiftDialog = ({
   const [localError, setLocalError] = useState(null);
   const [showPostClose, setShowPostClose] = useState(false);
   const [closedShiftData, setClosedShiftData] = useState(null);
+  const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const [counts, setCounts] = useState(
     ALL_DENOMINATIONS.reduce((acc, note) => ({ ...acc, [note]: "" }), {})
@@ -131,6 +138,87 @@ export const CloseShiftDialog = ({
       fetchBranchCash(shift.branchId);
     }
   }, [isOpen, shift?.branchId, fetchBranchCash]);
+
+  // Automatically initiate shift closing on dialog open to lock concurrent billing across devices
+  useEffect(() => {
+    if (isOpen && shift?._id && shift.status !== "closed") {
+      dispatch(initiateShiftClose(shift._id));
+    }
+  }, [isOpen, shift?._id, dispatch]);
+
+  const isClosedRef = React.useRef(false);
+  useEffect(() => {
+    isClosedRef.current = Boolean(closedShiftData || shift?.status === "closed");
+  }, [closedShiftData, shift?.status]);
+
+  // Option 1: Abort closing automatically if the user refreshes, navigates away, or closes the tab/browser
+  useEffect(() => {
+    if (!isOpen || !shift?._id || shift.status === "closed" || closedShiftData) {
+      return;
+    }
+
+    const abortClosingOnUnload = () => {
+      if (isClosedRef.current) return;
+      const token = storage.get(TOKEN_KEY);
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const companyId = localStorage.getItem("pahuch_active_company_id");
+      if (companyId) headers["x-company-id"] = companyId;
+      const branchId = localStorage.getItem("pahuch_active_branch_id");
+      if (branchId) headers["x-branch-id"] = branchId;
+      const workMode = localStorage.getItem("pahuch_work_mode");
+      if (workMode) headers["x-work-mode"] = workMode;
+      const pipelineLevel = localStorage.getItem("pahuch_pipeline_level");
+      if (pipelineLevel) headers["x-pipeline-level"] = pipelineLevel;
+
+      const url = `${env.API_BASE_URL}/operations/shifts/${shift._id}/abort-close`;
+
+      try {
+        fetch(url, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({}),
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        try {
+          navigator.sendBeacon?.(url, new Blob([JSON.stringify({})], { type: "application/json" }));
+        } catch {}
+      }
+    };
+
+    window.addEventListener("pagehide", abortClosingOnUnload);
+    window.addEventListener("beforeunload", abortClosingOnUnload);
+
+    return () => {
+      window.removeEventListener("pagehide", abortClosingOnUnload);
+      window.removeEventListener("beforeunload", abortClosingOnUnload);
+    };
+  }, [isOpen, shift?._id, shift?.status, closedShiftData]);
+
+  const handleRequestCancel = () => {
+    if (closedShiftData || shift?.status === "closed") {
+      onClose();
+      return;
+    }
+    setShowCancelConfirm(true);
+  };
+
+  const handleConfirmAbortClose = async () => {
+    setShowCancelConfirm(false);
+    if (shift?._id && !closedShiftData && shift.status !== "closed") {
+      try {
+        await dispatch(abortShiftClose(shift._id)).unwrap();
+      } catch (e) {
+        console.warn("[CloseShiftDialog] Could not abort shift close:", e);
+      }
+    }
+    onClose();
+  };
 
   // Load initial summary & populate counts from running denominations
   useEffect(() => {
@@ -414,13 +502,19 @@ export const CloseShiftDialog = ({
   const projectedFrozenCash = currentFrozenCash + totalFrozen;
   const projectedTotalBranchCash = runningCashAfterClosing + projectedFrozenCash;
 
-  const handleLockShift = async () => {
+  const handleClickCloseShift = () => {
     setLocalError(null);
-
     if (frozenValidation.length > 0) {
       setLocalError(frozenValidation[0]);
       return;
     }
+    setShowFinalizeConfirm(true);
+  };
+
+  const proceedLockShift = async () => {
+    isClosedRef.current = true;
+    setShowFinalizeConfirm(false);
+    setLocalError(null);
 
     const closingDenominations = ALL_DENOMINATIONS.filter(
       (n) => (Number(counts[n]) || 0) > 0
@@ -465,8 +559,8 @@ export const CloseShiftDialog = ({
   return (
     <>
       <UIModal
-        isOpen={isOpen}
-        onClose={onClose}
+        isOpen={isOpen && !showPostClose}
+        onClose={handleRequestCancel}
         showCloseButton={false}
         className="w-[1040px] max-w-[96vw] h-[86vh] max-h-[780px] min-h-[620px] rounded-2xl border border-border bg-surface shadow-2xl flex flex-col overflow-hidden select-none"
       >
@@ -477,19 +571,29 @@ export const CloseShiftDialog = ({
               <Lock className="size-5 stroke-[2.2]" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-text tracking-tight">
-                Lock & Close Shift Session
-              </h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-bold text-text tracking-tight">
+                  You are closing Shift
+                </h2>
+                <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/30">
+                  {shift?.shiftNo || "SFT-000"}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+                  <span className="size-1.5 rounded-full bg-amber-500 animate-ping" />
+                  Closing in Progress
+                </span>
+              </div>
               <p className="text-xs text-text-muted mt-0.5">
-                Review cash count, reconcile transactions and close this shift
+                Review cash count, reconcile transactions and finalize this shift
               </p>
             </div>
           </div>
 
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleRequestCancel}
             className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-surface-hover transition-colors cursor-pointer"
+            aria-label="Cancel closing"
           >
             <X className="size-4.5" />
           </button>
@@ -1615,7 +1719,7 @@ export const CloseShiftDialog = ({
             type="button"
             variant="outline"
             size="sm"
-            onClick={onClose}
+            onClick={handleRequestCancel}
             className="h-9 px-4 text-xs font-semibold cursor-pointer"
           >
             Cancel
@@ -1625,7 +1729,7 @@ export const CloseShiftDialog = ({
             type="button"
             variant="danger"
             size="sm"
-            onClick={handleLockShift}
+            onClick={handleClickCloseShift}
             isLoading={updateShiftStatusStatus === API_STATUS.LOADING}
             disabled={frozenValidation.length > 0}
             startIcon={<Lock className="size-4" />}
@@ -1635,6 +1739,34 @@ export const CloseShiftDialog = ({
           </UIButton>
         </div>
       </UIModal>
+
+      {/* ── Confirmation Modal: Finalize Close ── */}
+      <UIConfirmDialog
+        isOpen={showFinalizeConfirm}
+        onClose={() => setShowFinalizeConfirm(false)}
+        onConfirm={proceedLockShift}
+        intent="warning"
+        title="Confirm Shift Closure"
+        description="Do you really want to close this Shift? Once closed, shift reconciliation will be committed, cash drawers settled, and no new bills can be created until a new shift is opened."
+        confirmText="Yes, Close Shift"
+        cancelText="Go Back"
+        itemName={shift?.shiftNo || "Active Shift"}
+        itemDetails={`Counted Cash: ${formatCurrency(totalCounted)} · Total Sales: ${formatCurrency(totalSales)}`}
+        isLoading={updateShiftStatusStatus === API_STATUS.LOADING}
+      />
+
+      {/* ── Confirmation Modal: Cancel / Abort Close ── */}
+      <UIConfirmDialog
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={handleConfirmAbortClose}
+        intent="info"
+        title="Cancel Shift Closing?"
+        description="Do you want to cancel the closing of this Shift? Cancelling will abort the closing reconciliation and return the Shift to Active (Open) status on all devices."
+        confirmText="Yes, Cancel Closing (Keep Open)"
+        cancelText="Continue Closing"
+        itemName={shift?.shiftNo || "Active Shift"}
+      />
 
       <PostShiftCloseDialog
         isOpen={showPostClose}
@@ -1648,7 +1780,11 @@ export const CloseShiftDialog = ({
         onCreateDayClosing={() => {
           setShowPostClose(false);
           onClose();
-          if (onCreateDayClosing) onCreateDayClosing();
+          if (onCreateDayClosing) {
+            onCreateDayClosing();
+          } else {
+            navigate("/operations/business-days");
+          }
         }}
         onClose={() => {
           setShowPostClose(false);

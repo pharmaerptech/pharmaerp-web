@@ -9,6 +9,7 @@ import {
   reconcilePipelineLevel,
   isRouteAllowedForPipeline,
   filterNavForCollapsedRail,
+  resolveRoutePolicy,
 } from "../src/contexts/routePipelinePolicy.js";
 import { getHeaderBreadcrumbs } from "../src/layouts/app/components/header/headerBreadcrumbs.js";
 
@@ -24,6 +25,7 @@ const SIDEBAR_CONTEXT_EXPECTATIONS = {
   ],
   // 2. Workspace + Operation
   "workspace:operation": [
+    "/workspace-operations",
     "/companies",
     "/companies/create",
     "/members",
@@ -54,6 +56,7 @@ const SIDEBAR_CONTEXT_EXPECTATIONS = {
   ],
   // 4. Company + Operation
   "company:operation": [
+    "/company/operations",
     "/branches",
     "/branches/create",
     "/parties/customers",
@@ -83,12 +86,12 @@ const SIDEBAR_CONTEXT_EXPECTATIONS = {
   ],
   // 6. Branch + Operation
   "branch:operation": [
+    "/branch/operations",
     "/sales",
     "/billing",
     "/sales-returns",
     "/sales/credit-notes",
     "/purchases",
-    "/workspace-products",
     "/inventory/stock-metrics",
     "/inventory/transfer-orders",
     "/operations/shifts",
@@ -122,18 +125,18 @@ const run = () => {
         `Expected ${path} to be allowed in ${key}, got blocked (${check.reason} -> ${check.redirectTo})`
       );
 
-      const inferred = getLevelFromPathname(path);
-      if (inferred !== null && path !== "/catalog") {
+      const rule = resolveRoutePolicy(path);
+      if (rule && !rule.universal) {
         assert.equal(
-          inferred,
-          level,
-          `Expected getLevelFromPathname(${path}) to equal ${level}, got ${inferred}`
+          rule.levels.includes(level),
+          true,
+          `Expected rule for ${path} to include level ${level}`
         );
       }
     }
   }
 
-  // 2. Branch treasury routes must NOT leak to Company level
+  // 2. Branch treasury routes are allowed in Company level (Phase 10 & 18 multi-branch filtering)
   for (const path of [
     "/finance/treasury/branch-cash",
     "/finance/treasury/payment-qrs",
@@ -141,21 +144,19 @@ const run = () => {
     "/finance/treasury/cash-transactions",
     "/finance/treasury/cash-exchanges",
   ]) {
-    const blockedInCompany = isRouteAllowedForPipeline(path, {
+    const allowedInCompany = isRouteAllowedForPipeline(path, {
       currentLevel: PIPELINE_LEVELS.COMPANY,
       workMode: WORK_MODES.OPERATION,
       isSetupComplete: true,
       hasActiveCompany: true,
       hasActiveBranch: false,
     });
-    assert.equal(blockedInCompany.allowed, false);
-    assert.equal(blockedInCompany.redirectTo, "/branches");
+    assert.equal(allowedInCompany.allowed, true);
   }
 
-  // 3. Company treasury routes must NOT leak to Branch level
+  // 3. Corporate treasury routes must NOT leak to Branch level
   for (const path of [
     "/finance/treasury/bank-accounts",
-    "/finance/treasury/bank-deposit-slips",
     "/finance/treasury/fund-transfers",
     "/finance/treasury/cheque-management",
   ]) {
@@ -167,7 +168,7 @@ const run = () => {
       hasActiveBranch: true,
     });
     assert.equal(branchBlocked.allowed, false);
-    assert.equal(branchBlocked.redirectTo, "/sales");
+    assert.equal(branchBlocked.redirectTo, "/branch/operations");
   }
 
   // 4. Cross-mode blocking without changing level
@@ -196,7 +197,7 @@ const run = () => {
     hasActiveCompany: true,
   });
   assert.equal(opCompanyDash.allowed, false);
-  assert.equal(opCompanyDash.redirectTo, "/branches");
+  assert.equal(opCompanyDash.redirectTo, "/company/operations");
 
   // 5. Generic /dashboard resolves cleanly per active (level, mode)
   assert.equal(
@@ -216,7 +217,7 @@ const run = () => {
       hasActiveCompany: true,
       hasActiveBranch: true,
     }).redirectTo,
-    "/sales"
+    "/branch/operations"
   );
 
   // 6. Reconcile level safely when active company/branch missing
@@ -256,7 +257,7 @@ const run = () => {
   );
   assert.equal(
     getPipelineDefaultRoute(PIPELINE_LEVELS.WORKSPACE, WORK_MODES.OPERATION),
-    "/companies"
+    "/workspace-operations"
   );
 
   // 8. Standalone / single top-level routes MUST NOT render breadcrumbs
@@ -268,6 +269,9 @@ const run = () => {
     "/dashboard/workspace",
     "/dashboard/company",
     "/dashboard/branch",
+    "/workspace-operations",
+    "/company/operations",
+    "/branch/operations",
     "/companies",
     "/branches",
     "/members",

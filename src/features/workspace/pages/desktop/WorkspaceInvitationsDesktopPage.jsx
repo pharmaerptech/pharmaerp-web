@@ -1,11 +1,11 @@
 // src/features/workspace/pages/desktop/WorkspaceInvitationsDesktopPage.jsx
 
-import React from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   Mail,
-  UserPlus,
   Plus,
   RotateCcw,
+  RefreshCw,
   Search,
   Copy,
   Check,
@@ -15,35 +15,30 @@ import {
   CheckCircle2,
   Users,
   Shield,
-  Building2,
   GitBranch,
   AlertCircle,
-  MoreHorizontal,
+  Trash2,
 } from "lucide-react";
 
 import {
   UIButton,
-  UIIconButton,
-  UISearchInput,
+  UIInput,
   UISelect,
   UIBadge,
-  UIPagination,
   UITable,
   UITableHeader,
   UITableBody,
   UITableRow,
   UITableHead,
   UITableCell,
-  UIEmptyState,
-  UISkeleton,
-  UIDropdown,
-  UIDropdownTrigger,
-  UIDropdownMenu,
-  UIDropdownItem,
-  UIDropdownDivider,
-  UIAlert,
+  UITableEmpty,
+  UITableLoading,
+  UIInfiniteScroll,
+  UITableScrollArea,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+
+const PAGE_LIMIT = 20;
 
 const statusBadgeVariant = (status) => {
   switch (status) {
@@ -54,7 +49,7 @@ const statusBadgeVariant = (status) => {
     case "expired":
       return { variant: "soft", color: "neutral", label: "Expired" };
     case "cancelled":
-      return { variant: "soft", color: "neutral", label: "Cancelled" };
+      return { variant: "soft", color: "danger", label: "Cancelled" };
     default:
       return { variant: "soft", color: "neutral", label: status };
   }
@@ -63,33 +58,16 @@ const statusBadgeVariant = (status) => {
 export default function WorkspaceInvitationsDesktopPage({
   workspace,
   invitations = [],
-  paginatedInvitations = [],
   stats = [],
 
-  filters,
-  activeFilterChips = [],
+  filters = { search: "", status: "all" },
   statusOptions = [],
 
   isLoading = false,
-  hasError = false,
-  error = null,
-  message = null,
   copiedId = null,
-
-  currentPage = 1,
-  pageSize = 8,
-  totalPages = 1,
-  handlePageChange,
-  handlePageSizeChange,
-
-  totalInvitations = 0,
-  filteredInvitationsCount = 0,
-  hasInvitations = false,
-  hasFilteredInvitations = false,
 
   handleFilterChange,
   handleSearchChange,
-  handleRemoveFilter,
   handleClearFilters,
 
   handleRefresh,
@@ -98,324 +76,408 @@ export default function WorkspaceInvitationsDesktopPage({
   handleCancelInvitation,
   handleResendInvitation,
   handleCopyLink,
-
-  clearMessage,
 }) {
-  const shouldShowPagination = hasFilteredInvitations && filteredInvitationsCount > pageSize;
+  const tableContainerRef = useRef(null);
+
+  // Infinite Scroll state - incremental client-side batches
+  const [visibleCount, setVisibleCount] = useState(PAGE_LIMIT);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Reset visible count and scroll to top on filter change
+  useEffect(() => {
+    setVisibleCount(PAGE_LIMIT);
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  }, [filters.search, filters.status]);
+
+  const displayedInvitations = useMemo(() => {
+    return (invitations || []).slice(0, visibleCount);
+  }, [invitations, visibleCount]);
+
+  const hasMore = visibleCount < (invitations || []).length;
+
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount((prev) =>
+        Math.min(prev + PAGE_LIMIT, (invitations || []).length)
+      );
+      setIsLoadingMore(false);
+    }, 120);
+  }, [isLoadingMore, hasMore, invitations]);
+
+  const hasActiveFilters = Boolean(
+    filters.search || (filters.status && filters.status !== "all")
+  );
+
+  // 4 Top Stat Cards
+  const statCards = useMemo(() => {
+    const total = invitations.length;
+    const pending = invitations.filter((i) => i.effectiveStatus === "pending").length;
+    const accepted = invitations.filter((i) => i.effectiveStatus === "accepted").length;
+    const closed = invitations.filter(
+      (i) => i.effectiveStatus === "cancelled" || i.effectiveStatus === "expired"
+    ).length;
+
+    return [
+      {
+        id: "total",
+        title: "Total Invitations",
+        value: stats.find((s) => s.id === "total")?.value ?? total,
+        subtitle: "Workspace team invites",
+        icon: Mail,
+        color: "text-indigo-600 dark:text-indigo-400",
+        bg: "bg-indigo-500/10",
+        border: "border-indigo-500/20",
+      },
+      {
+        id: "pending",
+        title: "Pending Action",
+        value: stats.find((s) => s.id === "pending")?.value ?? pending,
+        subtitle: "Awaiting registration",
+        icon: Clock,
+        color: "text-amber-600 dark:text-amber-400",
+        bg: "bg-amber-500/10",
+        border: "border-amber-500/20",
+      },
+      {
+        id: "accepted",
+        title: "Accepted & Active",
+        value: stats.find((s) => s.id === "accepted")?.value ?? accepted,
+        subtitle: "Joined workspace",
+        icon: CheckCircle2,
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/20",
+      },
+      {
+        id: "closed",
+        title: "Expired & Revoked",
+        value:
+          (stats.find((s) => s.id === "expired")?.value ?? 0) +
+          (stats.find((s) => s.id === "cancelled")?.value ?? closed),
+        subtitle: "Lapsed or cancelled",
+        icon: AlertCircle,
+        color: "text-rose-600 dark:text-rose-400",
+        bg: "bg-rose-500/10",
+        border: "border-rose-500/20",
+      },
+    ];
+  }, [invitations, stats]);
 
   return (
-    <div className="min-h-screen bg-bg text-text p-3 sm:p-4 lg:p-5 max-w-[1440px] mx-auto space-y-4">
-      {/* Feedback Toast */}
-      {message && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4">
-          <UIAlert
-            intent="success"
-            title={message}
-            onClose={clearMessage}
-            className="shadow-lg"
+    <div className="w-full flex flex-col gap-3.5 bg-bg select-text">
+      {/* ── 1. Top Stat Cards Grid ───────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 shrink-0">
+        {statCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <div
+              key={stat.id}
+              className="flex items-center gap-2.5 p-3 rounded-xl bg-surface border border-border shadow-2xs transition-all"
+            >
+              <div
+                className={cn(
+                  "p-2 rounded-lg shrink-0 border",
+                  stat.bg,
+                  stat.border,
+                  stat.color
+                )}
+              >
+                <Icon className="size-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[11.5px] font-medium text-text-muted truncate">
+                  {stat.title}
+                </div>
+                <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                  {stat.value}
+                </div>
+                <div className="text-[10px] text-text-muted truncate mt-0.5">
+                  {stat.subtitle}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── 2. Streamlined Single-Row Toolbar ────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {/* Search Input */}
+        <div className="flex-1 min-w-[200px] sm:min-w-[240px]">
+          <UIInput
+            type="text"
+            value={filters.search || ""}
+            onChange={handleSearchChange}
+            placeholder="Search by invitee email, role, or notes..."
+            startIcon={<Search className="size-4 text-text-muted" />}
+            size="md"
+            variant="outline"
+            isClearable
+            onClear={() => handleSearchChange?.({ target: { value: "" } })}
+            className="w-full"
           />
         </div>
-      )}
 
-      {/* 1. Header Banner Card */}
-      <div className="bg-surface rounded-2xl p-5 sm:p-6 border border-border/60 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2.5">
-            <div className="size-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
-              <Mail className="size-5" />
-            </div>
-            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-text">
-              Workspace Invitations
-            </h1>
-            <UIBadge variant="soft" color="primary" size="sm">
-              {workspace?.name || "Workspace"}
-            </UIBadge>
-          </div>
-          <p className="text-xs sm:text-sm text-text-muted pl-0.5">
-            Track, resend, and manage onboarding invitation links sent to team members.
-          </p>
+        {/* Status Select */}
+        <div className="w-[140px] sm:w-[160px]">
+          <UISelect
+            value={filters.status || "all"}
+            onChange={(val) => handleFilterChange?.({ status: val })}
+            options={statusOptions}
+            placeholder="All Status"
+            size="md"
+          />
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+        {/* Quick Reset */}
+        {hasActiveFilters && (
           <UIButton
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isLoading}
-            startIcon={<RotateCcw className={cn("size-3.5", isLoading && "animate-spin")} />}
+            type="button"
+            variant="ghost"
+            size="md"
+            onClick={handleClearFilters}
+            startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+            className="h-10 px-2.5 text-xs text-text-muted hover:text-text"
+            title="Reset all filters"
           >
-            Refresh
+            Reset
+          </UIButton>
+        )}
+
+        {/* Action Cluster (Right) */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
+            disabled={isLoading}
+            onClick={handleRefresh}
+            className="h-10 w-10 p-0 text-text-muted hover:text-text cursor-pointer"
+            title="Refresh invitations"
+          >
+            <RefreshCw
+              className={cn(
+                "size-4 text-text-muted hover:text-primary",
+                isLoading && "animate-spin text-primary"
+              )}
+            />
           </UIButton>
 
           <UIButton
+            type="button"
             variant="outline"
-            size="sm"
+            size="md"
+            startIcon={<Users className="size-4 text-text-muted" />}
             onClick={handleViewMembers}
-            startIcon={<Users className="size-3.5 text-text-muted" />}
+            className="h-10 px-3 text-xs"
           >
             View Members
           </UIButton>
 
           <UIButton
+            type="button"
             variant="primary"
-            size="sm"
-            onClick={handleInviteMember}
+            size="md"
             startIcon={<Plus className="size-4" />}
+            onClick={handleInviteMember}
+            className="h-10 px-3.5 text-xs font-semibold shadow-xs"
           >
             Invite Member
           </UIButton>
         </div>
       </div>
 
-      {/* 2. Quick Stat Metric Strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {stats.map((stat) => (
-          <div
-            key={stat.id}
-            className="bg-surface rounded-2xl p-4 border border-border/60 shadow-2xs space-y-1"
+      {/* ── 3. Table with Sticky Header & Infinite Scroll ── */}
+      <div className="rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
+          <UITable
+            stickyHeader
+            containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
+            className="w-full"
           >
-            <div className="text-xs font-semibold text-text-muted">{stat.title}</div>
-            <div className="text-xl sm:text-2xl font-bold text-text font-mono">
-              {stat.value}
-            </div>
-            <div className="text-[11px] text-text-muted">{stat.description}</div>
-          </div>
-        ))}
-      </div>
+            {/* Sticky Table Header */}
+            <UITableHeader
+              sticky
+              className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs"
+            >
+              <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
+                <UITableHead sticky className="min-w-[220px]">Invitee &amp; Credentials</UITableHead>
+                <UITableHead sticky className="min-w-[150px]">Designated Role</UITableHead>
+                <UITableHead sticky className="min-w-[160px]">Branch Clearance</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[110px]">Status</UITableHead>
+                <UITableHead sticky className="min-w-[130px]">Sent Date</UITableHead>
+                <UITableHead sticky className="min-w-[140px]">Expires At</UITableHead>
+                <UITableHead sticky align="right" className="min-w-[160px]">Actions</UITableHead>
+              </UITableRow>
+            </UITableHeader>
 
-      {/* 3. Search and Filter Bar */}
-      <div className="bg-surface rounded-2xl p-3 sm:p-4 border border-border/60 shadow-2xs space-y-3">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex-1 max-w-md">
-            <UISearchInput
-              placeholder="Search invitee email, role or notes..."
-              value={filters.search}
-              onChange={handleSearchChange}
-              onClear={() => handleSearchChange({ target: { value: "" } })}
-              size="sm"
-            />
-          </div>
+            <UITableBody>
+              {isLoading && displayedInvitations.length === 0 ? (
+                <UITableLoading colSpan={7} rows={8} />
+              ) : displayedInvitations.length === 0 ? (
+                <UITableEmpty
+                  colSpan={7}
+                  title="No invitations found"
+                  description={
+                    hasActiveFilters
+                      ? "No invitations match your active filter criteria."
+                      : "No pending or past invitations found in this workspace."
+                  }
+                  action={
+                    hasActiveFilters ? (
+                      <UIButton variant="outline" size="sm" onClick={handleClearFilters}>
+                        Clear Filters
+                      </UIButton>
+                    ) : (
+                      <UIButton
+                        variant="primary"
+                        size="sm"
+                        onClick={handleInviteMember}
+                        startIcon={<Plus className="size-4" />}
+                      >
+                        Send First Invitation
+                      </UIButton>
+                    )
+                  }
+                />
+              ) : (
+                displayedInvitations.map((invitation) => {
+                  const statusMeta = statusBadgeVariant(invitation.effectiveStatus);
+                  const isPending = invitation.effectiveStatus === "pending";
+                  const isCopied = copiedId === invitation._id;
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="w-36 sm:w-44">
-              <UISelect
-                size="sm"
-                value={filters.status}
-                onChange={(e) => handleFilterChange({ status: e.target.value })}
-                options={statusOptions}
-              />
-            </div>
-
-            {(filters.search || filters.status !== "all") && (
-              <UIButton
-                variant="ghost"
-                size="xs"
-                onClick={handleClearFilters}
-                className="text-text-muted hover:text-text"
-              >
-                Clear Filters
-              </UIButton>
-            )}
-          </div>
-        </div>
-
-        {activeFilterChips.length > 0 && (
-          <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-border/30">
-            <span className="text-[11px] font-semibold text-text-muted mr-1">Active filters:</span>
-            {activeFilterChips.map((chip) => (
-              <UIBadge
-                key={chip.key}
-                variant="soft"
-                color="neutral"
-                size="xs"
-                className="gap-1 cursor-pointer hover:bg-surface-hover"
-                onClick={() => handleRemoveFilter(chip.key)}
-              >
-                <span>{chip.label}</span>
-                <span className="text-text-muted hover:text-text ml-0.5">×</span>
-              </UIBadge>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* 4. UITable Component with Responsive Layout */}
-      <div className="bg-surface rounded-2xl border border-border/60 shadow-2xs overflow-hidden">
-        {isLoading && !hasInvitations ? (
-          <div className="p-6 space-y-3">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <UISkeleton key={i} className="h-12 w-full rounded-xl" />
-            ))}
-          </div>
-        ) : hasFilteredInvitations ? (
-          <>
-            <div className="overflow-x-auto">
-              <UITable>
-                <UITableHeader>
-                  <UITableRow className="bg-surface-alt/50">
-                    <UITableHead className="min-w-[220px]">Invitee & Credentials</UITableHead>
-                    <UITableHead className="min-w-[150px]">Designated Role</UITableHead>
-                    <UITableHead className="min-w-[160px]">Branch Clearance</UITableHead>
-                    <UITableHead className="min-w-[120px]">Status</UITableHead>
-                    <UITableHead className="min-w-[150px]">Sent & Expiry</UITableHead>
-                    <UITableHead className="text-right min-w-[160px]">Actions</UITableHead>
-                  </UITableRow>
-                </UITableHeader>
-
-                <UITableBody>
-                  {paginatedInvitations.map((invitation) => {
-                    const statusMeta = statusBadgeVariant(invitation.effectiveStatus);
-                    const isPending = invitation.effectiveStatus === "pending";
-                    const isCopied = copiedId === invitation._id;
-
-                    return (
-                      <UITableRow key={invitation._id} className="hover:bg-surface-alt/30 transition-colors">
-                        {/* Invitee Email */}
-                        <UITableCell>
-                          <div className="flex items-center gap-2.5">
-                            <div className="size-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs shrink-0">
-                              {invitation.displayEmail.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="font-semibold text-xs text-text block truncate">
-                                {invitation.displayEmail}
-                              </span>
-                              <span className="text-[10.5px] text-text-muted block">
-                                Invited by {invitation.displayInvitedBy}
-                              </span>
-                            </div>
+                  return (
+                    <UITableRow
+                      key={invitation._id}
+                      className="hover:bg-surface-alt/50 transition-colors"
+                    >
+                      {/* Invitee Email */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-xs shrink-0">
+                            {invitation.displayEmail.charAt(0).toUpperCase()}
                           </div>
-                        </UITableCell>
-
-                        {/* Role */}
-                        <UITableCell>
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-surface-alt border border-border/50 text-text">
-                            <Shield className="size-3 text-primary" />
-                            <span>{invitation.displayRole}</span>
-                          </span>
-                        </UITableCell>
-
-                        {/* Scope */}
-                        <UITableCell>
-                          <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
-                            <GitBranch className="size-3.5 text-text-muted shrink-0" />
-                            <span>{invitation.storeFootprint}</span>
-                          </span>
-                        </UITableCell>
-
-                        {/* Status */}
-                        <UITableCell>
-                          <UIBadge
-                            variant={statusMeta.variant}
-                            color={statusMeta.color}
-                            size="xs"
-                          >
-                            {statusMeta.label}
-                          </UIBadge>
-                        </UITableCell>
-
-                        {/* Timestamps */}
-                        <UITableCell>
-                          <div className="text-xs">
-                            <span className="text-text font-medium block">
-                              {invitation.displayCreatedAt}
+                          <div className="min-w-0">
+                            <span className="font-semibold text-xs text-text block truncate">
+                              {invitation.displayEmail}
                             </span>
                             <span className="text-[10.5px] text-text-muted block">
-                              Expires {invitation.displayExpiresAt}
+                              Invited by {invitation.displayInvitedBy}
                             </span>
                           </div>
-                        </UITableCell>
+                        </div>
+                      </UITableCell>
 
-                        {/* Actions */}
-                        <UITableCell className="text-right">
-                          <div className="flex items-center justify-end gap-1.5">
-                            {isPending ? (
-                              <>
-                                <UIButton
-                                  variant="ghost"
-                                  size="xs"
-                                  onClick={() => handleCopyLink(invitation)}
-                                  startIcon={isCopied ? <Check className="size-3 text-success" /> : <Copy className="size-3" />}
-                                  title="Copy invite link"
-                                >
-                                  {isCopied ? "Copied" : "Copy"}
-                                </UIButton>
+                      {/* Designated Role */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-surface-alt border border-border/50 text-text">
+                          <Shield className="size-3 text-primary" />
+                          <span>{invitation.displayRole}</span>
+                        </span>
+                      </UITableCell>
 
-                                <UIButton
-                                  variant="outline"
-                                  size="xs"
-                                  onClick={() => handleResendInvitation(invitation)}
-                                  startIcon={<Send className="size-3 text-primary" />}
-                                  className="text-primary hover:text-primary-hover hover:border-primary/40"
-                                >
-                                  Resend
-                                </UIButton>
+                      {/* Branch Clearance */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="inline-flex items-center gap-1.5 text-xs text-text-muted">
+                          <GitBranch className="size-3.5 text-text-muted shrink-0" />
+                          <span>{invitation.storeFootprint}</span>
+                        </span>
+                      </UITableCell>
 
-                                <UIButton
-                                  variant="ghost"
-                                  size="xs"
-                                  onClick={() => handleCancelInvitation(invitation)}
-                                  className="text-destructive hover:bg-destructive/10"
-                                  title="Revoke invitation"
-                                >
-                                  Revoke
-                                </UIButton>
-                              </>
-                            ) : (
-                              <span className="text-xs text-text-muted italic pr-2">
-                                {invitation.effectiveStatus === "accepted" ? "Member Active" : "Closed"}
-                              </span>
-                            )}
-                          </div>
-                        </UITableCell>
-                      </UITableRow>
-                    );
-                  })}
-                </UITableBody>
-              </UITable>
-            </div>
+                      {/* Status */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        <UIBadge
+                          variant={statusMeta.variant}
+                          color={statusMeta.color}
+                          size="xs"
+                        >
+                          {statusMeta.label}
+                        </UIBadge>
+                      </UITableCell>
 
-            {/* Pagination Controls (Hidden when rows <= pageSize per user requirement) */}
-            {shouldShowPagination && (
-              <div className="p-3 border-t border-border/40 flex items-center justify-between">
-                <div className="text-xs text-text-muted">
-                  Showing {(currentPage - 1) * pageSize + 1} to{" "}
-                  {Math.min(currentPage * pageSize, filteredInvitationsCount)} of{" "}
-                  {filteredInvitationsCount} invitations
-                </div>
-                <UIPagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={handlePageChange}
-                  size="sm"
-                />
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="p-8 text-center space-y-3">
-            <UIEmptyState
-              icon={<Mail className="size-10 text-text-muted/60" />}
-              title="No Invitations Found"
-              description={
-                filters.search || filters.status !== "all"
-                  ? "No invitations match your current filter criteria."
-                  : "No pending or past invitations found in this workspace."
-              }
-              action={
-                filters.search || filters.status !== "all" ? (
-                  <UIButton variant="outline" size="sm" onClick={handleClearFilters}>
-                    Clear Filters
-                  </UIButton>
-                ) : (
-                  <UIButton variant="primary" size="sm" onClick={handleInviteMember} startIcon={<Plus className="size-4" />}>
-                    Send First Invitation
-                  </UIButton>
-                )
-              }
-            />
-          </div>
-        )}
+                      {/* Sent Date */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="text-xs text-text font-medium">
+                          {invitation.displayCreatedAt}
+                        </span>
+                      </UITableCell>
+
+                      {/* Expires At */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="text-xs text-text-muted">
+                          {invitation.displayExpiresAt}
+                        </span>
+                      </UITableCell>
+
+                      {/* Actions */}
+                      <UITableCell align="right" className="py-2.5 px-3">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isPending ? (
+                            <>
+                              <UIButton
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => handleCopyLink(invitation)}
+                                startIcon={
+                                  isCopied ? (
+                                    <Check className="size-3 text-emerald-600" />
+                                  ) : (
+                                    <Copy className="size-3" />
+                                  )
+                                }
+                                title="Copy invite link"
+                              >
+                                {isCopied ? "Copied" : "Copy"}
+                              </UIButton>
+
+                              <UIButton
+                                variant="outline"
+                                size="xs"
+                                onClick={() => handleResendInvitation(invitation)}
+                                startIcon={<Send className="size-3 text-primary" />}
+                                className="text-primary hover:text-primary-hover hover:border-primary/40"
+                              >
+                                Resend
+                              </UIButton>
+
+                              <UIButton
+                                variant="ghost"
+                                size="xs"
+                                onClick={() => handleCancelInvitation(invitation)}
+                                className="text-destructive hover:bg-destructive/10"
+                                title="Revoke invitation"
+                              >
+                                Revoke
+                              </UIButton>
+                            </>
+                          ) : (
+                            <span className="text-xs text-text-muted italic pr-2">
+                              {invitation.effectiveStatus === "accepted"
+                                ? "Member Active"
+                                : "Closed"}
+                            </span>
+                          )}
+                        </div>
+                      </UITableCell>
+                    </UITableRow>
+                  );
+                })
+              )}
+            </UITableBody>
+          </UITable>
+
+          {/* Infinite Scroll sentinel */}
+          <UIInfiniteScroll
+            hasMore={hasMore}
+            isLoading={isLoadingMore}
+            onLoadMore={handleLoadMore}
+            scrollThreshold={0.8}
+          />
+        </UITableScrollArea>
       </div>
     </div>
   );

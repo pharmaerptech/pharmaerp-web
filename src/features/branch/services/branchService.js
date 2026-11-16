@@ -1,8 +1,9 @@
 import { apiClient, ENDPOINTS } from "@/services";
 
 const branchService = {
-  createBranch(payload) {
-    return apiClient.post(ENDPOINTS.BRANCH.CREATE, payload);
+  createBranch(payload, companyId = null) {
+    const headers = companyId ? { "x-company-id": companyId } : {};
+    return apiClient.post(ENDPOINTS.BRANCH.CREATE, payload, { headers });
   },
 
   getCompanyBranches(companyId = null) {

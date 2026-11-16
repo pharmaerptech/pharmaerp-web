@@ -20,8 +20,11 @@ import invoiceService from "@/features/sales/services/invoiceService";
 import { BILLING_STATS, INVOICE_RECORDS } from "../../constants/billingData";
 import { BillingCreateInvoiceModal } from "../../components/BillingCreateInvoiceModal";
 import { BillingInvoiceDetailsDrawer } from "../../components/BillingInvoiceDetailsDrawer";
+import { BranchFilterSelect } from "@/components/shared";
+import { useBranchFilter } from "@/hooks";
 
 export const BillingMobilePage = () => {
+  const { isCompanyLevel, selectedBranchId, setSelectedBranchId } = useBranchFilter();
   const [invoices, setInvoices] = useState(INVOICE_RECORDS);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -129,6 +132,14 @@ export const BillingMobilePage = () => {
 
       {/* Search and Status Chips */}
       <div className="space-y-2">
+        {isCompanyLevel && (
+          <BranchFilterSelect
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            size="sm"
+            className="w-full"
+          />
+        )}
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-muted" />
           <input

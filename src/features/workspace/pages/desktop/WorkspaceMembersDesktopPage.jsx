@@ -1,25 +1,22 @@
 // src/features/workspace/pages/desktop/WorkspaceMembersDesktopPage.jsx
 
-import React, { useState } from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
-  Plus,
-  Download,
-  MoreHorizontal,
-  Mail,
-  Phone,
-  Key,
-  MapPin,
-  UserCheck,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Filter,
-  Shield,
-  UserMinus,
   Users,
+  UserCheck,
+  UserMinus,
+  Shield,
   Search,
   RotateCcw,
+  RefreshCw,
+  Plus,
+  Mail,
+  Download,
+  MoreVertical,
   Eye,
+  Key,
+  Clock,
+  Phone,
   Building2,
   GitBranch,
 } from "lucide-react";
@@ -27,61 +24,53 @@ import { useNavigate } from "react-router-dom";
 import { ROUTES } from "@/constants";
 import {
   UIButton,
-  UIPageHeader,
-  UIFilterToolbar,
-  UI_TOOLBAR_VIEWS,
+  UIInput,
   UISelect,
-  UIPagination,
+  UIBadge,
+  UITable,
+  UITableHeader,
+  UITableBody,
+  UITableRow,
+  UITableHead,
+  UITableCell,
+  UITableEmpty,
+  UITableLoading,
+  UIInfiniteScroll,
+  UITableScrollArea,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
   UIDropdownItem,
   UIDropdownDivider,
-  UIEmptyState,
-  UIAlert,
-  UISkeleton,
   PermissionGate,
-  UIModal,
-  UIModalHeader,
-  UIModalTitle,
-  UIModalDescription,
-  UIModalBody,
-  UIModalFooter,
-  UIIconButton,
 } from "@/components/ui";
-import { TopBarStats } from "@/layouts/app/components/header";
-import { WorkspaceMembersTableView } from "../../components";
 import { usePermission } from "@/hooks";
 import { cn } from "@/lib/utils";
 import { RoleWorkAccessBadges } from "@/features/access-control/components";
 
+const PAGE_LIMIT = 20;
+
+const getInitials = (name) => {
+  return String(name || "M")
+    .trim()
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase())
+    .join("");
+};
+
 export default function WorkspaceMembersDesktopPage({
   workspace,
   members = [],
-  paginatedMembers = [],
   stats = [],
-  filters,
-  activeFilterChips = [],
+  filters = { search: "", status: "all", role: "all" },
   statusOptions = [],
   roleOptions = [],
-  companyOptions = [],
-  viewMode = UI_TOOLBAR_VIEWS.GRID,
-  onViewModeChange,
-  isLoading,
-  hasError,
-  error,
-  message,
+  isLoading = false,
   totalMembers = 0,
-  filteredMembersCount = 0,
-  hasMembers,
-  hasFilteredMembers,
   hasCompanies = true,
   hasBranches = true,
-  currentPage = 1,
-  pageSize = 6,
-  totalPages = 1,
-  handlePageChange,
-  handlePageSizeChange,
   handleFilterChange,
   handleSearchChange,
   handleClearFilters,
@@ -94,654 +83,504 @@ export default function WorkspaceMembersDesktopPage({
   handleRemoveMember,
   handleManageAccess,
   handleOpenResetPassword,
-  clearMessage,
 }) {
   const navigate = useNavigate();
   const { can } = usePermission();
-  const [activeDropdownMemberId, setActiveDropdownMemberId] = useState(null);
+  const tableContainerRef = useRef(null);
 
-  const activeCount =
-    stats.find((s) => s.id === "active")?.value ??
-    members.filter((m) => m.status === "active").length;
-  const inactiveCount = stats.inactiveCount ?? 0;
+  // Infinite Scroll state - incremental batches
+  const [visibleCount, setVisibleCount] = useState(PAGE_LIMIT);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
-  const topBarStats = [
-    { label: "Total", value: totalMembers, intent: "primary" },
-    { label: "Active", value: activeCount, intent: "success" },
-    { label: "Inactive", value: inactiveCount, intent: "error" },
-  ];
+  // Reset visible count and scroll to top on filter change
+  useEffect(() => {
+    setVisibleCount(PAGE_LIMIT);
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  }, [filters.search, filters.status, filters.role]);
 
-  const [isFilterModalOpen, setIsFilterModalOpen] = React.useState(false);
+  const displayedMembers = useMemo(() => {
+    return (members || []).slice(0, visibleCount);
+  }, [members, visibleCount]);
 
-  // Condition to hide pagination when total records don't exceed single page
-  const shouldShowPagination =
-    hasFilteredMembers && filteredMembersCount > pageSize;
+  const hasMore = visibleCount < (members || []).length;
+
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount((prev) =>
+        Math.min(prev + PAGE_LIMIT, (members || []).length)
+      );
+      setIsLoadingMore(false);
+    }, 120);
+  }, [isLoadingMore, hasMore, members]);
+
+  const activeCount = useMemo(() => {
+    const fromStats = stats.find?.((s) => s.id === "active")?.value;
+    if (fromStats !== undefined) return fromStats;
+    return members.filter((m) => m.status === "active").length;
+  }, [stats, members]);
+
+  const inactiveCount = useMemo(() => {
+    const fromStats = stats.find?.((s) => s.id === "inactive")?.value;
+    if (fromStats !== undefined) return fromStats;
+    return members.filter((m) => m.status !== "active").length;
+  }, [stats, members]);
+
+  const statCards = useMemo(
+    () => [
+      {
+        id: "total",
+        title: "Total Members",
+        value: totalMembers || members.length,
+        subtitle: "Workspace team directory",
+        icon: Users,
+        color: "text-indigo-600 dark:text-indigo-400",
+        bg: "bg-indigo-500/10",
+        border: "border-indigo-500/20",
+      },
+      {
+        id: "active",
+        title: "Active Staff",
+        value: activeCount,
+        subtitle: "Can log in & operate",
+        icon: UserCheck,
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/20",
+      },
+      {
+        id: "inactive",
+        title: "Inactive / Suspended",
+        value: inactiveCount,
+        subtitle: "Access restricted",
+        icon: UserMinus,
+        color: "text-amber-600 dark:text-amber-400",
+        bg: "bg-amber-500/10",
+        border: "border-amber-500/20",
+      },
+      {
+        id: "roles",
+        title: "Staff Roles",
+        value: (roleOptions || []).filter((r) => r.value !== "all").length || "5+",
+        subtitle: "Configured access roles",
+        icon: Shield,
+        color: "text-purple-600 dark:text-purple-400",
+        bg: "bg-purple-500/10",
+        border: "border-purple-500/20",
+      },
+    ],
+    [totalMembers, members.length, activeCount, inactiveCount, roleOptions]
+  );
+
+  const hasActiveFilters = Boolean(
+    filters.search ||
+      (filters.status && filters.status !== "all") ||
+      (filters.role && filters.role !== "all")
+  );
 
   return (
-    <div className="min-h-screen bg-bg text-text p-3 sm:p-4 lg:p-0 max-w-[1440px] mx-auto space-y-2.5">
-      {/* Global Error Banner */}
-      {error && !hasError && (
-        <UIAlert
-          intent="danger"
-          title="Something went wrong"
-          description={error}
-          onClose={clearMessage}
-        />
-      )}
-
-      {/* Prerequisite Alert Banners for Owner / Member Management */}
-      {!hasCompanies && !isLoading && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-900 dark:text-amber-200">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-amber-500/20 rounded-xl text-amber-600 dark:text-amber-400 shrink-0">
-                <Building2 className="size-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">
-                  Operating Company Required
-                </h3>
-                <p className="text-xs text-text-muted mt-0.5 leading-relaxed">
-                  Before you can add or invite team members, you must first
-                  create at least one company. Staff members require assigned
-                  company clearances.
-                </p>
-              </div>
-            </div>
-            <UIButton
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => navigate(ROUTES.CREATE_COMPANY)}
-              startIcon={<Building2 className="size-3.5" />}
-              className="shrink-0"
-            >
-              Create Company
-            </UIButton>
-          </div>
-        </div>
-      )}
-
-      {hasCompanies && !hasBranches && !isLoading && (
-        <div className="rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-cyan-900 dark:text-cyan-200">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <div className="p-2 bg-cyan-500/20 rounded-xl text-cyan-600 dark:text-cyan-400 shrink-0">
-                <GitBranch className="size-5" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold">
-                  Dispensary Branch Required
-                </h3>
-                <p className="text-xs text-text-muted mt-0.5 leading-relaxed">
-                  You have created a company, but you need at least one
-                  dispensary branch before adding staff so they can be granted
-                  store access.
-                </p>
-              </div>
-            </div>
-            <UIButton
-              type="button"
-              variant="primary"
-              size="sm"
-              onClick={() => navigate(ROUTES.CREATE_BRANCH)}
-              startIcon={<GitBranch className="size-3.5" />}
-              className="shrink-0"
-            >
-              Create Branch
-            </UIButton>
-          </div>
-        </div>
-      )}
-
-      {/* ── TopBar Stats Teleport ── */}
-      <TopBarStats stats={topBarStats} />
-
-      {/* ── 2. Standard UIFilterToolbar Component with View Switcher ── */}
-      <UIFilterToolbar
-        searchQuery={filters.search}
-        onSearchChange={handleSearchChange}
-        searchPlaceholder="Search member name, email or phone..."
-        activeFilterChips={activeFilterChips}
-        onClearFilters={handleClearFilters}
-        showViewSwitcher={true}
-        viewMode={viewMode}
-        onViewModeChange={onViewModeChange}
-        filters={
-          <UIButton
-            variant="outline"
-            size="sm"
-            startIcon={<Filter className="size-4" />}
-            onClick={() => setIsFilterModalOpen(true)}
-            className="w-10 px-0 sm:w-auto sm:px-3 justify-center"
-          >
-            <span className="hidden sm:inline">Filter</span>
-          </UIButton>
-        }
-        actions={
-          <div className="flex items-center gap-2 shrink-0 border-l border-border pl-2 ml-1">
-            <UIIconButton
-              variant="ghost"
-              size="sm"
-              className="text-text-muted hover:text-text h-9 w-9"
-              onClick={handleRefresh}
-              title="Refresh"
-            >
-              <RotateCcw className={`size-4 ${isLoading ? "animate-spin" : ""}`} />
-            </UIIconButton>
-
-            <UIButton
-              type="button"
-              variant="outline"
-              size="sm"
-              startIcon={<Mail className="size-4 text-primary" />}
-              onClick={handleViewInvitations}
-            >
-              Pending Invitations
-            </UIButton>
-
-            <UIButton
-              type="button"
-              variant="outline"
-              size="sm"
-              startIcon={<Download className="size-4" />}
-              onClick={handleExportCSV}
-            >
-              Export
-            </UIButton>
-
-            <PermissionGate permission="workspace-member:create">
-              <UIButton
-                type="button"
-                variant="primary"
-                size="sm"
-                startIcon={<Plus className="size-4" />}
-                onClick={handleInviteMember}
-              >
-                Add Member
-              </UIButton>
-            </PermissionGate>
-          </div>
-        }
-      />
-
-      {/* ── Filter Modal ── */}
-      <UIModal
-        isOpen={isFilterModalOpen}
-        onClose={() => setIsFilterModalOpen(false)}
-        className="overflow-visible"
-      >
-        <UIModalHeader>
-          <UIModalTitle>Filter Members</UIModalTitle>
-          <UIModalDescription>Select criteria to filter the workspace members list.</UIModalDescription>
-        </UIModalHeader>
-        <UIModalBody className="overflow-visible">
-          <div className="space-y-5 py-2">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-text-muted">Role</label>
-              <UISelect
-                value={filters.role}
-                onChange={(val) => handleFilterChange({ role: val })}
-                options={roleOptions}
-                placeholder="All Roles"
-                size="sm"
-              />
-            </div>
-            {companyOptions.length > 1 && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-text-muted">Company</label>
-                <UISelect
-                  value={filters.company}
-                  onChange={(val) => handleFilterChange({ company: val })}
-                  options={companyOptions}
-                  placeholder="All Companies"
-                  size="sm"
-                />
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-text-muted">Status</label>
-              <UISelect
-                value={filters.status}
-                onChange={(val) => handleFilterChange({ status: val })}
-                options={statusOptions}
-                placeholder="All Status"
-                size="sm"
-              />
-            </div>
-          </div>
-        </UIModalBody>
-        <UIModalFooter>
-          <UIButton variant="ghost" onClick={() => handleClearFilters()}>
-            Clear Filters
-          </UIButton>
-          <UIButton variant="primary" onClick={() => setIsFilterModalOpen(false)}>
-            Apply Filters
-          </UIButton>
-        </UIModalFooter>
-      </UIModal>
-
-      {/* ── 3. Main Card Grid / Table Stream ── */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
-          {Array.from({ length: 6 }).map((_, idx) => (
-            <div
-              key={idx}
-              className="bg-surface rounded-2xl p-4 flex flex-col items-center space-y-3 shadow-xs border border-border"
-            >
-              <UISkeleton className="size-18 rounded-full" />
-              <UISkeleton className="h-4 w-28 rounded" />
-              <UISkeleton className="h-3 w-20 rounded" />
-              <div className="w-full pt-3 border-t border-border/30 grid grid-cols-2 gap-3">
-                <UISkeleton className="h-6 rounded" />
-                <UISkeleton className="h-6 rounded" />
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : !hasMembers ? (
-        <div className="py-10 bg-surface rounded-2xl shadow-xs border border-border">
-          <UIEmptyState
-            icon={<Users className="size-9 text-primary" />}
-            title="No workspace members yet"
-            description="Start building your pharmacy team roster by adding or inviting members."
-            primaryAction={
-              <PermissionGate permission="workspace-member:create">
-                <UIButton
-                  variant="primary"
-                  size="sm"
-                  startIcon={<Plus className="size-4" />}
-                  onClick={handleInviteMember}
-                >
-                  Add Member
-                </UIButton>
-              </PermissionGate>
-            }
-          />
-        </div>
-      ) : !hasFilteredMembers ? (
-        <div className="py-10 bg-surface rounded-2xl shadow-xs border border-border">
-          <UIEmptyState
-            icon={<Search className="size-9 text-text-muted" />}
-            title="No matching members found"
-            description="Try changing your search query, status, or role filter criteria."
-            primaryAction={
-              <UIButton
-                variant="outline"
-                size="sm"
-                onClick={handleClearFilters}
-              >
-                Clear Filters
-              </UIButton>
-            }
-          />
-        </div>
-      ) : viewMode === UI_TOOLBAR_VIEWS.LIST ? (
-        <WorkspaceMembersTableView
-          members={paginatedMembers}
-          onViewDetails={handleViewMemberDetails}
-          onChangeStatus={handleChangeMemberStatus}
-          onRemove={handleRemoveMember}
-          onManageAccess={handleManageAccess}
-          onResetPassword={handleOpenResetPassword}
-        />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
-          {paginatedMembers.map((member) => {
-            const isDropdownOpen = activeDropdownMemberId === member._id;
-            const hasAnyDropdownOpen = activeDropdownMemberId !== null;
-
+    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-2 sm:px-3 pt-0 pb-1 gap-2.5 text-text font-sans transition-colors overflow-hidden select-none">
+      {/* ── 1. Compact 4-Card Statistics Grid (Matches Sales/Customer Pages) ── */}
+      <div className="shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
             return (
-              <MemberCard
-                key={member._id}
-                member={member}
-                isDropdownOpen={isDropdownOpen}
-                hasAnyDropdownOpen={hasAnyDropdownOpen}
-                onDropdownOpenChange={(open) => {
-                  setActiveDropdownMemberId(open ? member._id : null);
-                }}
-                onCardClick={() => {
-                  if (!hasAnyDropdownOpen) {
-                    handleViewMemberDetails?.(member);
-                  }
-                }}
-                onViewDetails={() => {
-                  setActiveDropdownMemberId(null);
-                  handleViewMemberDetails?.(member);
-                }}
-                onChangeStatus={(m, status) => {
-                  setActiveDropdownMemberId(null);
-                  handleChangeMemberStatus(m, status);
-                }}
-                onRemove={(m) => {
-                  setActiveDropdownMemberId(null);
-                  handleRemoveMember(m);
-                }}
-                onManageAccess={(m) => {
-                  setActiveDropdownMemberId(null);
-                  handleViewMemberDetails?.(m);
-                }}
-                onResetPassword={(m) => {
-                  setActiveDropdownMemberId(null);
-                  handleOpenResetPassword(m);
-                }}
-              />
+              <div
+                key={stat.id}
+                className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors"
+              >
+                <div
+                  className={cn(
+                    "size-9 rounded-lg flex items-center justify-center shrink-0 border",
+                    stat.bg,
+                    stat.border,
+                    stat.color
+                  )}
+                >
+                  <Icon className="size-4.5 stroke-[1.8]" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[11.5px] font-medium text-text-muted truncate">
+                    {stat.title}
+                  </div>
+                  <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                    {stat.value}
+                  </div>
+                  <div className="text-[10px] text-text-muted truncate mt-0.5">
+                    {stat.subtitle}
+                  </div>
+                </div>
+              </div>
             );
           })}
         </div>
-      )}
+      </div>
 
-      {/* ── 4. Bottom Pagination Module ── */}
-      {shouldShowPagination && (
-        <div className="bg-surface rounded-xl shadow-xs border border-border overflow-hidden">
-          <UIPagination
-            page={currentPage}
-            totalPages={totalPages}
-            totalItems={filteredMembersCount}
-            pageSize={pageSize}
-            pageSizeOptions={[6, 12, 24, 48]}
-            onPageChange={handlePageChange}
-            onPageSizeChange={handlePageSizeChange}
-            showSummary
-            showPageSize
+      {/* ── 2. Streamlined Single-Row Toolbar ────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {/* Search Input */}
+        <div className="flex-1 min-w-[220px] sm:min-w-[260px]">
+          <UIInput
+            type="text"
+            value={filters.search || ""}
+            onChange={handleSearchChange}
+            placeholder="Search member name, email or phone..."
+            startIcon={<Search className="size-4 text-text-muted" />}
+            size="md"
+            variant="outline"
+            isClearable
+            onClear={() => handleSearchChange?.({ target: { value: "" } })}
+            className="w-full"
           />
         </div>
-      )}
-    </div>
-  );
-}
 
-/**
- * MemberCard Component
- * - Displays Companies and Branches assigned to member
- * - Crisp borders with distinct non-blending bottom section
- * - Active dropdown stacking and hover isolation
- */
-function MemberCard({
-  member,
-  isDropdownOpen,
-  hasAnyDropdownOpen,
-  onDropdownOpenChange,
-  onCardClick,
-  onViewDetails,
-  onChangeStatus,
-  onRemove,
-  onManageAccess,
-  onResetPassword,
-}) {
-  const { can } = usePermission();
-  const isOwner = Boolean(member?.isOwner);
-  const status = member?.status || "inactive";
-
-  const getStatusDotColor = () => {
-    switch (status) {
-      case "active":
-        return "bg-success ring-success/20";
-      case "suspended":
-        return "bg-error ring-error/20";
-      default:
-        return "bg-warning ring-warning/20";
-    }
-  };
-
-  const getInitials = (name) => {
-    return String(name || "M")
-      .trim()
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((w) => w[0]?.toUpperCase())
-      .join("");
-  };
-
-  // Company and Branch Access counts / labels
-  const companyAccessLabel = isOwner
-    ? "All Companies"
-    : member?.accessAllCompanies
-      ? "All Companies"
-      : member?.companyCount === 0 ||
-          member?.companies?.length === 0 ||
-          member?.companyIds?.length === 0
-        ? "No Companies"
-        : member?.companyCount !== undefined
-          ? `${member.companyCount} ${member.companyCount === 1 ? "Company" : "Companies"}`
-          : member?.companies?.length !== undefined
-            ? `${member.companies.length} ${member.companies.length === 1 ? "Company" : "Companies"}`
-            : member?.companyIds?.length !== undefined
-              ? `${member.companyIds.length} ${member.companyIds.length === 1 ? "Company" : "Companies"}`
-              : "No Companies";
-
-  const branchAccessLabel = isOwner
-    ? "All Branches"
-    : member?.accessAllBranches
-      ? "All Branches"
-      : member?.branchCount === 0 ||
-          member?.branches?.length === 0 ||
-          member?.branchIds?.length === 0
-        ? "No Branches"
-        : member?.branchCount !== undefined
-          ? `${member.branchCount} ${member.branchCount === 1 ? "Branch" : "Branches"}`
-          : member?.branches?.length !== undefined
-            ? `${member.branches.length} ${member.branches.length === 1 ? "Branch" : "Branches"}`
-            : member?.branchIds?.length !== undefined
-              ? `${member.branchIds.length} ${member.branchIds.length === 1 ? "Branch" : "Branches"}`
-              : "No Branches";
-
-  return (
-    <div
-      onClick={onCardClick}
-      className={cn(
-        "bg-surface rounded-2xl shadow-xs transition-all duration-200 flex flex-col relative border border-border overflow-hidden",
-        isDropdownOpen
-          ? "z-50 ring-2 ring-primary/40 shadow-xl"
-          : hasAnyDropdownOpen
-            ? "z-0"
-            : "z-10 hover:z-20 hover:border-border-strong hover:shadow-md cursor-pointer group active:scale-[0.99]",
-      )}
-    >
-      {/* Top Section: Avatar, Name, Role */}
-      <div className="bg-surface p-4 pt-3.5 relative flex flex-col items-center text-center">
-        {/* Enlarged Three-Dots Context Menu (z-50) */}
-        <div
-          className="absolute top-3 right-3 z-50"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <UIDropdown
-            open={isDropdownOpen}
-            onOpenChange={onDropdownOpenChange}
-            align="right"
-            placement="bottom"
-            usePortal={true}
-          >
-            <UIDropdownTrigger asChild>
-              <button
-                type="button"
-                aria-label={`Actions for ${member.displayName}`}
-                className={cn(
-                  "size-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer border-0",
-                  isDropdownOpen
-                    ? "bg-primary-soft text-primary"
-                    : "text-text-muted hover:text-text hover:bg-surface-hover",
-                )}
-              >
-                <MoreHorizontal className="size-5" />
-              </button>
-            </UIDropdownTrigger>
-            <UIDropdownMenu
-              width="w-52"
-              className="shadow-2xl border border-border/60"
-            >
-              <UIDropdownItem
-                icon={<Eye className="size-4 text-primary" />}
-                onClick={(e) => {
-                  e?.stopPropagation?.();
-                  onViewDetails?.();
-                }}
-              >
-                View Member Details
-              </UIDropdownItem>
-              <UIDropdownItem
-                icon={<MapPin className="size-4" />}
-                onClick={(e) => {
-                  e?.stopPropagation?.();
-                  onManageAccess?.(member);
-                }}
-              >
-                Manage Access & Roles
-              </UIDropdownItem>
-              <UIDropdownItem
-                icon={<Key className="size-4" />}
-                onClick={(e) => {
-                  e?.stopPropagation?.();
-                  onResetPassword?.(member);
-                }}
-                disabled={isOwner}
-              >
-                Reset Password / PIN
-              </UIDropdownItem>
-
-              {can("member-access:update") && (
-                <>
-                  <UIDropdownItem
-                    icon={<UserCheck className="size-4 text-success" />}
-                    onClick={(e) => {
-                      e?.stopPropagation?.();
-                      onChangeStatus?.(member, "active");
-                    }}
-                    disabled={isOwner || status === "active"}
-                  >
-                    Mark Active
-                  </UIDropdownItem>
-                  <UIDropdownItem
-                    icon={<Clock className="size-4 text-warning" />}
-                    onClick={(e) => {
-                      e?.stopPropagation?.();
-                      onChangeStatus?.(member, "inactive");
-                    }}
-                    disabled={isOwner || status === "inactive"}
-                  >
-                    Mark Inactive
-                  </UIDropdownItem>
-                  <UIDropdownItem
-                    icon={<Shield className="size-4 text-error" />}
-                    onClick={(e) => {
-                      e?.stopPropagation?.();
-                      onChangeStatus?.(member, "suspended");
-                    }}
-                    disabled={isOwner || status === "suspended"}
-                  >
-                    Suspend Member
-                  </UIDropdownItem>
-                  <UIDropdownDivider />
-                </>
-              )}
-
-              {can("workspace-member:delete") && (
-                <UIDropdownItem
-                  icon={<UserMinus className="size-4 text-error" />}
-                  onClick={(e) => {
-                    e?.stopPropagation?.();
-                    onRemove?.(member);
-                  }}
-                  disabled={isOwner}
-                  destructive
-                >
-                  Remove Member
-                </UIDropdownItem>
-              )}
-            </UIDropdownMenu>
-          </UIDropdown>
+        {/* Role Select */}
+        <div className="w-[140px] sm:w-[160px]">
+          <UISelect
+            value={filters.role || "all"}
+            onChange={(val) => handleFilterChange?.("role", val)}
+            options={roleOptions}
+            placeholder="All Roles"
+            size="md"
+          />
         </div>
 
-        {/* Circular Avatar with Status Dot */}
-        <div className="relative mt-1">
-          {member?.user?.avatar || member?.avatar ? (
-            <img
-              src={member?.user?.avatar || member?.avatar}
-              alt={member.displayName}
-              className="size-18 rounded-full object-cover border-2 border-surface shadow-xs"
+        {/* Status Select */}
+        <div className="w-[130px] sm:w-[150px]">
+          <UISelect
+            value={filters.status || "all"}
+            onChange={(val) => handleFilterChange?.("status", val)}
+            options={statusOptions}
+            placeholder="All Status"
+            size="md"
+          />
+        </div>
+
+        {/* Quick Reset */}
+        {hasActiveFilters && (
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
+            onClick={handleClearFilters}
+            startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+            className="h-10 px-2.5 text-xs text-text-muted hover:text-text"
+            title="Reset all filters"
+          >
+            Reset
+          </UIButton>
+        )}
+
+        {/* Action Cluster (Right) */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
+            disabled={isLoading}
+            onClick={handleRefresh}
+            className="h-10 w-10 p-0 text-text-muted hover:text-text cursor-pointer"
+            title="Refresh members"
+          >
+            <RefreshCw
+              className={cn(
+                "size-4 text-text-muted hover:text-primary",
+                isLoading && "animate-spin text-primary"
+              )}
             />
-          ) : (
-            <div className="size-18 rounded-full bg-primary-soft text-primary font-extrabold text-lg flex items-center justify-center border-2 border-surface shadow-xs select-none">
-              {getInitials(member.displayName)}
-            </div>
-          )}
+          </UIButton>
 
-          <span
-            className={`absolute bottom-0 right-0 size-3.5 rounded-full border-2 border-surface ring-2 ${getStatusDotColor()}`}
-            title={`Status: ${status}`}
-          />
-        </div>
-
-        {/* Member Name & Role */}
-        <div className="mt-2.5 space-y-0.5 max-w-full">
-          <h3
-            className={cn(
-              "text-base font-bold text-text tracking-tight truncate px-2 transition-colors",
-              !hasAnyDropdownOpen && "group-hover:text-primary",
-            )}
+          <UIButton
+            type="button"
+            variant="outline"
+            size="md"
+            startIcon={<Mail className="size-4 text-primary" />}
+            onClick={handleViewInvitations}
+            className="h-10 px-3 text-xs"
           >
-            {member.displayName}
-          </h3>
-          <p className="text-xs text-text-muted font-medium truncate">
-            {member.displayRole || "Staff Member"}
-          </p>
+            Invitations
+          </UIButton>
+
+          <UIButton
+            type="button"
+            variant="outline"
+            size="md"
+            startIcon={<Download className="size-4" />}
+            onClick={handleExportCSV}
+            className="h-10 px-3 text-xs"
+          >
+            Export
+          </UIButton>
+
+          <PermissionGate permission="workspace-member:create">
+            <UIButton
+              type="button"
+              variant="primary"
+              size="md"
+              startIcon={<Plus className="size-4" />}
+              onClick={handleInviteMember}
+              className="h-10 px-3.5 text-xs font-semibold shadow-xs"
+            >
+              Add Member
+            </UIButton>
+          </PermissionGate>
         </div>
       </div>
 
-      {/* Bottom Section */}
-      <div className="bg-surface border-t border-border/40 p-4 pt-3 space-y-3 text-left flex-1 flex flex-col justify-between">
-        {/* Work Modes & Level Ceiling */}
-        <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-border/40">
-          <span className="text-[10.5px] font-bold text-text-muted uppercase tracking-wider shrink-0">
-            Access Scope
-          </span>
-          <RoleWorkAccessBadges
-            workAccess={member?.workAccess}
-            role={member?.role || member?.roleId}
-            compact
-          />
-        </div>
+      {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ── */}
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
+          <UITable
+            stickyHeader
+            containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
+            className="w-full"
+          >
+            {/* Sticky Table Header */}
+            <UITableHeader
+              sticky
+              className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs"
+            >
+              <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
+                <UITableHead sticky className="min-w-[220px]">Member</UITableHead>
+                <UITableHead sticky className="min-w-[200px]">Role &amp; Work Access</UITableHead>
+                <UITableHead sticky className="min-w-[130px]">Company Access</UITableHead>
+                <UITableHead sticky className="min-w-[130px]">Branch Access</UITableHead>
+                <UITableHead sticky className="min-w-[140px]">Contact</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[100px]">Status</UITableHead>
+                <UITableHead sticky align="right" className="min-w-[80px]">Actions</UITableHead>
+              </UITableRow>
+            </UITableHeader>
 
-        {/* 2-Column Metadata Grid: Company Access & Branch Access Tiles */}
-        <div className="w-full grid grid-cols-2 gap-2.5 text-left">
-          <div className="rounded-xl bg-surface-alt/50 border border-border/40 p-2.5 shadow-2xs transition-colors">
-            <span className="block text-[10.5px] font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <Building2 className="size-3.5 text-primary shrink-0" />
-              Companies
-            </span>
-            <span className="block text-xs font-bold text-text truncate mt-1">
-              {companyAccessLabel}
-            </span>
-          </div>
+            <UITableBody>
+              {isLoading ? (
+                <UITableLoading colSpan={7} rows={8} />
+              ) : displayedMembers.length === 0 ? (
+                <UITableEmpty
+                  colSpan={7}
+                  title="No team members found"
+                  description={
+                    hasActiveFilters
+                      ? "Try clearing filters to find team members."
+                      : "Invite staff members to grant them access to companies and branches."
+                  }
+                />
+              ) : (
+                displayedMembers.map((member) => {
+                  const name = member.displayName || member.user?.name || "Staff Member";
+                  const email = member.displayEmail || member.user?.email || member.email;
+                  const phone = member.displayPhone || member.phone;
+                  const roleName = member.displayRole || member.role?.name || "Staff Member";
+                  const isOwner = Boolean(member?.isOwner);
+                  const status = member?.status || "inactive";
 
-          <div className="rounded-xl bg-surface-alt/50 border border-border/40 p-2.5 shadow-2xs transition-colors">
-            <span className="block text-[10.5px] font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5">
-              <GitBranch className="size-3.5 text-primary shrink-0" />
-              Branches
-            </span>
-            <span className="block text-xs font-bold text-text truncate mt-1">
-              {branchAccessLabel}
-            </span>
-          </div>
-        </div>
+                  const companyAccessLabel = isOwner
+                    ? "All Companies"
+                    : member?.accessAllCompanies
+                    ? "All Companies"
+                    : member?.companyCount === 0 ||
+                      member?.companies?.length === 0 ||
+                      member?.companyIds?.length === 0
+                    ? "No Companies"
+                    : member?.companyCount !== undefined
+                    ? `${member.companyCount} ${member.companyCount === 1 ? "Company" : "Companies"}`
+                    : member?.companies?.length !== undefined
+                    ? `${member.companies.length} ${member.companies.length === 1 ? "Company" : "Companies"}`
+                    : member?.companyIds?.length !== undefined
+                    ? `${member.companyIds.length} ${member.companyIds.length === 1 ? "Company" : "Companies"}`
+                    : "No Companies";
 
-        {/* Contact Details List (Email & Phone) */}
-        <div className="w-full space-y-1.5 pt-2 border-t border-border/60 text-left">
-          <div className="flex items-center gap-2 text-xs text-text-muted hover:text-text truncate transition-colors">
-            <Mail className="size-3.5 shrink-0 text-text-muted" />
-            <span className="truncate font-medium">
-              {member.displayEmail || "-"}
-            </span>
-          </div>
+                  const branchAccessLabel = isOwner
+                    ? "All Branches"
+                    : member?.accessAllBranches
+                    ? "All Branches"
+                    : member?.branchCount === 0 ||
+                      member?.branches?.length === 0 ||
+                      member?.branchIds?.length === 0
+                    ? "No Branches"
+                    : member?.branchCount !== undefined
+                    ? `${member.branchCount} ${member.branchCount === 1 ? "Branch" : "Branches"}`
+                    : member?.branches?.length !== undefined
+                    ? `${member.branches.length} ${member.branches.length === 1 ? "Branch" : "Branches"}`
+                    : member?.branchIds?.length !== undefined
+                    ? `${member.branchIds.length} ${member.branchIds.length === 1 ? "Branch" : "Branches"}`
+                    : "No Branches";
 
-          <div className="flex items-center gap-2 text-xs text-text-muted hover:text-text truncate transition-colors">
-            <Phone className="size-3.5 shrink-0 text-text-muted" />
-            <span className="font-mono tabular-nums font-medium truncate">
-              {member.displayPhone || "-"}
-            </span>
-          </div>
-        </div>
+                  return (
+                    <UITableRow
+                      key={member._id || member.id}
+                      onClick={() => handleViewMemberDetails?.(member)}
+                      className="cursor-pointer hover:bg-surface-alt/50 transition-colors"
+                    >
+                      {/* Member Info */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="size-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0 border border-primary/20">
+                            {getInitials(name)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-xs text-text truncate max-w-[170px]">
+                              {name}
+                            </div>
+                            <div className="text-[11px] text-text-muted truncate max-w-[170px]">
+                              {email || "—"}
+                            </div>
+                          </div>
+                        </div>
+                      </UITableCell>
+
+                      {/* Role & Work Access Badges */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-xs text-text">
+                              {roleName}
+                            </span>
+                            {isOwner && (
+                              <UIBadge variant="soft" color="primary" className="text-[9.5px] px-1 py-0">
+                                Owner
+                              </UIBadge>
+                            )}
+                          </div>
+                          <RoleWorkAccessBadges
+                            workAccess={member.workAccess}
+                            size="xs"
+                          />
+                        </div>
+                      </UITableCell>
+
+                      {/* Company Access */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+                          <Building2 className="size-3 text-text-muted/70 shrink-0" />
+                          <span className="truncate max-w-[120px]">{companyAccessLabel}</span>
+                        </span>
+                      </UITableCell>
+
+                      {/* Branch Access */}
+                      <UITableCell className="py-2.5 px-3">
+                        <span className="inline-flex items-center gap-1 text-xs text-text-muted">
+                          <GitBranch className="size-3 text-text-muted/70 shrink-0" />
+                          <span className="truncate max-w-[120px]">{branchAccessLabel}</span>
+                        </span>
+                      </UITableCell>
+
+                      {/* Contact */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="text-xs font-mono text-text truncate max-w-[140px]">
+                          {phone || email || "—"}
+                        </div>
+                      </UITableCell>
+
+                      {/* Status */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        <UIBadge
+                          variant="soft"
+                          color={
+                            status === "active"
+                              ? "success"
+                              : status === "suspended"
+                              ? "error"
+                              : "warning"
+                          }
+                          className="capitalize text-[10.5px] font-semibold"
+                        >
+                          {status}
+                        </UIBadge>
+                      </UITableCell>
+
+                      {/* Actions */}
+                      <UITableCell align="right" className="py-2.5 px-3">
+                        <div
+                          className="flex items-center justify-end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <UIDropdown>
+                            <UIDropdownTrigger asChild>
+                              <UIButton
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0 text-text-muted hover:text-text cursor-pointer"
+                              >
+                                <MoreVertical className="size-3.5" />
+                              </UIButton>
+                            </UIDropdownTrigger>
+                            <UIDropdownMenu align="end" className="w-48">
+                              <UIDropdownItem
+                                icon={<Eye className="size-4 text-text-muted" />}
+                                onClick={() => handleViewMemberDetails?.(member)}
+                              >
+                                View Details
+                              </UIDropdownItem>
+                              {handleOpenResetPassword && (
+                                <UIDropdownItem
+                                  icon={<Key className="size-4 text-text-muted" />}
+                                  onClick={() => handleOpenResetPassword?.(member)}
+                                >
+                                  Reset Password
+                                </UIDropdownItem>
+                              )}
+                              {!isOwner && handleChangeMemberStatus && (
+                                <>
+                                  <UIDropdownDivider />
+                                  <UIDropdownItem
+                                    icon={<UserCheck className="size-4 text-text-muted" />}
+                                    onClick={() =>
+                                      handleChangeMemberStatus?.(
+                                        member,
+                                        status === "active" ? "inactive" : "active"
+                                      )
+                                    }
+                                  >
+                                    {status === "active" ? "Deactivate" : "Activate"}
+                                  </UIDropdownItem>
+                                </>
+                              )}
+                              {!isOwner && handleRemoveMember && (
+                                <>
+                                  <UIDropdownDivider />
+                                  <UIDropdownItem
+                                    variant="danger"
+                                    icon={<UserMinus className="size-4 text-error" />}
+                                    onClick={() => handleRemoveMember?.(member)}
+                                  >
+                                    Remove Member
+                                  </UIDropdownItem>
+                                </>
+                              )}
+                            </UIDropdownMenu>
+                          </UIDropdown>
+                        </div>
+                      </UITableCell>
+                    </UITableRow>
+                  );
+                })
+              )}
+            </UITableBody>
+          </UITable>
+
+          {/* Infinite Scroll trigger */}
+          {!isLoading && (
+            <UIInfiniteScroll
+              onLoadMore={handleLoadMore}
+              hasMore={hasMore}
+              isLoading={isLoadingMore}
+              rootRef={tableContainerRef}
+              rootMargin="160px"
+              endMessage={
+                !hasMore && (members || []).length > 0 ? (
+                  <span className="font-mono text-[11px] text-text-muted select-none">
+                    ✓ All {(members || []).length} team members loaded
+                  </span>
+                ) : null
+              }
+            />
+          )}
+        </UITableScrollArea>
       </div>
     </div>
   );

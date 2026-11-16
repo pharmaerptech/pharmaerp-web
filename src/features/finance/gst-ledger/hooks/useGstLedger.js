@@ -79,6 +79,10 @@ export const useGstLedger = (type = "GSTR-1") => {
           delete params[key];
         }
       });
+      if (params.branchId === "all") delete params.branchId;
+      if (params.companyId === "all") delete params.companyId;
+      if (params.branchId === "all") delete params.branchId;
+      if (params.companyId === "all") delete params.companyId;
 
       const response =
         type === "GSTR-1"
@@ -133,6 +137,8 @@ export const useGstLedger = (type = "GSTR-1") => {
           delete params[key];
         }
       });
+      if (params.branchId === "all") delete params.branchId;
+      if (params.companyId === "all") delete params.companyId;
 
       const response =
         type === "GSTR-1"
@@ -279,6 +285,8 @@ export const useGstLedger = (type = "GSTR-1") => {
           delete params[key];
         }
       });
+      if (params.branchId === "all") delete params.branchId;
+      if (params.companyId === "all") delete params.companyId;
       const response =
         type === "GSTR-1"
           ? await gstLedgerService.getGstr1Ledger(params)
@@ -369,6 +377,8 @@ export const useGstLedger = (type = "GSTR-1") => {
           delete params[key];
         }
       });
+      if (params.branchId === "all") delete params.branchId;
+      if (params.companyId === "all") delete params.companyId;
       const response = await gstLedgerService.getGstr1Summary(params);
       const data = response?.data?.data || response?.data || null;
       setSummaryData(data);

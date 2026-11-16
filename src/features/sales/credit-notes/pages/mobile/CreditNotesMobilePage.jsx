@@ -18,6 +18,8 @@ import {
   UIBadge,
 } from "@/components/ui";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
+import { useBranchFilter } from "@/hooks";
 import creditNoteService from "../../services/creditNoteService";
 import CreditNoteDetailsDialog from "../../components/CreditNoteDetailsDialog";
 import { cn } from "@/lib/utils";
@@ -80,7 +82,9 @@ const PAGE_LIMIT = 20;
 
 export const CreditNotesMobilePage = () => {
   const { currentBranch } = useBranch();
+  const { isCompanyLevel, selectedBranchId, setSelectedBranchId, queryBranchId } = useBranchFilter();
   const branchId = currentBranch?._id || currentBranch?.id;
+  const activeBranchId = isCompanyLevel ? queryBranchId : (branchId || undefined);
   const scrollContainerRef = useRef(null);
 
   const [creditNotes, setCreditNotes] = useState([]);
@@ -102,7 +106,7 @@ export const CreditNotesMobilePage = () => {
     setError(null);
     try {
       const params = {
-        branchId: branchId || undefined,
+        branchId: activeBranchId,
         page: 1,
         limit: PAGE_LIMIT,
         status: statusFilter !== "all" ? statusFilter : undefined,
@@ -111,7 +115,7 @@ export const CreditNotesMobilePage = () => {
 
       const [notesRes, statsRes] = await Promise.all([
         creditNoteService.getCreditNotes(params),
-        creditNoteService.getCreditNoteStats({ branchId: branchId || undefined }),
+        creditNoteService.getCreditNoteStats({ branchId: activeBranchId }),
       ]);
 
       const notesData = notesRes?.data?.data || notesRes?.data || {};
@@ -132,7 +136,7 @@ export const CreditNotesMobilePage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [branchId, statusFilter, searchQuery]);
+  }, [activeBranchId, statusFilter, searchQuery]);
 
   const handleLoadMore = useCallback(async () => {
     if (isLoading || isLoadingMore || !hasMore) return;
@@ -140,7 +144,7 @@ export const CreditNotesMobilePage = () => {
     const nextPage = currentPage + 1;
     try {
       const params = {
-        branchId: branchId || undefined,
+        branchId: activeBranchId,
         page: nextPage,
         limit: PAGE_LIMIT,
         status: statusFilter !== "all" ? statusFilter : undefined,
@@ -173,7 +177,7 @@ export const CreditNotesMobilePage = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [currentPage, hasMore, isLoading, isLoadingMore, branchId, statusFilter, searchQuery, totalCount]);
+  }, [currentPage, hasMore, isLoading, isLoadingMore, activeBranchId, statusFilter, searchQuery, totalCount]);
 
   useEffect(() => {
     fetchCreditNotes();
@@ -217,6 +221,16 @@ export const CreditNotesMobilePage = () => {
           </span>
         </div>
       </div>
+
+      {/* Branch Filter (Company Level Only) */}
+      {isCompanyLevel && (
+        <BranchFilterSelect
+          value={selectedBranchId}
+          onChange={setSelectedBranchId}
+          size="sm"
+          className="w-full"
+        />
+      )}
 
       {/* Search Input */}
       <div className="relative">
@@ -298,7 +312,12 @@ export const CreditNotesMobilePage = () => {
 
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-medium text-text truncate max-w-[180px]">{custName}</span>
-                  <span className="font-mono text-text-muted text-[11px]">{formatDate(issueTimestamp)}</span>
+                  <div className="flex items-center gap-1.5">
+                    {isCompanyLevel && cnItem.branchId && (
+                      <BranchBadge branch={cnItem.branchId} />
+                    )}
+                    <span className="font-mono text-text-muted text-[11px]">{formatDate(issueTimestamp)}</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between text-xs pt-2 border-t border-border/60">

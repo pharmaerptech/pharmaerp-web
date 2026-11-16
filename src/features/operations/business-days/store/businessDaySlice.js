@@ -6,6 +6,8 @@ import {
   getOpenBusinessDay,
   getSuggestedBusinessDate,
   getBusinessDayById,
+  initiateBusinessDayClose,
+  abortBusinessDayClose,
   closeBusinessDay,
   cancelBusinessDay,
 } from "./businessDayThunk";
@@ -13,7 +15,7 @@ import {
 const initialState = {
   businessDays: [],
   currentBusinessDay: null,
-  /** The currently OPEN Business Day for this branch. Null if day is closed or not fetched yet. */
+  /** The currently ACTIVE (open or closing) Business Day for this branch. Null if day is closed or not fetched yet. */
   openBusinessDay: null,
   /** Suggested date for next Business Day opening (today or tomorrow). */
   suggestedBusinessDate: null,
@@ -27,6 +29,8 @@ const initialState = {
   getOpenBusinessDayStatus: API_STATUS.IDLE,
   getSuggestedDateStatus: API_STATUS.IDLE,
   getBusinessDayStatus: API_STATUS.IDLE,
+  initiateBusinessDayCloseStatus: API_STATUS.IDLE,
+  abortBusinessDayCloseStatus: API_STATUS.IDLE,
   closeBusinessDayStatus: API_STATUS.IDLE,
   cancelBusinessDayStatus: API_STATUS.IDLE,
 };
@@ -118,6 +122,44 @@ const businessDaySlice = createSlice({
       })
       .addCase(getBusinessDayById.rejected, (state, action) => {
         state.getBusinessDayStatus = API_STATUS.ERROR;
+        state.error = action.payload;
+      })
+
+      // INITIATE CLOSE
+      .addCase(initiateBusinessDayClose.pending, (state) => {
+        state.initiateBusinessDayCloseStatus = API_STATUS.LOADING;
+      })
+      .addCase(initiateBusinessDayClose.fulfilled, (state, action) => {
+        state.initiateBusinessDayCloseStatus = API_STATUS.SUCCESS;
+        const updated = action.payload;
+        if (updated) {
+          state.businessDays = state.businessDays.map((d) =>
+            d._id === updated._id ? updated : d
+          );
+          state.openBusinessDay = updated;
+        }
+      })
+      .addCase(initiateBusinessDayClose.rejected, (state, action) => {
+        state.initiateBusinessDayCloseStatus = API_STATUS.ERROR;
+        state.error = action.payload;
+      })
+
+      // ABORT CLOSE
+      .addCase(abortBusinessDayClose.pending, (state) => {
+        state.abortBusinessDayCloseStatus = API_STATUS.LOADING;
+      })
+      .addCase(abortBusinessDayClose.fulfilled, (state, action) => {
+        state.abortBusinessDayCloseStatus = API_STATUS.SUCCESS;
+        const updated = action.payload;
+        if (updated) {
+          state.businessDays = state.businessDays.map((d) =>
+            d._id === updated._id ? updated : d
+          );
+          state.openBusinessDay = updated;
+        }
+      })
+      .addCase(abortBusinessDayClose.rejected, (state, action) => {
+        state.abortBusinessDayCloseStatus = API_STATUS.ERROR;
         state.error = action.payload;
       })
 

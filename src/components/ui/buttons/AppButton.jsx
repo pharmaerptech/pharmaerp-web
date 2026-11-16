@@ -14,6 +14,8 @@ const AppButton = ({
   fullWidth = false,
   disabled = false,
   loading = false,
+  isLoading = false,
+  loadingText,
   startIcon,
   endIcon,
   rounded = "md",
@@ -243,6 +245,8 @@ const AppButton = ({
         : active.main
       : active.text;
 
+  const isBusy = Boolean(loading || isLoading);
+
   return (
     <Button
       type={type}
@@ -252,10 +256,10 @@ const AppButton = ({
           ? variant
           : "contained"
       }
-      disabled={disabled || loading}
+      disabled={disabled || isBusy}
       fullWidth={fullWidth}
-      startIcon={!loading ? startIcon : undefined}
-      endIcon={!loading ? endIcon : undefined}
+      startIcon={!isBusy ? startIcon : undefined}
+      endIcon={!isBusy ? endIcon : undefined}
       sx={{
         ...baseStyles,
         ...appliedVariant,
@@ -263,22 +267,25 @@ const AppButton = ({
       }}
       {...props}
     >
-      {loading ? (
-        <AppLoader
-          size={activeSize.loaderSize}
-          variant={loaderVariant}
-          colorVariant={colorVariant === "dark" ? "primary" : colorVariant}
-          center={false}
-          sx={{
-            width: "auto",
-            minHeight: "auto",
-            display: "inline-flex",
-            color: loaderColor,
-            "& .MuiCircularProgress-root": {
+      {isBusy ? (
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <AppLoader
+            size={activeSize.loaderSize}
+            variant={loaderVariant}
+            colorVariant={colorVariant === "dark" ? "primary" : colorVariant}
+            center={false}
+            sx={{
+              width: "auto",
+              minHeight: "auto",
+              display: "inline-flex",
               color: loaderColor,
-            },
-          }}
-        />
+              "& .MuiCircularProgress-root": {
+                color: loaderColor,
+              },
+            }}
+          />
+          {loadingText && <span>{loadingText}</span>}
+        </span>
       ) : (
         children
       )}

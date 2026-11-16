@@ -18,7 +18,7 @@ import { AnimatePresence } from "framer-motion";
  */
 export const SetupCenterGuard = ({ children }) => {
   const location = useLocation();
-  const { isSetupComplete, isLoading, setupStatus, workspaceId } =
+  const { isSetupComplete, isLoading, setupStatus, workspaceId, companyCompleted } =
     useSetupStatus();
 
   // If workspace is present and status hasn't hydrated yet (either loading or about to load)
@@ -31,7 +31,20 @@ export const SetupCenterGuard = ({ children }) => {
   }
 
   // If setup is incomplete, redirect to the Setup Center
+  // Exception: Allow Company Operations Starter (/company/operations), Branches (/branches, /branches/create),
+  // and company-level operations when Step 1 (Company) is complete,
+  // allowing the user to enter the company level to create branches and launch operations.
   if (!isSetupComplete) {
+    if (
+      companyCompleted &&
+      (location.pathname.startsWith("/company/operations") ||
+       location.pathname.startsWith("/branches") ||
+       location.pathname.startsWith("/company-operations") ||
+       location.pathname.startsWith("/branch-operations"))
+    ) {
+      return children || <Outlet />;
+    }
+
     return (
       <Navigate
         to={ROUTES.SETUP_CENTER}

@@ -1,1392 +1,947 @@
 // src/features/company/pages/desktop/CompanyDetailsDesktopPage.jsx
 
-import { useMemo, useState } from "react";
+import { memo, useState, useCallback } from "react";
 import {
-  FiBriefcase,
-  FiArrowLeft,
-  FiRefreshCw,
-  FiEdit3,
-  FiMoreHorizontal,
-  FiCalendar,
-  FiUser,
-  FiClock,
-  FiSearch,
-  FiFilter,
-  FiDownload,
-  FiPlus,
-  FiUsers,
-  FiCheckCircle,
-  FiFileText,
-  FiShield,
-  FiChevronRight,
-  FiChevronLeft,
-  FiGrid,
-  FiInfo,
-  FiMail,
-  FiPhone,
-  FiGlobe,
-  FiExternalLink,
-  FiMapPin,
-} from "react-icons/fi";
-import { HiOutlineBuildingOffice2 } from "react-icons/hi2";
-import { LuStore } from "react-icons/lu";
+  Building2,
+  Calendar,
+  Check,
+  Clock,
+  Copy,
+  Edit3,
+  ExternalLink,
+  FileCheck,
+  FileText,
+  Globe,
+  Mail,
+  MapPin,
+  Phone,
+  RotateCcw,
+  Scale,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  User,
+} from "lucide-react";
 
 import {
-  AppBox,
-  AppBreadcrumb,
-  AppButton,
-  AppCard,
-  AppHeading,
-  AppIconButton,
-  AppMenu,
-  AppSearchInput,
-  AppSelect,
-  AppStack,
-  AppStatusBadge,
-  AppTag,
-  AppText,
-  AppPageLoader,
-  AppErrorState,
-  PageRightSidebar,
-  PermissionGate,
-} from "@/components";
+  UIAlert,
+  UIBadge,
+  UIButton,
+} from "@/components/ui";
 
-const CompanyDetailsDesktopPage = ({
-  company,
-  isLoading,
-  hasError,
-  error,
-  currentTab,
-  handleTabChange,
-  handleBack,
-  handleEdit,
-  handleSettings,
-  handleRefresh,
-}) => {
-  if (isLoading && !company) {
-    return (
-      <section className="min-h-[calc(100vh-58px)] bg-bg px-5 py-4">
-        <AppPageLoader text="Retrieving platform entity coordinates..." />
-      </section>
-    );
-  }
+const formatCompanyType = (type) => {
+  if (!type) return "Proprietorship";
+  return String(type)
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
 
-  if (hasError && !company) {
-    return (
-      <section className="min-h-[calc(100vh-58px)] bg-bg px-5 py-4">
-        <AppErrorState
-          title="Profile Extraction Failure"
-          description={
-            error || "The server could not process the company identifier."
-          }
-          actionText="Retry Pipeline"
-          onRetry={handleRefresh}
-          size="page"
-        />
-      </section>
-    );
-  }
+const formatDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
 
-  const safeCompany = company || {};
+/* ==========================================================================
+   SKELETON LOADER COMPONENT (Exact 1:1 Layout Mirror, Zero Shift)
+   ========================================================================== */
 
-  // Tab Header Items
-  const tabs = [
-    { value: "overview", label: "Overview" },
-    {
-      value: "branches",
-      label: `Branches (${safeCompany.highlights?.totalBranches || 0})`,
-    },
-    {
-      value: "members",
-      label: `Members (${safeCompany.highlights?.totalMembers || 0})`,
-    },
-    {
-      value: "documents",
-      label: `Documents (${safeCompany.documents?.length || 0})`,
-    },
-    { value: "settings", label: "Settings" },
-    { value: "activity", label: "Activity Log" },
-  ];
+const CompanyDetailsSkeleton = () => (
+  <div className="w-full min-h-full flex-1 overflow-y-auto pt-1 pb-10 px-2 sm:px-4 lg:px-6 font-sans select-none animate-pulse">
+    <div className="mx-auto w-full max-w-7xl space-y-4">
+      {/* ── 1. Hero Dossier Banner Skeleton ── */}
+      <section className="bg-surface border border-border/90 rounded-2xl p-5 sm:p-6 shadow-xs relative overflow-hidden">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+          {/* Entity Branding & Identity Skeleton */}
+          <div className="flex items-start sm:items-center gap-4.5 min-w-0">
+            <div className="size-16 sm:size-20 rounded-2xl border border-border/80 bg-surface-alt/70 flex items-center justify-center shrink-0">
+              <Building2 className="size-8 sm:size-10 text-text-muted/20" />
+            </div>
 
-  return (
-    <section className="min-h-[calc(100vh-58px)] bg-bg px-5 py-4">
-      <div className="mx-auto w-full max-w-[1500px]">
-        {/* --- BREADCRUMB HEADER NAV STRIP --- */}
-        <div className="flex items-center justify-between">
-          <AppBreadcrumb
-            size="small"
-            variant="text"
-            items={[
-              { label: "Dashboard", onClick: () => {} },
-              { label: "Companies", onClick: handleBack },
-              {
-                label: safeCompany.displayName || "Company Profile",
-                current: true,
-              },
-            ]}
-            sx={breadcrumbSx}
-            itemSx={breadcrumbItemSx}
-            currentItemSx={breadcrumbCurrentSx}
-          />
+            <div className="min-w-0 space-y-2">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <div className="h-7 w-64 sm:w-80 bg-surface-alt rounded-lg" />
+                <div className="h-6 w-20 bg-surface-alt/80 rounded-md border border-border/60" />
+                <div className="h-6 w-24 bg-primary/10 rounded-full border border-primary/20" />
+                <div className="h-6 w-16 bg-surface-alt/80 rounded-full" />
+              </div>
+
+              <div className="mt-2.5 flex items-center gap-4 flex-wrap">
+                <div className="h-4 w-36 bg-surface-alt/70 rounded-md" />
+                <div className="h-4 w-28 bg-surface-alt/70 rounded-md" />
+                <div className="h-4 w-32 bg-surface-alt/70 rounded-md" />
+                <div className="h-4 w-36 bg-surface-alt/70 rounded-md" />
+              </div>
+            </div>
+          </div>
+
+          {/* Integrated Actions Skeleton in Top Right */}
+          <div className="flex items-center gap-2 self-start md:self-auto shrink-0 pt-2 md:pt-0">
+            <div className="h-9 w-16 bg-surface-alt/50 rounded-xl" />
+            <div className="h-9 w-28 bg-surface-alt rounded-xl border border-border/60" />
+            <div className="h-9 w-20 bg-surface-alt/40 rounded-xl" />
+          </div>
         </div>
 
-        {/* --- CORPORATE IDENTITY JUMBOTRON HEADER ROW --- */}
-        <div className="mt-2 flex w-full items-start justify-between border-b border-border-strong bg-surface rounded-xl border p-4 shadow-xs">
-          <AppStack direction="row" align="center" gap={1.2}>
-            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-success-soft text-success text-[28px]">
-              <HiOutlineBuildingOffice2 />
-            </div>
-            <AppBox>
-              <AppStack direction="row" align="center" gap={0.8}>
-                <AppHeading level={1} weight={700} sx={pageTitleSx}>
-                  {safeCompany.displayName}
-                </AppHeading>
-                <AppStatusBadge
-                  status={safeCompany.status || "active"}
-                  variant="soft"
-                  rounded="md"
-                  size="small"
-                />
-              </AppStack>
-              <AppText variant="body2" sx={subHeaderMetaDataSx}>
-                {safeCompany.displayType} &bull;{" "}
-                <span className="font-semibold text-text-muted">CIN:</span>{" "}
-                {safeCompany.pan
-                  ? `U24233DL2018PTC${safeCompany.pan}`
-                  : "U24233DL2018PTC341234"}
-              </AppText>
+        {/* Quick Stat Ticker Strip Skeleton (4 Cards) */}
+        <div className="mt-5 pt-4 border-t border-border/60 grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/40 space-y-1.5">
+            <div className="h-2.5 w-14 bg-surface-alt/70 rounded" />
+            <div className="h-4 w-28 bg-surface-alt rounded" />
+          </div>
+          <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/40 space-y-1.5">
+            <div className="h-2.5 w-20 bg-surface-alt/70 rounded" />
+            <div className="h-4 w-32 bg-emerald-500/10 rounded" />
+          </div>
+          <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/40 space-y-1.5">
+            <div className="h-2.5 w-24 bg-surface-alt/70 rounded" />
+            <div className="h-4 w-28 bg-surface-alt rounded" />
+          </div>
+          <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/40 space-y-1.5">
+            <div className="h-2.5 w-20 bg-surface-alt/70 rounded" />
+            <div className="h-4 w-24 bg-surface-alt rounded" />
+          </div>
+        </div>
+      </section>
 
-              {/* Meta pills strip */}
-              <div className="mt-2.5 flex flex-wrap items-center gap-4 text-[11px] font-semibold text-text-muted">
-                <span className="flex items-center gap-1.5">
-                  <FiCalendar className="text-primary text-[13px]" /> Created on{" "}
-                  {safeCompany.displayCreatedAt}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <FiUser className="text-success text-[13px]" /> Owned by{" "}
-                  {safeCompany.displayOwnerName}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <FiClock className="text-warning text-[13px]" /> Member since
-                  15 Mar 2024
-                </span>
+      {/* ── 2. Asymmetric 2-Column Corporate Dossier Skeleton ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* ── LEFT COLUMN (5 cols / 40%): Corporate Governance & Owner KYC ── */}
+        <div className="lg:col-span-5 space-y-4">
+          {/* Executive Ownership Profile Skeleton */}
+          <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center gap-2.5 pb-3 mb-4 border-b border-border/60">
+              <div className="size-8 rounded-lg bg-surface-alt/80 shrink-0" />
+              <div className="space-y-1">
+                <div className="h-3 w-40 bg-surface-alt rounded" />
+                <div className="h-2.5 w-52 bg-surface-alt/60 rounded" />
               </div>
-            </AppBox>
-          </AppStack>
+            </div>
 
-          <AppStack direction="row" align="center" gap={1}>
-            <PermissionGate permission="company:update">
-              <AppButton
-                variant="outlined"
-                colorVariant="neutral"
-                rounded="md"
-                size="small"
-                startIcon={<FiEdit3 />}
-                onClick={handleEdit}
-                sx={secondaryButtonSx}
-              >
-                Edit Company
-              </AppButton>
-            </PermissionGate>
-            <AppMenu
-              trigger={
-                <AppButton
-                  variant="outlined"
-                  colorVariant="neutral"
-                  rounded="md"
-                  size="small"
-                  endIcon={<FiMoreHorizontal />}
-                  sx={secondaryButtonSx}
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-alt/40 border border-border/40">
+                <div className="size-10 rounded-xl bg-primary/20 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="h-3.5 w-32 bg-surface-alt rounded" />
+                  <div className="h-2.5 w-44 bg-surface-alt/60 rounded" />
+                </div>
+              </div>
+
+              <div className="divide-y divide-border/40 text-xs">
+                <div className="py-2 flex items-center justify-between gap-3">
+                  <div className="h-3 w-24 bg-surface-alt/60 rounded" />
+                  <div className="h-3.5 w-36 bg-surface-alt rounded" />
+                </div>
+                <div className="py-2 flex items-center justify-between gap-3">
+                  <div className="h-3 w-20 bg-surface-alt/60 rounded" />
+                  <div className="h-3.5 w-28 bg-surface-alt rounded" />
+                </div>
+                <div className="py-2 flex items-center justify-between gap-3">
+                  <div className="h-3 w-24 bg-surface-alt/60 rounded" />
+                  <div className="h-3.5 w-28 bg-surface-alt rounded" />
+                </div>
+                <div className="py-2 flex items-center justify-between gap-3">
+                  <div className="h-3 w-24 bg-surface-alt/60 rounded" />
+                  <div className="h-3.5 w-32 bg-surface-alt rounded" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Direct Communications & Channels Hub Skeleton */}
+          <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center gap-2.5 pb-3 mb-4 border-b border-border/60">
+              <div className="size-8 rounded-lg bg-surface-alt/80 shrink-0" />
+              <div className="space-y-1">
+                <div className="h-3 w-40 bg-surface-alt rounded" />
+                <div className="h-2.5 w-48 bg-surface-alt/60 rounded" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {[
+                { labelW: "w-20", valW: "w-36" },
+                { labelW: "w-24", valW: "w-28" },
+                { labelW: "w-28", valW: "w-28" },
+                { labelW: "w-24", valW: "w-32" },
+              ].map((row, idx) => (
+                <div
+                  key={idx}
+                  className="p-2.5 rounded-xl bg-surface-alt/30 border border-border/40 flex items-center justify-between gap-3"
                 >
-                  More Actions
-                </AppButton>
-              }
-              items={[
-                {
-                  id: "settings",
-                  label: "Module Settings",
-                  onClick: handleSettings,
-                },
-                {
-                  id: "refresh",
-                  label: "Force Sync State",
-                  onClick: handleRefresh,
-                },
-              ]}
-              dense
-            />
-          </AppStack>
+                  <div className="flex items-center gap-2">
+                    <div className="size-3.5 rounded bg-surface-alt/60" />
+                    <div className={`h-3 ${row.labelW} bg-surface-alt/60 rounded`} />
+                  </div>
+                  <div className={`h-3.5 ${row.valW} bg-surface-alt rounded`} />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* --- INTERACTIVE NAV TABS LINE STRIP --- */}
-        <div className="mt-4 flex border-b border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {tabs.map((tab) => {
-            const isActive = currentTab === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => handleTabChange(tab.value)}
-                className={`border-b-2 px-4 pb-2.5 text-[12.5px] font-bold transition whitespace-nowrap outline-none ${
-                  isActive
-                    ? "border-primary text-primary"
-                    : "border-transparent text-text-muted hover:text-text"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* ── RIGHT COLUMN (7 cols / 60%): Operational Footprint & Statutory Licenses ── */}
+        <div className="lg:col-span-7 space-y-4">
+          {/* Executive Overview & Scope Skeleton */}
+          <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center gap-2 pb-2.5 mb-3 border-b border-border/60">
+              <div className="size-4 bg-primary/20 rounded" />
+              <div className="h-3 w-44 bg-surface-alt rounded" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-3 w-full bg-surface-alt/60 rounded" />
+              <div className="h-3 w-11/12 bg-surface-alt/60 rounded" />
+              <div className="h-3 w-3/4 bg-surface-alt/60 rounded" />
+            </div>
+          </div>
 
-        {/* --- SWITCHABLE TAB CONTENT DISPLAY LAYOUTS --- */}
-        <div className="mt-5">
-          {currentTab === "overview" && (
-            <OverviewTabSection company={safeCompany} />
-          )}
-          {currentTab === "branches" && (
-            <BranchesTabSection company={safeCompany} />
-          )}
-          {currentTab === "members" && (
-            <MembersTabSection company={safeCompany} />
-          )}
-          {currentTab === "documents" && (
-            <DocumentsTabSection company={safeCompany} />
-          )}
-          {currentTab === "settings" && (
-            <SettingsTabSection company={safeCompany} />
-          )}
-          {currentTab === "activity" && (
-            <ActivityLogTabSection company={safeCompany} />
-          )}
+          {/* Statutory Licensing Matrix Skeleton */}
+          <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center justify-between pb-3 mb-4 border-b border-border/60">
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-surface-alt/80 shrink-0" />
+                <div className="space-y-1">
+                  <div className="h-3 w-40 bg-surface-alt rounded" />
+                  <div className="h-2.5 w-56 bg-surface-alt/60 rounded" />
+                </div>
+              </div>
+              <div className="h-5 w-16 bg-emerald-500/10 rounded-full border border-emerald-500/20" />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {[
+                { titleW: "w-24", badgeW: "w-16", valW: "w-36" },
+                { titleW: "w-28", badgeW: "w-18", valW: "w-36" },
+                { titleW: "w-28", badgeW: "w-16", valW: "w-32" },
+                { titleW: "w-20", badgeW: "w-10", valW: "w-36" },
+              ].map((tile, idx) => (
+                <div
+                  key={idx}
+                  className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className={`h-2.5 ${tile.titleW} bg-surface-alt/60 rounded`} />
+                    <div className={`h-4 ${tile.badgeW} bg-surface-alt/80 rounded`} />
+                  </div>
+                  <div className={`h-4 ${tile.valW} bg-surface-alt rounded`} />
+                </div>
+              ))}
+            </div>
+
+            {/* Validity Timeline Skeleton */}
+            <div className="mt-4 pt-3.5 border-t border-border/60 flex items-center justify-between">
+              <div className="h-3 w-36 bg-surface-alt/60 rounded" />
+              <div className="h-3 w-40 bg-surface-alt/60 rounded" />
+            </div>
+          </div>
+
+          {/* Commercial Tax Credentials Skeleton */}
+          <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center gap-2.5 pb-3 mb-4 border-b border-border/60">
+              <div className="size-8 rounded-lg bg-surface-alt/80 shrink-0" />
+              <div className="space-y-1">
+                <div className="h-3 w-36 bg-surface-alt rounded" />
+                <div className="h-2.5 w-60 bg-surface-alt/60 rounded" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 flex items-center justify-between">
+                <div className="space-y-1.5">
+                  <div className="h-2.5 w-32 bg-surface-alt/60 rounded" />
+                  <div className="h-4 w-36 bg-surface-alt rounded" />
+                </div>
+                <div className="size-7 rounded-lg bg-surface-alt/60" />
+              </div>
+              <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 flex items-center justify-between">
+                <div className="space-y-1.5">
+                  <div className="h-2.5 w-32 bg-surface-alt/60 rounded" />
+                  <div className="h-4 w-28 bg-surface-alt rounded" />
+                </div>
+                <div className="size-7 rounded-lg bg-surface-alt/60" />
+              </div>
+            </div>
+          </div>
+
+          {/* Registered Office Headquarters Skeleton */}
+          <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+            <div className="flex items-center gap-2.5 pb-3 mb-4 border-b border-border/60">
+              <div className="size-8 rounded-lg bg-surface-alt/80 shrink-0" />
+              <div className="space-y-1">
+                <div className="h-3 w-44 bg-surface-alt rounded" />
+                <div className="h-2.5 w-64 bg-surface-alt/60 rounded" />
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 space-y-2.5">
+              <div className="flex items-start gap-2.5">
+                <div className="size-4 rounded bg-primary/20 shrink-0 mt-0.5" />
+                <div className="space-y-1.5 flex-1">
+                  <div className="h-3.5 w-full bg-surface-alt rounded" />
+                  <div className="h-3.5 w-3/4 bg-surface-alt/80 rounded" />
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-border/40 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="space-y-1">
+                    <div className="h-2 w-12 bg-surface-alt/60 rounded" />
+                    <div className="h-3 w-16 bg-surface-alt rounded" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </section>
-  );
-};
+    </div>
+  </div>
+);
 
 /* ==========================================================================
-   1. OVERVIEW TAB MODULE PANELS
+   MAIN COMPONENT: COMPANY DETAILS DESKTOP PAGE
    ========================================================================== */
-const OverviewTabSection = ({ company }) => (
-  <div className="space-y-4">
-    <div className="grid grid-cols-[1fr_420px_350px] gap-4 items-start">
-      {/* Col 1: Static Information Fields Card */}
-      <AppCard
-        variant="default"
-        rounded="lg"
-        bordered
-        padding="none"
-        sx={sectionCardSx}
-      >
-        <SectionHeader
-          title="Company Information"
-          description="Root registry records configuration details."
-        />
-        <div className="p-4 space-y-3.5">
-          <InfoGridRow
-            icon={<HiOutlineBuildingOffice2 />}
-            label="Company Name"
-            value={company.displayName}
-          />
-          <InfoGridRow
-            icon={<FiBriefcase />}
-            label="Company Type"
-            value={company.displayType}
-          />
-          <InfoGridRow
-            icon={<FiUser />}
-            label="Owner"
-            value={company.displayOwnerName}
-          />
-          <InfoGridRow
-            icon={<FiGrid />}
-            label="PAN Number"
-            value={company.displayPan}
-          />
-          <InfoGridRow
-            icon={<FiFileText />}
-            label="GST Number"
-            value={company.displayGstin}
-          />
-          <InfoGridRow
-            icon={<FiMail />}
-            label="Email"
-            value={company.displayEmail}
-          />
-          <InfoGridRow
-            icon={<FiPhone />}
-            label="Phone"
-            value={company.displayPhone}
-          />
-          <InfoGridRow
-            icon={<FiGlobe />}
-            label="Website"
-            value={company.website || "www.medplus.com"}
-            link
-          />
-          <InfoGridRow
-            icon={<FiShield />}
-            label="Industry Type"
-            value="Pharmacy & Healthcare"
-          />
-          <InfoGridRow
-            icon={<FiCalendar />}
-            label="Incorporation Date"
-            value={company.displayCreatedAt}
-          />
-          <InfoGridRow
-            icon={<FiMapPin />}
-            label="Registered Address"
-            value={company.displayAddress}
-          />
-        </div>
-        <div className="border-t border-border p-3 flex justify-center">
-          <button
-            type="button"
-            className="text-[12px] font-bold text-primary hover:underline"
-          >
-            View Full Details
-          </button>
-        </div>
-      </AppCard>
 
-      {/* Col 2: Core Highlights Mini-Grid Cards */}
-      <div className="space-y-4">
-        <AppCard
-          variant="default"
-          rounded="lg"
-          bordered
-          padding="none"
-          sx={sectionCardSx}
-        >
-          <SectionHeader
-            title="Company Highlights"
-            description="Operational volume parameters summary."
-          />
-          <div className="grid grid-cols-2 gap-3 p-4">
-            <HighlightMetricCard
-              icon={<LuStore />}
-              title="Total Branches"
-              value={company.highlights?.totalBranches}
-              subtext="View branches &rarr;"
-              color="bg-primary-soft text-primary"
-            />
-            <HighlightMetricCard
-              icon={<FiUsers />}
-              title="Total Members"
-              value={company.highlights?.totalMembers}
-              subtext="View members &rarr;"
-              color="bg-info-soft text-info"
-            />
-            <HighlightMetricCard
-              icon={<FiCheckCircle />}
-              title="Active Members"
-              value={company.highlights?.activeMembers}
-              subtext="View members &rarr;"
-              color="bg-success-soft text-success"
-            />
-            <HighlightMetricCard
-              icon={<FiShield />}
-              title="Roles"
-              value={company.highlights?.rolesCount}
-              subtext="View roles &rarr;"
-              color="bg-warning-soft text-warning"
-            />
-            <HighlightMetricCard
-              icon={<FiGrid />}
-              title="Products"
-              value={company.highlights?.productsCount}
-              subtext="View products &rarr;"
-              color="bg-purple-soft text-purple"
-            />
-            <HighlightMetricCard
-              icon={<FiUsers />}
-              title="Total Customers"
-              value={company.highlights?.totalCustomers}
-              subtext="View customers &rarr;"
-              color="bg-cyan-soft text-cyan"
-            />
-          </div>
-        </AppCard>
-      </div>
+const CompanyDetailsDesktopPage = memo(
+  ({
+    company,
+    isLoading = false,
+    hasError = false,
+    error,
+    handleBack,
+    handleEdit,
+    handleDelete,
+    handleRefresh,
+  }) => {
+    const [copiedField, setCopiedField] = useState(null);
 
-      {/* Col 3: Status Tracking Information Module Panel */}
-      <AppCard
-        variant="default"
-        rounded="lg"
-        bordered
-        padding="none"
-        sx={sectionCardSx}
-      >
-        <SectionHeader
-          title="Company Status"
-          description="Lifecycle governance logs."
-        />
-        <div className="p-4 space-y-4">
-          <StatusTrackingRow
-            label="Status"
-            value={
-              <AppTag
-                label="Active"
-                colorVariant="success"
-                variant="soft"
-                rounded="md"
-                sx={{ height: 20, fontSize: "10px" }}
-              />
-            }
-          />
-          <StatusTrackingRow
-            label="Verified By Workspace"
-            value={
-              <span className="flex items-center gap-1 text-[11.5px] font-bold text-success">
-                <FiCheckCircle /> Verified
-              </span>
-            }
-          />
-          <StatusTrackingRow
-            label="Last Verified On"
-            value="28 May 2024, 04:32 PM"
-          />
-          <StatusTrackingRow
-            label="Created On"
-            value={company.displayCreatedAt}
-          />
-          <StatusTrackingRow
-            label="Last Updated"
-            value="28 May 2024, 04:32 PM"
-          />
+    const handleCopy = useCallback((text, field) => {
+      if (!text || text === "-") return;
+      navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1800);
+    }, []);
 
-          <div className="border-t border-border pt-3">
-            <span className="block text-[11px] font-bold text-text-muted uppercase">
-              Description
-            </span>
-            <p className="mt-1.5 text-[11.5px] leading-relaxed text-text-muted">
-              MedPlus Healthcare Pvt. Ltd. is engaged in the distribution and
-              retail of pharmaceutical products and healthcare solutions.
-            </p>
-          </div>
-        </div>
-        <div className="border-t border-border p-3 flex justify-center">
-          <AppButton
-            type="button"
-            variant="outlined"
-            colorVariant="neutral"
-            rounded="md"
-            size="small"
-            sx={{ width: "100%", height: 32, fontSize: "11px" }}
-          >
-            Edit Description
-          </AppButton>
-        </div>
-      </AppCard>
-    </div>
-
-    {/* Bottom Activity Layout Split Strip Grid */}
-    <div className="grid grid-cols-3 gap-4">
-      {/* Left Bottom Mini-Table: Members Link Summary Panel */}
-      <AppCard
-        variant="default"
-        rounded="lg"
-        bordered
-        padding="none"
-        className="col-span-1"
-        sx={sectionCardSx}
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <span className="text-[13px] font-bold text-text">
-            Assigned Members{" "}
-            <span className="text-[11px] font-normal text-text-muted">
-              (From Workspace)
-            </span>
-          </span>
-          <button
-            type="button"
-            className="text-[11px] font-bold text-primary hover:underline"
-          >
-            View All
-          </button>
-        </div>
-        <div className="divide-y divide-border overflow-y-auto max-h-[300px]">
-          {company.members?.slice(0, 5).map((member) => (
-            <div
-              key={member._id}
-              className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-alt/50"
-            >
-              <AppStack direction="row" align="center" gap={0.8}>
-                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary uppercase">
-                  {member.name.slice(0, 2)}
-                </div>
-                <div>
-                  <span className="block text-[12px] font-bold text-text leading-tight">
-                    {member.name}
-                  </span>
-                  <span className="block text-[10.5px] text-text-muted">
-                    {member.department}
-                  </span>
-                </div>
-              </AppStack>
-              <AppTag
-                label={member.role}
-                size="small"
-                variant="soft"
-                rounded="md"
-                colorVariant={member.tagColor}
-                sx={{ height: 18, fontSize: "9.5px", fontWeight: 700 }}
-              />
+    // Error State
+    if (hasError && !company) {
+      return (
+        <div className="w-full min-h-full flex-1 overflow-y-auto pt-4 pb-10 px-2 sm:px-4 lg:px-6 font-sans">
+          <div className="mx-auto w-full max-w-7xl space-y-4">
+            <UIAlert
+              intent="danger"
+              title="Profile Extraction Failure"
+              description={error || "The server could not process the company identifier."}
+            />
+            <div className="flex gap-3">
+              <UIButton variant="outline" onClick={handleBack} startIcon={<RotateCcw className="size-4" />}>
+                Back to Companies
+              </UIButton>
+              <UIButton variant="primary" onClick={handleRefresh} startIcon={<RotateCcw className="size-4" />}>
+                Retry Pipeline
+              </UIButton>
             </div>
-          ))}
+          </div>
         </div>
-      </AppCard>
+      );
+    }
 
-      {/* Middle Bottom List: Activity Streams */}
-      <AppCard
-        variant="default"
-        rounded="lg"
-        bordered
-        padding="none"
-        className="col-span-1"
-        sx={sectionCardSx}
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <span className="text-[13px] font-bold text-text">
-            Recent Activity
-          </span>
-          <button
-            type="button"
-            className="text-[11px] font-bold text-primary hover:underline"
-          >
-            View All
-          </button>
-        </div>
-        <div className="divide-y divide-border overflow-y-auto max-h-[300px] p-2 space-y-2">
-          {company.activities?.map((act) => (
-            <div
-              key={act.id}
-              className="flex items-start gap-3 p-2 rounded-md hover:bg-surface-alt/40"
-            >
-              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-soft text-[10px] text-success">
-                <FiCheckCircle />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[11.5px] font-medium text-text leading-snug">
-                  {act.text}
-                </p>
-                <span className="block mt-0.5 text-[10px] text-text-muted">
-                  by {act.user} &bull; {act.time}
+    // Always render high-fidelity skeleton when company is resolving (never show an empty state)
+    if (!company || isLoading) {
+      return <CompanyDetailsSkeleton />;
+    }
+
+    const {
+      name,
+      companyCode,
+      type,
+      industry,
+      status,
+      email,
+      phones = {},
+      website,
+      companyDescription,
+      description,
+      address = {},
+      gstin,
+      pan,
+      owner = {},
+      license = {},
+      createdAt,
+      updatedAt,
+      logo,
+    } = company;
+
+    const displayType = formatCompanyType(type);
+    const displayDescription = companyDescription || description;
+    const isLicenseActive = license.status === "active";
+    const fullAddress = [
+      address.addressLine1,
+      address.addressLine2,
+      address.city,
+      address.district,
+      address.state ? `${address.state} - ${address.pincode || ""}` : address.pincode,
+      address.country || "India",
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    return (
+      <div className="w-full min-h-full flex-1 overflow-y-auto pt-1 pb-10 px-2 sm:px-4 lg:px-6 font-sans select-none text-text">
+        <div className="mx-auto w-full max-w-7xl space-y-4">
+          {/* ── 1. Modern Corporate Hero Dossier Banner (Starts at Very Top) ── */}
+          <section className="bg-surface border border-border/90 rounded-2xl p-5 sm:p-6 shadow-xs relative overflow-hidden">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
+              {/* Entity Branding & Identity */}
+              <div className="flex items-start sm:items-center gap-4.5 min-w-0">
+                <div className="size-16 sm:size-20 rounded-2xl border border-border/80 bg-primary/10 text-primary flex items-center justify-center shrink-0 overflow-hidden shadow-2xs">
+                  {logo?.url ? (
+                    <img src={logo.url} alt={name || "Company Logo"} className="size-full object-cover" />
+                  ) : (
+                    <Building2 className="size-8 sm:size-10" />
+                  )}
+                </div>
+
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h1 className="text-xl sm:text-2xl font-bold text-text truncate">
+                      {name || "Unnamed Corporate Entity"}
+                    </h1>
+                    {companyCode && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(companyCode, "code")}
+                        className="inline-flex items-center gap-1 font-mono text-xs font-bold text-text-muted hover:text-text bg-surface-alt px-2 py-0.5 rounded-md border border-border/80 transition-colors cursor-pointer"
+                        title="Click to copy Company Code"
+                      >
+                        <span>{companyCode}</span>
+                        {copiedField === "code" ? (
+                          <Check className="size-3 text-emerald-500" />
+                        ) : (
+                          <Copy className="size-2.5 opacity-60" />
+                        )}
+                      </button>
+                    )}
+                    <UIBadge variant="primary" className="text-xs font-semibold">
+                      {displayType}
+                    </UIBadge>
+                    {industry && (
+                      <UIBadge variant="success" className="text-xs font-semibold capitalize">
+                        {industry.replace(/_/g, " ")}
+                      </UIBadge>
+                    )}
+                    <UIBadge
+                      variant={status === "active" ? "success" : "neutral"}
+                      className="capitalize text-xs font-semibold"
+                    >
+                      {status || "Active"}
+                    </UIBadge>
+                  </div>
+
+                  <div className="mt-2 flex items-center gap-4 flex-wrap text-xs text-text-muted">
+                    {email && (
+                      <a
+                        href={`mailto:${email}`}
+                        className="inline-flex items-center gap-1.5 hover:text-primary transition-colors truncate max-w-[220px]"
+                      >
+                        <Mail className="size-3.5 shrink-0" />
+                        <span className="truncate">{email}</span>
+                      </a>
+                    )}
+                    {phones.mobile && (
+                      <a
+                        href={`tel:${phones.mobile}`}
+                        className="inline-flex items-center gap-1.5 hover:text-primary transition-colors"
+                      >
+                        <Phone className="size-3.5 shrink-0" />
+                        <span>+91 {phones.mobile}</span>
+                      </a>
+                    )}
+                    {address.city && address.state && (
+                      <div className="inline-flex items-center gap-1.5">
+                        <MapPin className="size-3.5 shrink-0" />
+                        <span>{address.city}, {address.state}</span>
+                      </div>
+                    )}
+                    {createdAt && (
+                      <div className="inline-flex items-center gap-1.5">
+                        <Calendar className="size-3.5 shrink-0" />
+                        <span>Incorporated {formatDate(createdAt)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Integrated Primary Actions in Top Right of Hero */}
+              <div className="flex items-center gap-2 self-start md:self-auto shrink-0 pt-2 md:pt-0">
+                <UIButton
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefresh}
+                  startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+                  className="h-9 px-3 text-xs font-semibold cursor-pointer text-text-muted hover:text-text"
+                >
+                  Sync
+                </UIButton>
+                <UIButton
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleEdit}
+                  startIcon={<Edit3 className="size-3.5" />}
+                  className="h-9 px-3.5 text-xs font-bold cursor-pointer"
+                >
+                  Edit Profile
+                </UIButton>
+                {handleDelete && (
+                  <UIButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDelete}
+                    startIcon={<Trash2 className="size-3.5 text-error" />}
+                    className="h-9 px-3 text-xs font-semibold text-error hover:bg-error/10 cursor-pointer"
+                  >
+                    Delete
+                  </UIButton>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Stat Ticker Strip */}
+            <div className="mt-5 pt-4 border-t border-border/60 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/40">
+                <span className="text-[10px] uppercase font-bold text-text-muted tracking-wider block">
+                  Tax Status
+                </span>
+                <span className="font-mono text-xs font-bold text-text mt-0.5 block truncate">
+                  {gstin ? "GST Registered" : "Exempt / Pending"}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/40">
+                <span className="text-[10px] uppercase font-bold text-text-muted tracking-wider block">
+                  Drug Controller
+                </span>
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 block truncate flex items-center gap-1">
+                  <ShieldCheck className="size-3.5" />
+                  <span>{isLicenseActive ? "Compliant & Active" : "Pending Verification"}</span>
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/40">
+                <span className="text-[10px] uppercase font-bold text-text-muted tracking-wider block">
+                  Governance Entity
+                </span>
+                <span className="text-xs font-bold text-text mt-0.5 block truncate">
+                  {owner.name || "Designated Proprietor"}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-surface-alt/40 border border-border/40">
+                <span className="text-[10px] uppercase font-bold text-text-muted tracking-wider block">
+                  Audit Timestamp
+                </span>
+                <span className="text-xs font-mono font-medium text-text mt-0.5 block truncate">
+                  {formatDate(updatedAt || createdAt)}
                 </span>
               </div>
             </div>
-          ))}
-        </div>
-      </AppCard>
+          </section>
 
-      {/* Right Bottom List: Cloud Asset Documents Storage Panels */}
-      <AppCard
-        variant="default"
-        rounded="lg"
-        bordered
-        padding="none"
-        className="col-span-1"
-        sx={sectionCardSx}
-      >
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <span className="text-[13px] font-bold text-text">
-            Important Documents
-          </span>
-          <button
-            type="button"
-            className="text-[11px] font-bold text-primary hover:underline"
-          >
-            View All
-          </button>
-        </div>
-        <div className="divide-y divide-border overflow-y-auto max-h-[300px]">
-          {company.documents?.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex items-center justify-between px-4 py-2.5 hover:bg-surface-alt/50"
-            >
-              <AppStack
-                direction="row"
-                align="center"
-                gap={0.8}
-                sx={{ minWidth: 0 }}
-              >
-                <span className="text-[16px] text-primary shrink-0">
-                  <FiFileText />
-                </span>
-                <div className="min-w-0">
-                  <span className="block text-[12px] font-bold text-text truncate leading-tight">
-                    {doc.name}
-                  </span>
-                  <span className="block text-[10.5px] text-text-muted">
-                    {doc.uploadedAt}
-                  </span>
+          {/* ── 2. Asymmetric 2-Column Corporate Dossier Architecture ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* ── LEFT COLUMN (5 cols / 40%): Corporate Governance & Owner KYC ── */}
+            <div className="lg:col-span-5 space-y-4">
+              {/* Executive Ownership Profile */}
+              <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+                <div className="flex items-center gap-2.5 pb-3 mb-4 border-b border-border/60">
+                  <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <User className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-text uppercase tracking-wider">
+                      Ownership & Executive KYC
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Designated director / proprietor profile
+                    </p>
+                  </div>
                 </div>
-              </AppStack>
-              <AppIconButton
-                icon={<FiDownload />}
-                size="small"
-                variant="outlined"
-                colorVariant="neutral"
-                rounded="md"
-              />
-            </div>
-          ))}
-        </div>
-      </AppCard>
-    </div>
 
-    {/* Base alert strip verification status marker */}
-    <div className="flex items-center gap-2 rounded-lg border border-success-soft/30 bg-success-soft/10 p-3 text-[11.5px] font-semibold text-success">
-      <FiCheckCircle className="text-[14px]" /> This company profile ledger
-      index is fully validated and active across all mapped inventory pipelines.
-    </div>
-  </div>
-);
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 p-3 rounded-xl bg-surface-alt/40 border border-border/40">
+                    <div className="size-10 rounded-xl bg-primary text-primary-foreground font-bold text-sm flex items-center justify-center shrink-0 shadow-2xs">
+                      {owner.name ? owner.name.charAt(0).toUpperCase() : "O"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-text truncate">
+                        {owner.name || "Not Designated"}
+                      </p>
+                      <p className="text-[11px] text-text-muted truncate">
+                        Authorized Signatory & Managing Partner
+                      </p>
+                    </div>
+                  </div>
 
-/* ==========================================================================
-   2. BRANCHES MANAGEMENT TAB PANEL
-   ========================================================================== */
-const BranchesTabSection = ({ company }) => {
-  return (
-    <AppCard
-      variant="default"
-      rounded="lg"
-      bordered
-      padding="none"
-      sx={sectionCardSx}
-    >
-      {/* Context Action Toolbar Header Rows */}
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div>
-          <span className="block text-[13.5px] font-bold text-text">
-            Company Branches
-          </span>
-          <span className="block text-[11px] text-text-muted">
-            Manage all distribution terminals linked onto this corporate
-            identity model.
-          </span>
-        </div>
-        <AppStack direction="row" gap={1}>
-          <AppButton
-            variant="outlined"
-            colorVariant="neutral"
-            size="small"
-            rounded="md"
-            startIcon={<FiDownload />}
-            sx={{ height: 32, fontSize: "11.5px" }}
-          >
-            Export Metrics
-          </AppButton>
-          <AppButton
-            variant="contained"
-            colorVariant="primary"
-            size="small"
-            rounded="md"
-            startIcon={<FiPlus />}
-            sx={{ height: 32, fontSize: "11.5px", fontWeight: 700 }}
-          >
-            Add Branch
-          </AppButton>
-        </AppStack>
-      </div>
+                  <div className="divide-y divide-border/40 text-xs">
+                    <div className="py-2 flex items-center justify-between gap-3">
+                      <span className="text-text-muted">Executive Email</span>
+                      <span className="font-semibold text-text truncate max-w-[210px]">
+                        {owner.email || "-"}
+                      </span>
+                    </div>
 
-      {/* Grid Summary Block widgets panel */}
-      <div className="grid grid-cols-5 gap-3 border-b border-border bg-surface-alt/40 p-4">
-        <StatWidgetCard
-          label="Total Branches"
-          value="6"
-          description="All configured centers"
-        />
-        <StatWidgetCard
-          label="Active Branches"
-          value="6"
-          description="Operational setups live"
-        />
-        <StatWidgetCard
-          label="Inactive Branches"
-          value="0"
-          description="Suspended nodes locked"
-        />
-        <StatWidgetCard
-          label="Cities Map Coordinates"
-          value="4"
-          description="Spatial reach density"
-        />
-        <StatWidgetCard
-          label="States Represented"
-          value="2"
-          description="Regional index divisions"
-        />
-      </div>
+                    <div className="py-2 flex items-center justify-between gap-3">
+                      <span className="text-text-muted">Direct Mobile</span>
+                      <span className="font-semibold text-text">
+                        {owner.mobile ? `+91 ${owner.mobile}` : "-"}
+                      </span>
+                    </div>
 
-      {/* Filters Search Layout Strip Panels */}
-      <div className="border-b border-border p-3 flex items-center justify-between gap-4 bg-surface">
-        <AppSearchInput
-          placeholder="Search branches by identity keys or code prefixes..."
-          size="small"
-          rounded="md"
-          variant="bordered"
-          sx={{ maxW: 360 }}
-        />
-        <AppStack direction="row" gap={1}>
-          <AppSelect
-            value="all"
-            options={[{ label: "Status: All", value: "all" }]}
-            size="small"
-            rounded="md"
-            variant="bordered"
-            sx={{ width: 120, height: 32 }}
-          />
-          <AppButton
-            variant="outlined"
-            colorVariant="neutral"
-            size="small"
-            rounded="md"
-            startIcon={<FiFilter />}
-            sx={{ height: 32, fontSize: "11px" }}
-          >
-            Filters
-          </AppButton>
-        </AppStack>
-      </div>
+                    <div className="py-2 flex items-center justify-between gap-3">
+                      <span className="text-text-muted">Individual PAN</span>
+                      {owner.pan ? (
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(owner.pan, "ownerPan")}
+                          className="font-mono font-bold text-text hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Copy Owner PAN"
+                        >
+                          <span>{owner.pan}</span>
+                          {copiedField === "ownerPan" ? (
+                            <Check className="size-3 text-emerald-500" />
+                          ) : (
+                            <Copy className="size-2.5 opacity-50" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="font-semibold text-text-muted">-</span>
+                      )}
+                    </div>
 
-      {/* Grid Table Frame Sheets Component */}
-      <div className="w-full overflow-x-auto">
-        <table className="w-full border-collapse text-left min-w-[950px]">
-          <thead>
-            <tr className="border-b border-border bg-surface-alt/70 text-[11px] font-bold text-text-muted uppercase tracking-wider">
-              <th className="px-4 py-3">Branch Name</th>
-              <th className="px-4 py-3">Branch Code</th>
-              <th className="px-4 py-3">Manager</th>
-              <th className="px-4 py-3">Location</th>
-              <th className="px-4 py-3">Contact</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Created On</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border text-[12px]">
-            {company.branches?.map((branch) => (
-              <tr
-                key={branch._id}
-                className="hover:bg-surface-alt/40 transition"
-              >
-                <td className="px-4 py-3.5">
-                  <div className="flex items-center gap-2.5">
-                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary-soft text-primary text-[14px]">
-                      <LuStore />
+                    <div className="py-2 flex items-center justify-between gap-3">
+                      <span className="text-text-muted">Aadhaar (UID)</span>
+                      <span className="font-mono font-semibold text-text">
+                        {owner.aadhaar || "-"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Direct Communications & Channels Hub */}
+              <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+                <div className="flex items-center gap-2.5 pb-3 mb-4 border-b border-border/60">
+                  <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <Mail className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-text uppercase tracking-wider">
+                      Communication Endpoints
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Official communication routing channels
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-surface-alt/30 border border-border/40 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Mail className="size-3.5 text-text-muted shrink-0" />
+                      <span className="text-text-muted">Official Email</span>
+                    </div>
+                    <span className="font-semibold text-text truncate max-w-[190px]">
+                      {email || "-"}
                     </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-surface-alt/30 border border-border/40 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Phone className="size-3.5 text-text-muted shrink-0" />
+                      <span className="text-text-muted">Primary Phone</span>
+                    </div>
+                    <span className="font-semibold text-text font-mono">
+                      {phones.mobile ? `+91 ${phones.mobile}` : "-"}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-surface-alt/30 border border-border/40 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Phone className="size-3.5 text-text-muted shrink-0" />
+                      <span className="text-text-muted">WhatsApp Dispatch</span>
+                    </div>
+                    <span className="font-semibold text-text font-mono">
+                      {phones.whatsapp ? `+91 ${phones.whatsapp}` : "-"}
+                    </span>
+                  </div>
+
+                  {phones.landline && (
+                    <div className="p-2.5 rounded-xl bg-surface-alt/30 border border-border/40 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Phone className="size-3.5 text-text-muted shrink-0" />
+                        <span className="text-text-muted">Landline</span>
+                      </div>
+                      <span className="font-semibold text-text font-mono">
+                        {phones.landline}
+                      </span>
+                    </div>
+                  )}
+
+                  {website && (
+                    <div className="p-2.5 rounded-xl bg-surface-alt/30 border border-border/40 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Globe className="size-3.5 text-text-muted shrink-0" />
+                        <span className="text-text-muted">Corporate Portal</span>
+                      </div>
+                      <a
+                        href={website.startsWith("http") ? website : `https://${website}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 font-semibold text-primary hover:underline truncate max-w-[180px]"
+                      >
+                        <span className="truncate">{website}</span>
+                        <ExternalLink className="size-3 shrink-0" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── RIGHT COLUMN (7 cols / 60%): Operational Footprint & Statutory Licenses ── */}
+            <div className="lg:col-span-7 space-y-4">
+              {/* Executive Summary / Description */}
+              {displayDescription && (
+                <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+                  <div className="flex items-center gap-2.5 pb-2.5 mb-3 border-b border-border/60">
+                    <Sparkles className="size-4 text-primary" />
+                    <h3 className="text-xs font-bold text-text uppercase tracking-wider">
+                      Executive Overview & Scope
+                    </h3>
+                  </div>
+                  <p className="text-xs text-text-muted leading-relaxed font-sans">
+                    {displayDescription}
+                  </p>
+                </div>
+              )}
+
+              {/* Statutory Licenses & Drug Regulatory Credentials Matrix */}
+              <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+                <div className="flex items-center justify-between pb-3 mb-4 border-b border-border/60">
+                  <div className="flex items-center gap-2.5">
+                    <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <Scale className="size-4" />
+                    </div>
                     <div>
-                      <span className="block font-bold text-text">
-                        {branch.name}
-                      </span>
-                      <span className="block text-[10.5px] text-text-muted truncate max-w-[240px]">
-                        {typeof branch.address === "string"
-                          ? branch.address
-                          : [branch.address?.addressLine1, branch.address?.city]
-                              .filter(Boolean)
-                              .join(", ") || "-"}
-                      </span>
+                      <h3 className="text-xs font-bold text-text uppercase tracking-wider">
+                        Statutory Licensing Matrix
+                      </h3>
+                      <p className="text-[11px] text-text-muted">
+                        Drug Controller and Food Safety Authority credentials
+                      </p>
                     </div>
                   </div>
-                </td>
-                <td className="px-4 py-3.5 font-semibold text-text-muted">
-                  {branch.code}
-                </td>
-                <td className="px-4 py-3.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-info-soft text-[9.5px] font-bold text-info uppercase">
-                      {branch.managerName.slice(0, 2)}
+                  {license.status && (
+                    <UIBadge variant={isLicenseActive ? "success" : "outline"} className="capitalize text-xs">
+                      {license.status}
+                    </UIBadge>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Retail Drug License */}
+                  <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-text-muted">
+                      <span>Retail Drug License</span>
+                      <span className="text-[10px] font-bold uppercase bg-surface px-1.5 py-0.2 rounded border border-border/60">
+                        Form 20 / 21
+                      </span>
                     </div>
-                    <div>
-                      <span className="block font-semibold text-text">
-                        {branch.managerName}
-                      </span>
-                      <span className="block text-[10.5px] text-text-muted">
-                        {branch.managerPhone}
-                      </span>
+                    <div className="font-mono text-xs font-bold text-text pt-1">
+                      {license.retailLicenseNumber || "Not Registered"}
                     </div>
                   </div>
-                </td>
-                <td className="px-4 py-3.5">
-                  <span className="block font-medium text-text">
-                    {branch.city}
-                  </span>
-                  <span className="block text-[10.5px] text-text-muted">
-                    {branch.state}
-                  </span>
-                </td>
-                <td className="px-4 py-3.5 text-text-muted font-medium">
-                  {branch.contactEmail}
-                </td>
-                <td className="px-4 py-3.5">
-                  <AppStatusBadge
-                    status={branch.status}
-                    variant="soft"
-                    rounded="md"
-                    size="small"
-                  />
-                </td>
-                <td className="px-4 py-3.5 text-text-muted font-medium">
-                  {branch.createdAt}
-                </td>
-                <td className="px-4 py-3.5 text-right">
-                  <AppStack
-                    direction="row"
-                    align="center"
-                    justify="flex-end"
-                    gap={0.5}
-                  >
-                    <AppIconButton
-                      icon={<FiEdit3 />}
-                      size="small"
-                      variant="ghost"
-                      colorVariant="neutral"
-                    />
-                    <AppIconButton
-                      icon={<FiMoreHorizontal />}
-                      size="small"
-                      variant="ghost"
-                      colorVariant="neutral"
-                    />
-                  </AppStack>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
-      {/* Footer Sheet Strip Pagination Widget */}
-      <div className="flex items-center justify-between border-t border-border px-4 py-3 bg-surface-alt/20">
-        <span className="text-[11.5px] font-medium text-text-muted">
-          Showing 1 to 6 of 6 entries
-        </span>
-        <AppStack direction="row" align="center" gap={0.5}>
-          <AppIconButton
-            icon={<FiChevronLeft />}
-            size="small"
-            variant="outlined"
-            colorVariant="neutral"
-            disabled
-            rounded="md"
-          />
-          <span className="flex h-6 min-w-[24px] items-center justify-center rounded-md bg-primary px-1.5 text-[11px] font-bold text-text-inverse">
-            1
-          </span>
-          <AppIconButton
-            icon={<FiChevronRight />}
-            size="small"
-            variant="outlined"
-            colorVariant="neutral"
-            disabled
-            rounded="md"
-          />
-        </AppStack>
-      </div>
-    </AppCard>
-  );
-};
+                  {/* Wholesale Drug License */}
+                  <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-text-muted">
+                      <span>Wholesale Drug License</span>
+                      <span className="text-[10px] font-bold uppercase bg-surface px-1.5 py-0.2 rounded border border-border/60">
+                        Form 20B / 21B
+                      </span>
+                    </div>
+                    <div className="font-mono text-xs font-bold text-text pt-1">
+                      {license.wholesaleLicenseNumber || "Not Registered"}
+                    </div>
+                  </div>
 
-/* ==========================================================================
-   3. ACCOUNTABILITY MEMBERS LIST TAB MODULE PANEL
-   ========================================================================== */
-const MembersTabSection = ({ company }) => {
-  return (
-    <AppCard
-      variant="default"
-      rounded="lg"
-      bordered
-      padding="none"
-      sx={sectionCardSx}
-    >
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div>
-          <span className="block text-[13.5px] font-bold text-text">
-            Company Members
-          </span>
-          <span className="block text-[11px] text-text-muted">
-            Manage administrative privileges assigned directly onto this
-            enterprise framework.
-          </span>
-        </div>
-        <AppStack direction="row" gap={1}>
-          <AppButton
-            variant="outlined"
-            colorVariant="neutral"
-            size="small"
-            rounded="md"
-            startIcon={<FiDownload />}
-            sx={{ height: 32, fontSize: "11.5px" }}
-          >
-            Export Members
-          </AppButton>
-          <AppButton
-            variant="contained"
-            colorVariant="primary"
-            size="small"
-            rounded="md"
-            startIcon={<FiPlus />}
-            sx={{ height: 32, fontSize: "11.5px", fontWeight: 700 }}
-          >
-            Add Member
-          </AppButton>
-        </AppStack>
-      </div>
+                  {/* FSSAI Registration */}
+                  <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-text-muted">
+                      <span>FSSAI Food Safety Reg</span>
+                      <span className="text-[10px] font-bold uppercase bg-surface px-1.5 py-0.2 rounded border border-border/60">
+                        14-Digit Token
+                      </span>
+                    </div>
+                    <div className="font-mono text-xs font-bold text-text pt-1">
+                      {license.fssaiNumber || "Not Registered"}
+                    </div>
+                  </div>
 
-      <div className="grid grid-cols-4 gap-3 border-b border-border bg-surface-alt/40 p-4">
-        <StatWidgetCard
-          label="Total Members"
-          value="12"
-          description="Registered inside profiles"
-        />
-        <StatWidgetCard
-          label="Active Members"
-          value="10"
-          description="Currently alive nodes"
-        />
-        <StatWidgetCard
-          label="Pending Invitations"
-          value="2"
-          description="Awaiting identity claims"
-        />
-        <StatWidgetCard
-          label="Inactive Members"
-          value="0"
-          description="Compliance pipeline locks"
-        />
-      </div>
+                  {/* License Classification */}
+                  <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-text-muted">
+                      <span>Classification</span>
+                      <FileCheck className="size-3.5 text-primary" />
+                    </div>
+                    <div className="text-xs font-bold text-text pt-1">
+                      {license.licenseType || "Standard Pharmaceutical"}
+                    </div>
+                  </div>
+                </div>
 
-      <div className="border-b border-border p-3 flex items-center justify-between bg-surface gap-4">
-        <AppSearchInput
-          placeholder="Search members by names, email metrics, or department indexes..."
-          size="small"
-          rounded="md"
-          variant="bordered"
-          sx={{ maxW: 360 }}
-        />
-        <AppStack direction="row" gap={1}>
-          <AppSelect
-            value="all"
-            options={[{ label: "Status: All", value: "all" }]}
-            size="small"
-            rounded="md"
-            variant="bordered"
-            sx={{ width: 110 }}
-          />
-          <AppSelect
-            value="all"
-            options={[{ label: "Roles: All", value: "all" }]}
-            size="small"
-            rounded="md"
-            variant="bordered"
-            sx={{ width: 110 }}
-          />
-          <AppButton
-            variant="outlined"
-            colorVariant="neutral"
-            size="small"
-            rounded="md"
-            startIcon={<FiFilter />}
-            sx={{ height: 32, fontSize: "11px" }}
-          >
-            Filters
-          </AppButton>
-        </AppStack>
-      </div>
+                {/* Validity Period Timeline Bar */}
+                {(license.issuedAt || license.expiresAt) && (
+                  <div className="mt-4 pt-3.5 border-t border-border/60 flex items-center justify-between text-xs text-text-muted">
+                    <div className="flex items-center gap-1.5">
+                      <Clock className="size-3.5 text-text-muted" />
+                      <span>Issued: <strong className="text-text font-mono">{formatDate(license.issuedAt)}</strong></span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="size-3.5 text-text-muted" />
+                      <span>Valid Thru: <strong className="text-text font-mono">{formatDate(license.expiresAt)}</strong></span>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-      <div className="w-full overflow-x-auto">
-        <table className="w-full border-collapse text-left min-w-[950px]">
-          <thead>
-            <tr className="border-b border-border bg-surface-alt/70 text-[11px] font-bold text-text-muted uppercase tracking-wider">
-              <th className="px-4 py-3">Member</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Department</th>
-              <th className="px-4 py-3">Joined On</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3">Last Active</th>
-              <th className="px-4 py-3">Added By</th>
-              <th className="px-4 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border text-[12px]">
-            {company.members?.map((member) => (
-              <tr
-                key={member._id}
-                className="hover:bg-surface-alt/40 transition"
-              >
-                <td className="px-4 py-3">
-                  <AppStack direction="row" align="center" gap={0.8}>
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-[10px] font-bold text-primary uppercase">
-                      {member.name.slice(0, 2)}
+              {/* Commercial Tax Credentials */}
+              <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+                <div className="flex items-center gap-2.5 pb-3 mb-4 border-b border-border/60">
+                  <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <FileText className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-text uppercase tracking-wider">
+                      Tax & Fiscal Identifiers
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Goods and Services Tax (GSTIN) and Income Tax Corporate PAN
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-text-muted block">
+                        Goods & Services Tax (GSTIN)
+                      </span>
+                      <span className="font-mono text-xs font-bold text-text mt-0.5 block">
+                        {gstin || "Not Registered"}
+                      </span>
+                    </div>
+                    {gstin && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(gstin, "gstin")}
+                        className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-surface transition-colors cursor-pointer"
+                        title="Copy GSTIN"
+                      >
+                        {copiedField === "gstin" ? (
+                          <Check className="size-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 flex items-center justify-between">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-text-muted block">
+                        Permanent Account Number (PAN)
+                      </span>
+                      <span className="font-mono text-xs font-bold text-text mt-0.5 block">
+                        {pan || "Not Registered"}
+                      </span>
+                    </div>
+                    {pan && (
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(pan, "pan")}
+                        className="p-1.5 rounded-lg text-text-muted hover:text-text hover:bg-surface transition-colors cursor-pointer"
+                        title="Copy PAN"
+                      >
+                        {copiedField === "pan" ? (
+                          <Check className="size-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="size-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Registered Corporate Headquarters (Physical Spatial Location) */}
+              <div className="bg-surface border border-border/90 rounded-2xl p-5 shadow-xs">
+                <div className="flex items-center gap-2.5 pb-3 mb-4 border-b border-border/60">
+                  <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <MapPin className="size-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-text uppercase tracking-wider">
+                      Registered Office Headquarters
+                    </h3>
+                    <p className="text-[11px] text-text-muted">
+                      Physical spatial mapping bound to invoices and delivery consignments
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-surface-alt/40 border border-border/60 space-y-2.5">
+                  <div className="flex items-start gap-2.5 text-xs">
+                    <MapPin className="size-4 text-primary shrink-0 mt-0.5" />
+                    <p className="font-semibold text-text leading-relaxed">
+                      {fullAddress || "Physical address not recorded"}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-border/40 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div>
+                      <span className="text-[10px] text-text-muted block">City / Town</span>
+                      <span className="font-semibold text-text">{address.city || "-"}</span>
                     </div>
                     <div>
-                      <span className="block font-bold text-text">
-                        {member.name}
-                      </span>
-                      <span className="block text-[10.5px] text-text-muted font-medium">
-                        {member.email}
-                      </span>
+                      <span className="text-[10px] text-text-muted block">District</span>
+                      <span className="font-semibold text-text">{address.district || "-"}</span>
                     </div>
-                  </AppStack>
-                </td>
-                <td className="px-4 py-3">
-                  <AppTag
-                    label={member.role}
-                    size="small"
-                    variant="soft"
-                    rounded="md"
-                    colorVariant={member.tagColor}
-                    sx={{ height: 20, fontSize: "10px", fontWeight: 700 }}
-                  />
-                </td>
-                <td className="px-4 py-3 text-text font-semibold">
-                  {member.department}
-                </td>
-                <td className="px-4 py-3 text-text-muted font-medium">
-                  {member.joinedOn}
-                </td>
-                <td className="px-4 py-3">
-                  <AppStatusBadge
-                    status={member.status}
-                    variant="soft"
-                    rounded="md"
-                    size="small"
-                  />
-                </td>
-                <td className="px-4 py-3 text-text font-medium">
-                  {member.lastActive}
-                </td>
-                <td className="px-4 py-3 text-text-muted font-semibold">
-                  {member.addedBy}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <AppIconButton
-                    icon={<FiMoreHorizontal />}
-                    size="small"
-                    variant="ghost"
-                    colorVariant="neutral"
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </AppCard>
-  );
-};
-
-/* ==========================================================================
-   4. CLOUD FILE STORAGE DOCUMENTS TAB SECTIONS
-   ========================================================================== */
-const DocumentsTabSection = ({ company }) => (
-  <AppCard
-    variant="default"
-    rounded="lg"
-    bordered
-    padding="none"
-    sx={sectionCardSx}
-  >
-    <div className="flex items-center justify-between border-b border-border px-4 py-3">
-      <div>
-        <span className="block text-[13.5px] font-bold text-text">
-          Corporate Compliance Asset Bin
-        </span>
-        <span className="block text-[11px] text-text-muted">
-          Repository catalog housing legal certifications and encryption
-          documents.
-        </span>
-      </div>
-      <AppButton
-        variant="contained"
-        colorVariant="primary"
-        size="small"
-        rounded="md"
-        startIcon={<FiPlus />}
-        sx={{ height: 32, fontSize: "11.5px", fontWeight: 700 }}
-      >
-        Upload Document
-      </AppButton>
-    </div>
-    <div className="p-4 grid grid-cols-4 gap-4">
-      {company.documents?.map((doc) => (
-        <AppCard
-          key={doc.id}
-          variant="default"
-          rounded="md"
-          bordered
-          sx={{
-            p: 3,
-            bg: "var(--app-color-surface)",
-            transition: "hover:shadow-md cursor-pointer",
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[26px] text-primary">
-              <FiFileText />
-            </span>
-            <AppIconButton
-              icon={<FiDownload />}
-              size="small"
-              variant="outlined"
-              colorVariant="neutral"
-              rounded="md"
-            />
-          </div>
-          <span className="block mt-4 text-[12.5px] font-bold text-text truncate">
-            {doc.name}
-          </span>
-          <span className="block mt-0.5 text-[10.5px] font-medium text-text-muted">
-            {doc.size} &bull; {doc.uploadedAt}
-          </span>
-        </AppCard>
-      ))}
-    </div>
-  </AppCard>
-);
-
-/* ==========================================================================
-   5. SETTINGS MODULE TAB COMPONENT PANELS
-   ========================================================================== */
-const SettingsTabSection = ({ company }) => (
-  <div className="grid grid-cols-3 gap-4">
-    <AppCard
-      variant="default"
-      rounded="lg"
-      bordered
-      padding="none"
-      sx={sectionCardSx}
-      className="col-span-2"
-    >
-      <SectionHeader
-        title="Compliance System Parameters"
-        description="Override validation parameters."
-      />
-      <div className="p-4 grid grid-cols-2 gap-4">
-        <SettingsKeyValueDisplay
-          label="Default Regional Currency Mapping"
-          value="INR (₹) - Indian Rupee"
-        />
-        <SettingsKeyValueDisplay
-          label="Invoicing Tax Model Architecture"
-          value="Unified CGST + SGST Pipeline Rules"
-        />
-        <SettingsKeyValueDisplay
-          label="Allow Backdated Ledger Mutations"
-          value="Enabled (Audit Logs Mandated)"
-        />
-        <SettingsKeyValueDisplay
-          label="Negative Product Inventory Balances"
-          value="Prevented (Stall Transactions Enabled)"
-        />
-      </div>
-    </AppCard>
-    <AppCard
-      variant="default"
-      rounded="lg"
-      bordered
-      padding="none"
-      sx={sectionCardSx}
-    >
-      <SectionHeader
-        title="Danger Zones"
-        description="Irreversible model lifecycle changes."
-      />
-      <div className="p-4 space-y-3">
-        <AppButton
-          variant="contained"
-          colorVariant="danger"
-          rounded="md"
-          size="small"
-          sx={{ width: "100%", height: 36, fontSize: "12px", fontWeight: 700 }}
-        >
-          Suspend Workspace Branch Linkage
-        </AppButton>
-        <AppButton
-          variant="outlined"
-          colorVariant="danger"
-          rounded="md"
-          size="small"
-          sx={{ width: "100%", height: 36, fontSize: "12px", fontWeight: 700 }}
-        >
-          Delete Corporate Log Record Archive
-        </AppButton>
-      </div>
-    </AppCard>
-  </div>
-);
-
-/* ==========================================================================
-   6. GLOBAL AUDIT ACTIVITY TRACKING TRAIL PANELS
-   ========================================================================== */
-const ActivityLogTabSection = ({ company }) => (
-  <AppCard
-    variant="default"
-    rounded="lg"
-    bordered
-    padding="none"
-    sx={sectionCardSx}
-  >
-    <SectionHeader
-      title="Global Ledger Mutation Streams"
-      description="Cryptographic transparency audit verification pipeline logs."
-    />
-    <div className="p-4 space-y-4 max-w-xl">
-      {company.activities?.map((act) => (
-        <div
-          key={act.id}
-          className="flex gap-4 items-start border-l-2 border-border pl-4 relative before:absolute before:h-2 before:w-2 before:bg-primary before:rounded-full before:-left-[5px] before:top-1"
-        >
-          <div>
-            <span className="block text-[12.5px] font-bold text-text leading-tight">
-              {act.text}
-            </span>
-            <span className="block mt-0.5 text-[11px] text-text-muted">
-              Mutated by context token{" "}
-              <span className="font-semibold text-text">{act.user}</span> &bull;{" "}
-              {act.time}
-            </span>
+                    <div>
+                      <span className="text-[10px] text-text-muted block">State</span>
+                      <span className="font-semibold text-text">{address.state || "-"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-text-muted block">PIN Code</span>
+                      <span className="font-semibold font-mono text-text">{address.pincode || "-"}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      ))}
-    </div>
-  </AppCard>
-);
-
-/* ==========================================================================
-   ATOM UTILITY UI REUSABLE MODULE COMPONENTS
-   ========================================================================== */
-const SectionHeader = ({ title, description }) => (
-  <div className="border-b border-border px-4 py-3 bg-surface">
-    <span className="block text-[13.5px] font-bold text-text">{title}</span>
-    {description && (
-      <span className="block text-[11px] text-text-muted mt-0.5">
-        {description}
-      </span>
-    )}
-  </div>
-);
-
-const InfoGridRow = ({ icon, label, value, link = false }) => (
-  <div className="grid grid-cols-[160px_1fr] items-start gap-4 text-[12px] py-0.5">
-    <div className="flex items-center gap-2 font-bold text-text-muted">
-      <span className="text-[14px] text-primary/80 shrink-0">{icon}</span>
-      <span>{label}</span>
-    </div>
-    <div
-      className={`font-bold text-text truncate max-w-[500px] ${link ? "text-primary cursor-pointer hover:underline flex items-center gap-1" : ""}`}
-    >
-      {value} {link && <FiExternalLink className="text-[10px]" />}
-    </div>
-  </div>
-);
-
-const HighlightMetricCard = ({ icon, title, value, subtext, color }) => (
-  <div className="rounded-xl border border-border p-3 bg-surface hover:shadow-xs transition select-none">
-    <div className="flex items-center gap-2.5">
-      <div
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${color} text-[15px]`}
-      >
-        {icon}
       </div>
-      <div>
-        <span className="block text-[10.5px] font-bold text-text-muted uppercase leading-none tracking-wide">
-          {title}
-        </span>
-        <span className="block mt-1 text-[17px] font-extrabold text-text leading-none">
-          {value}
-        </span>
-      </div>
-    </div>
-    <div className="mt-2.5 border-t border-border-strong/50 pt-1.5 flex items-center justify-between">
-      <span className="text-[10px] font-semibold text-text-muted">
-        {subtext}
-      </span>
-      <FiChevronRight className="text-[10px] text-text-muted" />
-    </div>
-  </div>
+    );
+  },
 );
 
-const StatusTrackingRow = ({ label, value }) => (
-  <div className="flex items-center justify-between gap-4 text-[12px]">
-    <span className="text-text-muted font-bold">{label}</span>
-    <div className="font-bold text-text text-right">{value}</div>
-  </div>
-);
-
-const StatWidgetCard = ({ label, value, description }) => (
-  <div className="rounded-lg border border-border p-3 bg-surface">
-    <span className="block text-[10.5px] font-bold text-text-muted uppercase tracking-wider">
-      {label}
-    </span>
-    <span className="block mt-1 text-[20px] font-extrabold text-text leading-none">
-      {value}
-    </span>
-    <span className="block mt-1.5 text-[10px] text-text-muted font-medium">
-      {description}
-    </span>
-  </div>
-);
-
-const SettingsKeyValueDisplay = ({ label, value }) => (
-  <div className="rounded-lg border border-border p-3 bg-surface-alt/30">
-    <span className="block text-[11px] font-bold text-text-muted uppercase tracking-wider">
-      {label}
-    </span>
-    <span className="block mt-1 text-[12.5px] font-bold text-text">
-      {value}
-    </span>
-  </div>
-);
-
-/* ==========================================================================
-   STYLE OBJECT MAPS (THEME DESIGN PRIMARY primitivetokens)
-   ========================================================================== */
-const breadcrumbSx = { mb: 1.5 };
-const breadcrumbItemSx = {
-  fontSize: "12px",
-  color: "var(--app-color-text-muted)",
-  fontW: 500,
-};
-const breadcrumbCurrentSx = {
-  fontSize: "12px",
-  fontWeight: 650,
-  color: "var(--app-color-text)",
-};
-
-const pageTitleSx = {
-  m: 0,
-  fontSize: "22px",
-  lineHeight: 1.15,
-  letterSpacing: "-0.45px",
-  color: "var(--app-color-text)",
-};
-
-const subHeaderMetaDataSx = {
-  mt: 0.35,
-  fontSize: "12px",
-  fontWeight: 600,
-  color: "var(--app-color-text-muted)",
-};
-
-const secondaryButtonSx = {
-  height: 34,
-  px: 1.5,
-  fontSize: "12px",
-  fontWeight: 650,
-  bgcolor: "var(--app-color-surface)",
-  boxShadow: "none",
-};
-
-const sectionCardSx = {
-  overflow: "hidden",
-  bgcolor: "var(--app-color-surface)",
-  borderColor: "var(--app-color-border)",
-  boxShadow: "var(--app-shadow-xs)",
-};
+CompanyDetailsDesktopPage.displayName = "CompanyDetailsDesktopPage";
 
 export default CompanyDetailsDesktopPage;

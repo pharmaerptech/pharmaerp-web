@@ -2,15 +2,18 @@
 
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { closeBusinessDay } from "../store/businessDayThunk";
+import { closeBusinessDay, initiateBusinessDayClose, abortBusinessDayClose } from "../store/businessDayThunk";
 import { clearBusinessDayError, resetCloseBusinessDayStatus } from "../store/businessDaySlice";
 import businessDayService from "../services/businessDayService";
-import { API_STATUS } from "@/constants";
+import { API_STATUS, TOKEN_KEY } from "@/constants";
+import { storage } from "@/utils";
+import env from "@/config/env";
 import {
   UIModal,
   UIButton,
   UIBadge,
   UIEmptyState,
+  UIConfirmDialog,
 } from "@/components/ui";
 import {
   Lock,
@@ -78,12 +81,75 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
   const [confirmed, setConfirmed] = useState(false);
   const [viewShift, setViewShift] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [showFinalizeConfirm, setShowFinalizeConfirm] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  const isClosedRef = React.useRef(false);
+  useEffect(() => {
+    isClosedRef.current = Boolean(
+      businessDay?.status === "closed" ||
+      closeBusinessDayStatus === API_STATUS.SUCCESS
+    );
+  }, [businessDay?.status, closeBusinessDayStatus]);
+
+  // Option 1: Abort closing automatically if the user refreshes, navigates away, or closes the tab/browser
+  useEffect(() => {
+    if (!isOpen || !businessDay?._id || businessDay.status === "closed" || closeBusinessDayStatus === API_STATUS.SUCCESS) {
+      return;
+    }
+
+    const abortClosingOnUnload = () => {
+      if (isClosedRef.current) return;
+      const token = storage.get(TOKEN_KEY);
+      const headers = {
+        "Content-Type": "application/json",
+      };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      const companyId = localStorage.getItem("pahuch_active_company_id");
+      if (companyId) headers["x-company-id"] = companyId;
+      const branchId = localStorage.getItem("pahuch_active_branch_id");
+      if (branchId) headers["x-branch-id"] = branchId;
+      const workMode = localStorage.getItem("pahuch_work_mode");
+      if (workMode) headers["x-work-mode"] = workMode;
+      const pipelineLevel = localStorage.getItem("pahuch_pipeline_level");
+      if (pipelineLevel) headers["x-pipeline-level"] = pipelineLevel;
+
+      const url = `${env.API_BASE_URL}/operations/business-days/${businessDay._id}/abort-close`;
+
+      try {
+        fetch(url, {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({}),
+          keepalive: true,
+        }).catch(() => {});
+      } catch {
+        try {
+          navigator.sendBeacon?.(url, new Blob([JSON.stringify({})], { type: "application/json" }));
+        } catch {}
+      }
+    };
+
+    window.addEventListener("pagehide", abortClosingOnUnload);
+    window.addEventListener("beforeunload", abortClosingOnUnload);
+
+    return () => {
+      window.removeEventListener("pagehide", abortClosingOnUnload);
+      window.removeEventListener("beforeunload", abortClosingOnUnload);
+    };
+  }, [isOpen, businessDay?._id, businessDay?.status, closeBusinessDayStatus]);
 
   useEffect(() => {
     if (isOpen && businessDay?._id) {
       setLoading(true);
       setNote("");
       setConfirmed(false);
+      // Auto-initiate closing to lock concurrent shift openings across devices
+      if (businessDay.status !== "closed") {
+        dispatch(initiateBusinessDayClose(businessDay._id));
+      }
       businessDayService
         .getBusinessDaySummary(businessDay._id)
         .then((res) => {
@@ -96,7 +162,27 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
       setNote("");
       setConfirmed(false);
     }
-  }, [isOpen, businessDay?._id]);
+  }, [isOpen, businessDay?._id, dispatch]);
+
+  const handleRequestCancel = () => {
+    if (!businessDay?._id || businessDay.status === "closed" || closeBusinessDayStatus === API_STATUS.SUCCESS) {
+      onClose();
+      return;
+    }
+    setShowCancelConfirm(true);
+  };
+
+  const handleConfirmAbortClose = async () => {
+    setShowCancelConfirm(false);
+    if (businessDay?._id && businessDay.status !== "closed" && closeBusinessDayStatus !== API_STATUS.SUCCESS) {
+      try {
+        await dispatch(abortBusinessDayClose(businessDay._id)).unwrap();
+      } catch (e) {
+        console.warn("[CloseBusinessDayDialog] Could not abort business day close:", e);
+      }
+    }
+    onClose();
+  };
 
   useEffect(() => {
     if (closeBusinessDayStatus === API_STATUS.SUCCESS) {
@@ -223,8 +309,14 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
 
   const isLoading = closeBusinessDayStatus === API_STATUS.LOADING;
 
-  const handleClose = () => {
+  const handleClickCloseDay = () => {
     if (!businessDay?._id || !confirmed || hasOpenShifts) return;
+    setShowFinalizeConfirm(true);
+  };
+
+  const proceedCloseBusinessDay = () => {
+    isClosedRef.current = true;
+    setShowFinalizeConfirm(false);
     const lastShift = shifts.length > 0 ? shifts[shifts.length - 1] : null;
     const lastShiftActual = lastShift
       ? (lastShift.actualClosingCashAmount ?? lastShift.actualCash ?? lastShift.expectedClosingCashAmount ?? lastShift.expectedCash)
@@ -247,7 +339,7 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
     <>
       <UIModal
         isOpen={isOpen}
-        onClose={onClose}
+        onClose={handleRequestCancel}
         showCloseButton={false}
         className="w-[960px] sm:w-[1000px] lg:w-[1020px] max-w-[95vw] h-[84vh] max-h-[760px] min-h-[540px] rounded-2xl border border-border bg-surface shadow-2xl p-4 sm:p-5 flex flex-col overflow-hidden select-none"
       >
@@ -259,11 +351,20 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
             </div>
 
             <div>
-              <h3 className="text-base sm:text-[17px] font-bold text-text tracking-tight leading-none">
-                Close Business Day Session
-              </h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base sm:text-[17px] font-bold text-text tracking-tight leading-none">
+                  You are closing Business Day
+                </h3>
+                <span className="font-mono text-xs px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-400 font-bold border border-amber-500/30">
+                  {bd.businessDayNo || "BD-000"}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30">
+                  <span className="size-1.5 rounded-full bg-amber-500 animate-ping" />
+                  Closing in Progress
+                </span>
+              </div>
               <p className="text-[11px] sm:text-xs text-text-muted mt-0.5 leading-tight">
-                Review summary and finalize the business day
+                Review summary and finalize this business day session
               </p>
             </div>
           </div>
@@ -271,9 +372,9 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
           {/* Circular Close Button */}
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleRequestCancel}
             className="size-7 sm:size-7.5 rounded-full bg-surface-alt hover:bg-surface-hover text-text-muted hover:text-text flex items-center justify-center transition-colors cursor-pointer shrink-0"
-            aria-label="Close dialog"
+            aria-label="Cancel closing"
           >
             <X className="size-3.5 sm:size-4" />
           </button>
@@ -739,7 +840,7 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
             type="button"
             variant="outline"
             size="sm"
-            onClick={onClose}
+            onClick={handleRequestCancel}
             className="h-8.5 px-4 text-xs font-medium rounded-lg"
           >
             Cancel
@@ -748,7 +849,7 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
           <UIButton
             type="button"
             size="sm"
-            onClick={handleClose}
+            onClick={handleClickCloseDay}
             disabled={!confirmed || hasOpenShifts || isLoading}
             isLoading={isLoading}
             startIcon={<LockKeyhole className="size-3.5" />}
@@ -758,6 +859,34 @@ export const CloseBusinessDayDialog = ({ isOpen, onClose, businessDay }) => {
           </UIButton>
         </div>
       </UIModal>
+
+      {/* ── Confirmation Modal: Finalize Close ── */}
+      <UIConfirmDialog
+        isOpen={showFinalizeConfirm}
+        onClose={() => setShowFinalizeConfirm(false)}
+        onConfirm={proceedCloseBusinessDay}
+        intent="warning"
+        title="Confirm Business Day Closure"
+        description="Do you really want to close this Business Day? Finalizing will lock daily sales and post consolidated cash & UPI journal balances. A new business day session will be needed for future transactions."
+        confirmText="Yes, Close Business Day"
+        cancelText="Go Back"
+        itemName={bd.businessDayNo || "Active Day"}
+        itemDetails={`Business Date: ${formatFullDate(bd.businessDate)} · Total Shifts: ${shifts.length}`}
+        isLoading={isLoading}
+      />
+
+      {/* ── Confirmation Modal: Cancel / Abort Close ── */}
+      <UIConfirmDialog
+        isOpen={showCancelConfirm}
+        onClose={() => setShowCancelConfirm(false)}
+        onConfirm={handleConfirmAbortClose}
+        intent="info"
+        title="Cancel Business Day Closing?"
+        description="Do you want to cancel the closing of this Business Day? Cancelling will abort the closing reconciliation and return the Business Day to Active (Open) status across all devices."
+        confirmText="Yes, Cancel Closing (Keep Open)"
+        cancelText="Continue Closing"
+        itemName={bd.businessDayNo || "Active Day"}
+      />
 
       {/* Shift details overlay */}
       {viewShift && (

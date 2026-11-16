@@ -6,13 +6,18 @@ import { useSelector } from "react-redux";
 import { uiToast } from "@/components/ui";
 
 import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
+import { useWorkMode, WORK_MODES } from "@/contexts/WorkModeContext";
 import BranchDashboardPage from "./BranchDashboardPage";
 import CompanyDashboardPage from "./CompanyDashboardPage";
 import WorkspaceDashboardPage from "./WorkspaceDashboardPage";
+import { WorkspaceOperationsStarterPage } from "@/features/workspace/pages";
+import { CompanyOperationsStarterPage } from "@/features/company/pages";
+import { BranchOperationsStarterPage } from "@/features/branch/pages";
 
 export const MainDashboardPage = (props) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { workMode } = useWorkMode();
   const { isWorkspaceLevel, isCompanyLevel, isBranchLevel } =
     useNavigationPipeline();
 
@@ -37,19 +42,33 @@ export const MainDashboardPage = (props) => {
     }
   }, [location, navigate]);
 
-  // Contextual Dashboard Resolution based on Elevator Pipeline Level
+  const isOp = workMode === WORK_MODES.OPERATION;
+
+  // Contextual Dashboard Resolution based on Elevator Pipeline Level & Work Mode
   if (isWorkspaceLevel) {
     const wsKey = currentWorkspace?._id || currentWorkspace?.id || "ws";
-    return <WorkspaceDashboardPage key={`workspace-${wsKey}`} {...props} />;
+    return isOp ? (
+      <WorkspaceOperationsStarterPage key={`workspace-op-${wsKey}`} {...props} />
+    ) : (
+      <WorkspaceDashboardPage key={`workspace-view-${wsKey}`} {...props} />
+    );
   }
 
   if (isCompanyLevel) {
     const compKey = currentCompany?._id || currentCompany?.id || "comp";
-    return <CompanyDashboardPage key={`company-${compKey}`} {...props} />;
+    return isOp ? (
+      <CompanyOperationsStarterPage key={`company-op-${compKey}`} {...props} />
+    ) : (
+      <CompanyDashboardPage key={`company-view-${compKey}`} {...props} />
+    );
   }
 
   const branchKey = currentBranch?._id || currentBranch?.id || "branch";
-  return <BranchDashboardPage key={`branch-${branchKey}`} {...props} />;
+  return isOp ? (
+    <BranchOperationsStarterPage key={`branch-op-${branchKey}`} {...props} />
+  ) : (
+    <BranchDashboardPage key={`branch-view-${branchKey}`} {...props} />
+  );
 };
 
 export default MainDashboardPage;

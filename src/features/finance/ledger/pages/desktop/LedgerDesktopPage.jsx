@@ -35,11 +35,14 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useAccount from "@/features/finance/chart-of-accounts/accounts/hooks/useAccount";
+import { useCompanyFilter } from "@/hooks";
+import { CompanyFilterSelect } from "@/components/shared";
 import ledgerService from "../../services/ledgerService";
 import { LedgerEntryDetailsDialog } from "../../components";
 
@@ -88,6 +91,7 @@ export const LedgerDesktopPage = () => {
   const { currentWorkspace } = useWorkspace();
   const { currentBranch } = useBranch();
   const { accounts = [], getAccounts } = useAccount();
+  const companyFilter = useCompanyFilter();
 
   const tableContainerRef = useRef(null);
   const hasFetchedAccountsRef = useRef(false);
@@ -250,6 +254,7 @@ export const LedgerDesktopPage = () => {
         limit: PAGE_LIMIT,
         accountId: selectedAccountId || undefined,
         branchId: currentBranch?._id,
+        companyId: companyFilter?.queryCompanyId,
         sort: "-voucherDate -createdAt",
         ...dateParams,
       };
@@ -310,7 +315,7 @@ export const LedgerDesktopPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentWorkspace, currentBranch?._id, selectedAccountId, activeAccount, buildDateParams]);
+  }, [currentWorkspace, currentBranch?._id, selectedAccountId, activeAccount, buildDateParams, companyFilter?.queryCompanyId]);
 
   // Load next batch via Infinite Scroll
   const handleLoadMore = useCallback(async () => {
@@ -326,6 +331,7 @@ export const LedgerDesktopPage = () => {
         limit: PAGE_LIMIT,
         accountId: selectedAccountId || undefined,
         branchId: currentBranch?._id,
+        companyId: companyFilter?.queryCompanyId,
         sort: "-voucherDate -createdAt",
         ...dateParams,
       };
@@ -360,6 +366,7 @@ export const LedgerDesktopPage = () => {
     buildDateParams,
     totalCount,
     ledgerEntries.length,
+    companyFilter?.queryCompanyId,
   ]);
 
   // Trigger fetch on parameter change
@@ -622,6 +629,14 @@ export const LedgerDesktopPage = () => {
           />
         </div>
 
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
+
         {/* Date Range Selector Dropdown */}
         <div className="w-[140px] sm:w-[160px]">
           <UISelect
@@ -706,11 +721,8 @@ export const LedgerDesktopPage = () => {
       </div>
 
       {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ──── */}
-      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-        <div
-          ref={tableContainerRef}
-          className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0"
-        >
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef}>
           <UITable
             stickyHeader
             containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -926,7 +938,7 @@ export const LedgerDesktopPage = () => {
               }
             />
           )}
-        </div>
+        </UITableScrollArea>
       </div>
       {/* ── 4. View Ledger Entry Details Modal Dialog ───────────────────── */}
       <LedgerEntryDetailsDialog

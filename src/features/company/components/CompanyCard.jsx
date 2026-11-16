@@ -1,13 +1,12 @@
 // src/features/company/components/CompanyCard.jsx
 
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   Building2,
   MoreHorizontal,
   Eye,
   Edit3,
-  Settings,
   Users,
   Trash2,
   Layers,
@@ -18,7 +17,6 @@ import {
   Activity,
   HeartPulse,
   Database,
-  Briefcase,
 } from "lucide-react";
 import {
   UIDropdown,
@@ -122,7 +120,6 @@ export const CompanyCard = ({
   company,
   onView,
   onEdit,
-  onSettings,
   onViewEmployees,
   onDelete,
 }) => {
@@ -135,7 +132,11 @@ export const CompanyCard = ({
   const memberCountText = formatMemberCount(company);
   const locationText = formatLocation(company);
   const lastInteractionText = formatLastInteraction(company);
-  const industryText = company?.displayType || company?.type || "Technology";
+  const industryText =
+    (company?.industry ? company.industry.replace(/_/g, " ") : null) ||
+    company?.displayType ||
+    company?.type ||
+    "Healthcare";
 
   return (
     <motion.div
@@ -178,12 +179,12 @@ export const CompanyCard = ({
               </UIIconButton>
             </UIDropdownTrigger>
 
-            <UIDropdownMenu width="w-48">
+            <UIDropdownMenu width="w-44">
               <UIDropdownItem
                 icon={<Eye className="w-4 h-4" />}
                 onClick={() => onView?.(company)}
               >
-                View Details
+                View Company
               </UIDropdownItem>
               <UIDropdownItem
                 icon={<Edit3 className="w-4 h-4" />}
@@ -191,20 +192,18 @@ export const CompanyCard = ({
               >
                 Edit Company
               </UIDropdownItem>
-              <UIDropdownItem
-                icon={<Users className="w-4 h-4" />}
-                onClick={() => onViewEmployees?.(company)}
-              >
-                Staff & Access
-              </UIDropdownItem>
-              <UIDropdownDivider />
-              <UIDropdownItem
-                destructive
-                icon={<Trash2 className="w-4 h-4" />}
-                onClick={() => onDelete?.(company)}
-              >
-                Delete Profile
-              </UIDropdownItem>
+              {onDelete && (
+                <>
+                  <UIDropdownDivider />
+                  <UIDropdownItem
+                    destructive
+                    icon={<Trash2 className="w-4 h-4" />}
+                    onClick={() => onDelete?.(company)}
+                  >
+                    Delete Company
+                  </UIDropdownItem>
+                </>
+              )}
             </UIDropdownMenu>
           </UIDropdown>
         </div>

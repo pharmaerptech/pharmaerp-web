@@ -6,6 +6,8 @@ import { useNavigate } from "react-router-dom";
 import { API_STATUS } from "@/constants";
 import { useIsMobile } from "@/hooks";
 import { UIConfirmDialog, UI_TOOLBAR_VIEWS } from "@/components/ui";
+import { useNavigationPipeline, PIPELINE_LEVELS } from "@/contexts/NavigationPipelineContext";
+import { useCompanyFilter } from "@/hooks";
 
 import useBranch from "../hooks/useBranch";
 import useCompany from "@/features/company/hooks/useCompany";
@@ -99,13 +101,20 @@ const BranchesPage = () => {
   const isMobile = useIsMobile();
   const hasFetchedRef = useRef(false);
 
+  const { currentLevel } = useNavigationPipeline();
+  const isWorkspaceLevel =
+    currentLevel === PIPELINE_LEVELS.WORKSPACE || currentLevel === "workspace";
+  const companyFilter = useCompanyFilter();
+
   const { currentCompany } = useCompany();
 
   const {
     branches,
     getCompanyBranches,
+    getWorkspaceBranches,
     deleteBranch,
     getCompanyBranchesStatus,
+    getWorkspaceBranchesStatus,
     deleteBranchStatus,
     error,
     message,
@@ -123,12 +132,29 @@ const BranchesPage = () => {
   const [selectedBranchForEmployees, setSelectedBranchForEmployees] = useState(null);
   const [isEmployeeDrawerOpen, setIsEmployeeDrawerOpen] = useState(false);
 
-  const isLoading =
-    getCompanyBranchesStatus === API_STATUS.LOADING || !currentCompany?._id;
+  const isLoading = isWorkspaceLevel
+    ? getWorkspaceBranchesStatus === API_STATUS.LOADING ||
+      getCompanyBranchesStatus === API_STATUS.LOADING
+    : getCompanyBranchesStatus === API_STATUS.LOADING || !currentCompany?._id;
   const isDeleting = deleteBranchStatus === API_STATUS.LOADING;
-  const hasError = getCompanyBranchesStatus === API_STATUS.ERROR;
+  const hasError = isWorkspaceLevel
+    ? getWorkspaceBranchesStatus === API_STATUS.ERROR
+    : getCompanyBranchesStatus === API_STATUS.ERROR;
 
   const fetchBranches = useCallback(async () => {
+    if (isWorkspaceLevel) {
+      try {
+        if (!companyFilter.selectedCompanyId || companyFilter.selectedCompanyId === "all") {
+          await getWorkspaceBranches();
+        } else {
+          await getCompanyBranches(companyFilter.selectedCompanyId);
+        }
+      } catch {
+        // Regulated by store selectors
+      }
+      return;
+    }
+
     if (!currentCompany?._id) return;
 
     try {
@@ -136,15 +162,26 @@ const BranchesPage = () => {
     } catch {
       // Regulated by store selectors
     }
-  }, [getCompanyBranches, currentCompany?._id]);
+  }, [
+    isWorkspaceLevel,
+    companyFilter.selectedCompanyId,
+    getWorkspaceBranches,
+    getCompanyBranches,
+    currentCompany?._id,
+  ]);
 
   useEffect(() => {
+    if (isWorkspaceLevel) {
+      fetchBranches();
+      return;
+    }
+
     if (!currentCompany?._id) return;
     if (hasFetchedRef.current === currentCompany._id) return;
 
     hasFetchedRef.current = currentCompany._id;
     fetchBranches();
-  }, [currentCompany?._id, fetchBranches]);
+  }, [isWorkspaceLevel, companyFilter.selectedCompanyId, currentCompany?._id, fetchBranches]);
 
   const mappedBranches = useMemo(
     () => (Array.isArray(branches) ? branches : []).map(mapBranchForView),
@@ -372,9 +409,10 @@ const BranchesPage = () => {
   }, []);
 
   const handleRequestDeleteBranch = useCallback((branch) => {
+    if (mappedBranches.length <= 1) return;
     setSelectedBranch(branch || null);
     setIsDeleteModalOpen(true);
-  }, []);
+  }, [mappedBranches.length]);
 
   const handleCloseDeleteModal = useCallback(() => {
     if (isDeleting) return;
@@ -426,6 +464,7 @@ const BranchesPage = () => {
     statusOptions,
     companyOptions,
     branchTypeOptions,
+    companyFilter,
 
     isLoading,
     isDeleting,
@@ -437,6 +476,9 @@ const BranchesPage = () => {
     filteredBranchesCount: filteredAndSortedBranches.length,
     hasBranches: mappedBranches.length > 0,
     hasFilteredBranches: filteredAndSortedBranches.length > 0,
+    isWorkspaceLevel,
+    canCreateBranch: !isWorkspaceLevel,
+    canDeleteBranch: mappedBranches.length > 1,
 
     handleFilterChange,
     handleSearchChange,

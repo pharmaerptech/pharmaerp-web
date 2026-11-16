@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation } from "react-router-dom";
 import { API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useBranchFilter } from "@/hooks";
 import { UI_TOOLBAR_VIEWS } from "@/components/ui";
 
 import {
@@ -46,6 +46,12 @@ const BusinessDaysPage = () => {
   const { businessDays, openBusinessDay, listBusinessDaysStatus, error, message } =
     useSelector((state) => state.businessDay);
   const { currentBranch } = useBranch();
+  const {
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
+    queryBranchId,
+  } = useBranchFilter();
 
   const [filters, setFilters] = useState(initialFilters);
   const [sortBy, setSortBy] = useState("desc");
@@ -65,15 +71,16 @@ const BusinessDaysPage = () => {
 
   const fetchBusinessDaysData = useCallback(() => {
     const params = {};
-    if (currentBranch?._id) {
-      params.branchId = currentBranch._id;
-      dispatch(getOpenBusinessDay(currentBranch._id));
+    const activeBranchId = isCompanyLevel ? queryBranchId : currentBranch?._id;
+    if (activeBranchId) {
+      params.branchId = activeBranchId;
+      dispatch(getOpenBusinessDay(activeBranchId));
     }
     if (filters.date) params.date = filters.date;
     if (filters.status !== "all") params.status = filters.status;
     params.sort = sortBy;
     dispatch(listBusinessDays(params));
-  }, [dispatch, currentBranch?._id, filters.date, filters.status, sortBy]);
+  }, [dispatch, isCompanyLevel, queryBranchId, currentBranch?._id, filters.date, filters.status, sortBy]);
 
   useEffect(() => {
     fetchBusinessDaysData();
@@ -276,6 +283,11 @@ const BusinessDaysPage = () => {
     handleClearFilters,
     handleRefresh,
     clearMessage: () => dispatch(clearBusinessDayMessage()),
+
+    // Branch filter state (Company Level Only)
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
 
     // Dialog state handlers
     openBusinessDay,

@@ -514,6 +514,105 @@ body {
   background-color: var(--app-color-border-strong);
 }
 
+/* ============================================================================
+   Table & Infinite Scroll Containers: Native Scrollbars Zero Layout Width
+   The native scrollbars are hidden so the table gets 100% full width with zero offset.
+   A floating overlay scrollbar is rendered directly over the table (WhatsApp style).
+============================================================================ */
+.table-scroll-container,
+[data-table-scroll],
+.auto-scroll-hide,
+[data-auto-scroll-hide],
+div.overflow-y-auto:has(table),
+div.overflow-x-auto:has(table),
+div.overflow-auto:has(table),
+div:has(> table),
+div:has(table.w-full),
+div:has(.ui-infinite-scroll),
+div:has([data-infinite-scroll]) {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.table-scroll-container::-webkit-scrollbar,
+[data-table-scroll]::-webkit-scrollbar,
+.auto-scroll-hide::-webkit-scrollbar,
+[data-auto-scroll-hide]::-webkit-scrollbar,
+div.overflow-y-auto:has(table)::-webkit-scrollbar,
+div.overflow-x-auto:has(table)::-webkit-scrollbar,
+div.overflow-auto:has(table)::-webkit-scrollbar,
+div:has(> table)::-webkit-scrollbar,
+div:has(table.w-full)::-webkit-scrollbar,
+div:has(.ui-infinite-scroll)::-webkit-scrollbar,
+div:has([data-infinite-scroll])::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+}
+
+/* ============================================================================
+   Floating Overlay Scrollbars (Superimposed over content, zero layout width)
+   Similar to WhatsApp Web / modern desktop overlay scrollbars
+============================================================================ */
+.table-overlay-scrollbar-thumb {
+  position: absolute;
+  border-radius: 9999px;
+  background-color: var(--app-color-primary, #00994a);
+  z-index: 50;
+  pointer-events: auto;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.2s ease-out, background-color 0.15s ease, width 0.15s ease, height 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.table-overlay-scrollbar-thumb:hover,
+.table-overlay-scrollbar-thumb.is-dragging {
+  background-color: var(--app-color-primary-hover, #00833f);
+}
+
+.table-overlay-scrollbar-thumb:active,
+.table-overlay-scrollbar-thumb.is-dragging {
+  cursor: grabbing;
+}
+
+.table-overlay-scrollbar-v {
+  top: 0;
+  right: 3px;
+  width: 6px;
+}
+
+.table-overlay-scrollbar-v:hover,
+.table-overlay-scrollbar-v.is-dragging {
+  width: 8px;
+  right: 2px;
+}
+
+.table-overlay-scrollbar-h {
+  bottom: 3px;
+  left: 0;
+  height: 6px;
+}
+
+.table-overlay-scrollbar-h:hover,
+.table-overlay-scrollbar-h.is-dragging {
+  height: 8px;
+  bottom: 2px;
+}
+
+.table-overlay-scrollbar-thumb.is-scrolling {
+  opacity: 0.9 !important;
+}
+
+.table-overlay-scrollbar-thumb.is-scrolling:hover,
+.table-overlay-scrollbar-thumb.is-dragging {
+  opacity: 1 !important;
+}
+
 /* Remove number input up/down stepper spinners */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {

@@ -183,7 +183,8 @@ const CreateCompanyMobilePage = memo(
                   rounded="md"
                   startIcon={<FiCheckCircle />}
                   onClick={handleSubmit}
-                  loading={isLoading}
+                  isLoading={isLoading}
+                  loadingText="Creating Company..."
                   disabled={isLoading}
                   sx={actionButtonRightSx}
                 >

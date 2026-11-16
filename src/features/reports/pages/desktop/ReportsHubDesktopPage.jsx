@@ -58,10 +58,10 @@ export const ReportsHubDesktopPage = () => {
   };
 
   return (
-    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-3 sm:px-4 md:px-5 pt-0 pb-3 gap-3.5 text-text font-sans transition-colors overflow-hidden">
+    <div className="w-full min-h-full flex-1 flex flex-col bg-bg px-3 sm:px-4 md:px-5 pt-0 pb-6 gap-3.5 text-text font-sans transition-colors">
       {activeReportContext ? (
         /* ── General Report Subdivision & Detail View (All Categories) ─── */
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+        <div className="flex-1 min-h-0">
           <ReportDetailView
             categoryKey={activeReportContext.catKey}
             initialTabKey={activeReportContext.tabKey}
@@ -78,7 +78,7 @@ export const ReportsHubDesktopPage = () => {
           </div>
 
           {/* 2. 3x3 Grid of 9 Category Cards (All 45 Reports) - Filter Toolbar Removed */}
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          <div className="flex-1">
             <ReportsDirectoryGrid
               onSelectReport={handleSelectReport}
             />

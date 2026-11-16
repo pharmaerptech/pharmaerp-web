@@ -1,6 +1,7 @@
 import { RouterProvider } from "react-router-dom";
 import { router } from "./routes";
 import { useEffect } from "react";
+import { initAllOverlayScrollbars } from "@/utils/overlayScrollbar";
 
 const App = () => {
   useEffect(() => {
@@ -45,6 +46,12 @@ const App = () => {
     const interval = setInterval(hideGoogleTranslateBar, 500);
 
     return () => clearInterval(interval);
+  }, []);
+
+  // Global floating overlay scrollbars for all tables, infinite scroll containers, and fixed-viewport pages (WhatsApp style)
+  useEffect(() => {
+    const cleanup = initAllOverlayScrollbars();
+    return cleanup;
   }, []);
 
   return <RouterProvider router={router} />;

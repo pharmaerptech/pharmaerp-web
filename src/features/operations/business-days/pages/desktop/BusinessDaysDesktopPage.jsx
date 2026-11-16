@@ -30,6 +30,7 @@ import {
   UITableCell,
   UIInfiniteScroll,
   UITableLoading,
+  UITableScrollArea,
 } from "@/components/ui";
 
 import {
@@ -37,6 +38,7 @@ import {
   ViewBusinessDayDialog,
   CloseBusinessDayDialog,
 } from "../../components";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 import { cn } from "@/lib/utils";
 
 const formatDate = (val) => {
@@ -96,6 +98,11 @@ export const BusinessDaysDesktopPage = ({
   clearMessage,
 
   hasBusinessDays = false,
+
+  // Branch filter state (Company Level Only)
+  isCompanyLevel = false,
+  selectedBranchId = "all",
+  setSelectedBranchId,
 
   // Dialog controls
   openBusinessDay,
@@ -246,9 +253,21 @@ export const BusinessDaysDesktopPage = ({
       </div>
 
       {/* ── 2. Streamlined Single-Row Filter Toolbar ─────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-3.5 shrink-0">
+        {/* Branch Filter (Company Level Only) */}
+        {isCompanyLevel && (
+          <div className="w-[190px] sm:w-[210px] shrink-0">
+            <BranchFilterSelect
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              size="md"
+              className="w-full"
+            />
+          </div>
+        )}
+
         {/* Search Input */}
-        <div className="w-[200px] sm:w-[240px] lg:w-[280px]">
+        <div className="w-[220px] sm:w-[260px] lg:w-[290px] shrink-0">
           <UIInput
             type="text"
             value={filters.search || ""}
@@ -396,11 +415,8 @@ export const BusinessDaysDesktopPage = ({
           />
         </div>
       ) : (
-        <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-          <div
-            ref={tableContainerRef}
-            className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0 divide-y divide-border/60"
-          >
+        <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+          <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
             <UITable
               stickyHeader
               containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -468,7 +484,11 @@ export const BusinessDaysDesktopPage = ({
 
                       {/* Branch */}
                       <UITableCell className="text-text font-medium truncate">
-                        {branchName}
+                        {bd.branchId ? (
+                          <BranchBadge branch={bd.branchId} />
+                        ) : (
+                          branchName
+                        )}
                       </UITableCell>
 
                       {/* Status */}
@@ -581,7 +601,7 @@ export const BusinessDaysDesktopPage = ({
                 ) : null
               }
             />
-          </div>
+          </UITableScrollArea>
         </div>
       )}
 

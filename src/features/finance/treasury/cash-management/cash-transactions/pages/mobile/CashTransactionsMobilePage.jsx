@@ -26,6 +26,7 @@ import {
 } from "@/components";
 import { ROUTES } from "@/constants";
 import { formatCurrency, formatDate } from "@/utils";
+import { BranchFilterSelect } from "@/components/shared";
 import { CashTransactionDetailsDialog } from "../../components";
 import { BillingInvoiceDetailsDrawer } from "@/features/billing/components/BillingInvoiceDetailsDrawer";
 
@@ -59,6 +60,9 @@ const CashTransactionsMobilePage = ({
   pageSize,
   totalTransactions,
   isLoading = false,
+  isCompanyLevel = false,
+  selectedBranchId = "all",
+  setSelectedBranchId,
   error,
   clearError,
   handleSearchChange,
@@ -163,6 +167,16 @@ const CashTransactionsMobilePage = ({
         </AppBox>
 
         {/* Search & Filters Toolbar */}
+        {isCompanyLevel && (
+          <div className="mb-2">
+            <BranchFilterSelect
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              size="sm"
+              className="w-full"
+            />
+          </div>
+        )}
         <div className="px-0 mb-3 flex gap-2">
           <AppInput
             name="search"

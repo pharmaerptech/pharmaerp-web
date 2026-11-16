@@ -4,34 +4,239 @@ import React, { memo, useEffect } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  Briefcase,
   Check,
   CheckCircle,
+  CheckCircle2,
   Edit3,
-  FileText,
-  Globe,
-  Grid,
-  Info,
   Mail,
   MapPin,
   Phone,
   RotateCcw,
-  CloudUpload,
-  User,
   Building2,
-  AlertTriangle,
   Scale,
-  Stethoscope
+  Sparkles,
+  Stethoscope,
+  User,
 } from "lucide-react";
 
 import {
   UIAlert,
   UIButton,
-  UICard,
   UIInput,
   UISelect,
   UIBadge,
 } from "@/components/ui";
+
+const STEPS_CONFIG = [
+  {
+    id: 1,
+    title: "Branch Profile",
+    subtitle: "Branch identity, type & contact channels",
+    icon: Building2,
+  },
+  {
+    id: 2,
+    title: "Registered Address",
+    subtitle: "Physical location, district & PIN code",
+    icon: MapPin,
+  },
+  {
+    id: 3,
+    title: "Statutory Licenses",
+    subtitle: "Drug controller & FSSAI licenses",
+    icon: Scale,
+  },
+  {
+    id: 4,
+    title: "Compliance Contacts",
+    subtitle: "Registered pharmacist & emergency contact",
+    icon: Stethoscope,
+  },
+  {
+    id: 5,
+    title: "Review & Update",
+    subtitle: "Final verification & save updates",
+    icon: CheckCircle2,
+  },
+];
+
+/* ==========================================================================
+   SKELETON LOADER COMPONENT (Exact 1:1 Two-Column Edit Page Mirror)
+   ========================================================================== */
+
+const EditBranchSkeleton = () => (
+  <div className="w-full min-h-full flex-1 overflow-y-auto pt-2 pb-10 px-2 sm:px-4 lg:px-6 font-sans select-none animate-pulse text-text">
+    <div className="mx-auto w-full max-w-7xl">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        {/* ── LEFT COLUMN: Stepper Sidebar Skeleton (4 cols) ───────── */}
+        <aside className="lg:col-span-4 xl:col-span-4 space-y-3.5">
+          {/* Stepper Card */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-border/90 shadow-2xs">
+            {/* Header */}
+            <div className="flex items-center gap-3 pb-4 mb-4 border-b border-border/60">
+              <div className="size-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                <Building2 className="size-5 text-primary/40" />
+              </div>
+              <div className="min-w-0 space-y-1.5 flex-1">
+                <div className="h-4 w-32 bg-surface-alt rounded" />
+                <div className="h-3 w-48 bg-surface-alt/70 rounded" />
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mb-5 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <div className="h-2.5 w-24 bg-surface-alt/70 rounded" />
+                <div className="h-2.5 w-8 bg-surface-alt/70 rounded" />
+              </div>
+              <div className="h-1.5 w-full bg-surface-alt rounded-full overflow-hidden border border-border/40">
+                <div className="h-full bg-primary/30 w-1/5 rounded-full" />
+              </div>
+            </div>
+
+            {/* Stepper Steps (5 items mirroring STEPS_CONFIG) */}
+            <div className="space-y-1">
+              {[
+                { titleW: "w-28", subW: "w-44", active: true },
+                { titleW: "w-32", subW: "w-48", active: false },
+                { titleW: "w-30", subW: "w-52", active: false },
+                { titleW: "w-28", subW: "w-48", active: false },
+                { titleW: "w-32", subW: "w-40", active: false },
+              ].map((step, idx) => (
+                <div
+                  key={idx}
+                  className={`w-full flex items-start gap-3 p-2.5 rounded-xl ${
+                    step.active
+                      ? "bg-primary/[0.08] border border-primary/30 shadow-2xs"
+                      : "border border-transparent"
+                  }`}
+                >
+                  <div
+                    className={`size-8 rounded-xl flex items-center justify-center shrink-0 ${
+                      step.active
+                        ? "bg-primary/20 border border-primary/30"
+                        : "bg-surface-alt border border-border"
+                    }`}
+                  />
+                  <div className="min-w-0 flex-1 pt-0.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <div className={`h-3.5 ${step.titleW} bg-surface-alt rounded`} />
+                      {step.active && (
+                        <div className="h-3 w-10 bg-primary/20 rounded-full" />
+                      )}
+                    </div>
+                    <div className={`h-2.5 ${step.subW} bg-surface-alt/60 rounded`} />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Reset Button Placeholder */}
+            <div className="pt-4 mt-4 border-t border-border/60">
+              <div className="h-8 w-full bg-surface-alt/50 rounded-xl" />
+            </div>
+          </div>
+
+          {/* Guidance Info Card */}
+          <div className="p-3.5 rounded-xl bg-surface border border-border/80 shadow-2xs flex items-start gap-2.5">
+            <Sparkles className="size-4 text-primary/40 shrink-0 mt-0.5" />
+            <div className="space-y-1.5 flex-1">
+              <div className="h-3 w-full bg-surface-alt/70 rounded" />
+              <div className="h-3 w-4/5 bg-surface-alt/70 rounded" />
+            </div>
+          </div>
+        </aside>
+
+        {/* ── RIGHT COLUMN: Form Canvas Skeleton (8 cols) ─────────── */}
+        <main className="lg:col-span-8 xl:col-span-8 min-w-0">
+          <div className="bg-surface border border-border/90 rounded-2xl shadow-xs overflow-hidden">
+            {/* Form Canvas Header */}
+            <div className="px-5 sm:px-7 py-4 sm:py-5 border-b border-border/60 bg-surface-alt/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1.5">
+                <div className="h-5 w-44 bg-surface-alt rounded" />
+                <div className="h-3.5 w-60 bg-surface-alt/70 rounded" />
+              </div>
+              <div className="h-6 w-24 bg-surface-alt rounded-full self-start sm:self-auto" />
+            </div>
+
+            {/* Form Canvas Body */}
+            <div className="p-5 sm:p-7 space-y-6">
+              {/* Section 1: Branch Core Profile Skeleton */}
+              <div>
+                <div className="flex items-start gap-3 pb-3 mb-4 border-b border-border/60">
+                  <div className="size-8 rounded-lg bg-surface-alt/80 shrink-0 mt-0.5" />
+                  <div className="space-y-1 flex-1">
+                    <div className="h-3.5 w-36 bg-surface-alt rounded" />
+                    <div className="h-2.5 w-64 bg-surface-alt/60 rounded" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
+                  {/* Branch Name (full width) */}
+                  <div className="md:col-span-2 space-y-1.5">
+                    <div className="h-3.5 w-24 bg-surface-alt/70 rounded" />
+                    <div className="h-10 w-full bg-surface-alt/50 rounded-xl border border-border/60" />
+                  </div>
+
+                  {/* Branch Type */}
+                  <div className="space-y-1.5">
+                    <div className="h-3.5 w-24 bg-surface-alt/70 rounded" />
+                    <div className="h-10 w-full bg-surface-alt/50 rounded-xl border border-border/60" />
+                  </div>
+
+                  {/* Primary Branch Flag */}
+                  <div className="space-y-1.5">
+                    <div className="h-3.5 w-48 bg-surface-alt/70 rounded" />
+                    <div className="h-10 w-full bg-surface-alt/50 rounded-xl border border-border/60" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Contact & Communication Details Skeleton */}
+              <div>
+                <div className="flex items-start gap-3 pb-3 mb-4 border-b border-border/60">
+                  <div className="size-8 rounded-lg bg-surface-alt/80 shrink-0 mt-0.5" />
+                  <div className="space-y-1 flex-1">
+                    <div className="h-3.5 w-48 bg-surface-alt rounded" />
+                    <div className="h-2.5 w-72 bg-surface-alt/60 rounded" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
+                  <div className="md:col-span-2 space-y-1.5">
+                    <div className="h-3.5 w-36 bg-surface-alt/70 rounded" />
+                    <div className="h-10 w-full bg-surface-alt/50 rounded-xl border border-border/60" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="h-3.5 w-28 bg-surface-alt/70 rounded" />
+                    <div className="h-10 w-full bg-surface-alt/50 rounded-xl border border-border/60" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="h-3.5 w-32 bg-surface-alt/70 rounded" />
+                    <div className="h-10 w-full bg-surface-alt/50 rounded-xl border border-border/60" />
+                  </div>
+
+                  <div className="md:col-span-2 space-y-1.5">
+                    <div className="h-3.5 w-44 bg-surface-alt/70 rounded" />
+                    <div className="h-10 w-full bg-surface-alt/50 rounded-xl border border-border/60" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Footer Skeleton */}
+              <div className="pt-5 border-t border-border/80 flex items-center justify-between">
+                <div className="h-9 w-20 bg-surface-alt/50 rounded-xl" />
+                <div className="h-9 w-32 bg-primary/20 rounded-xl" />
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+);
 
 const EditBranchDesktopPage = memo(
   ({
@@ -39,130 +244,283 @@ const EditBranchDesktopPage = memo(
     formErrors = {},
     isLoading = false,
     isFetching = false,
+    isDataFetching = false,
     currentStep = 1,
+    branchCode = "",
 
     branchTypeOptions = [],
     booleanOptions = [],
+    statusOptions = [],
 
     handleChange,
     handleSubmit,
     handleBack,
     handleContinue,
     handleStepChange,
-    handleSaveDraft,
     handleCancel,
     handleReload,
   }) => {
+    const isBusyFetching = isFetching || isDataFetching;
+
     const handleResetAndRefresh = React.useCallback(() => {
       handleStepChange?.(1);
       if (handleReload) handleReload();
     }, [handleReload, handleStepChange]);
 
-    // Auto-scroll to the top of the page when navigating between steps
+    // Auto-scroll to the top of the form area when navigating between steps
     useEffect(() => {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }, [currentStep]);
 
+    if (isBusyFetching) {
+      return <EditBranchSkeleton />;
+    }
+
+    const progressPercent = Math.round(((currentStep - 1) / (STEPS_CONFIG.length - 1)) * 100);
+
     return (
-      <section className="min-h-[100dvh] bg-bg px-4 sm:px-6 lg:px-0 py-6 sm:py-0 flex flex-col">
-        <div className="mx-auto w-full max-w-7xl my-auto">
-          {/* Top Section with Full Width Stepper and Reset Button */}
-          <div className="mb-8 flex w-full flex-col lg:flex-row lg:items-center gap-4">
-            <div className="flex-1 min-w-0">
-              <TopStepper
-                currentStep={currentStep}
-                onStepChange={handleStepChange}
-              />
-            </div>
-            <UIButton
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleResetAndRefresh}
-              loading={isLoading}
-              disabled={isLoading}
-              startIcon={<RotateCcw className="size-3.5" />}
-              className="shrink-0 h-9 px-4 text-xs font-bold bg-surface"
-            >
-              Reset Form
-            </UIButton>
-          </div>
+      <div className="w-full min-h-full flex-1 overflow-y-auto pt-2 pb-10 px-2 sm:px-4 lg:px-6 font-sans select-none text-text">
+        <div className="mx-auto w-full max-w-7xl">
+          {/* ── Two-Column Layout: Left Stepper Sidebar + Right Form Canvas ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            {/* ── LEFT COLUMN: Vertical Stepper Sidebar (4 cols) ───────── */}
+            <aside className="lg:col-span-4 xl:col-span-4 lg:sticky lg:top-2 space-y-3.5">
+              {/* Stepper Card */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-surface border border-border/90 shadow-2xs">
+                {/* Header */}
+                <div className="flex items-center gap-3 pb-4 mb-4 border-b border-border/60">
+                  <div className="size-10 rounded-xl bg-primary/10 text-primary border border-primary/20 flex items-center justify-center shrink-0">
+                    <Building2 className="size-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-text truncate">
+                      Update Branch
+                    </h2>
+                    <p className="text-[11px] text-text-muted truncate">
+                      Physical branch & compliance configuration
+                    </p>
+                  </div>
+                </div>
 
-          <div className="w-full">
-            {formErrors.submit && (
-              <div className="mb-8">
-                <UIAlert
-                  intent="danger"
-                  title="Submission Error"
-                  description={formErrors.submit}
-                />
+                {/* Progress Bar */}
+                <div className="mb-5 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-text-muted uppercase tracking-wider text-[10px]">
+                      Setup Progress
+                    </span>
+                    <span className="font-mono font-bold text-primary">
+                      {progressPercent}%
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full bg-surface-alt rounded-full overflow-hidden border border-border/40">
+                    <div
+                      className="h-full bg-primary transition-all duration-300 ease-out rounded-full"
+                      style={{ width: `${Math.max(progressPercent, 4)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {/* Vertical Stepper List */}
+                <nav aria-label="Registration Steps" className="space-y-1 relative">
+                  {STEPS_CONFIG.map((step, idx) => {
+                    const isActive = currentStep === step.id;
+                    const isCompleted = currentStep > step.id;
+                    const isClickable = isCompleted || isActive;
+                    const StepIcon = step.icon;
+
+                    return (
+                      <div key={step.id} className="relative">
+                        {/* Connecting vertical line */}
+                        {idx < STEPS_CONFIG.length - 1 && (
+                          <div
+                            className={`absolute left-[17px] top-[34px] w-[2px] h-[calc(100%-8px)] transition-colors duration-200 z-0 ${
+                              currentStep > step.id ? "bg-primary" : "bg-border/70"
+                            }`}
+                          />
+                        )}
+
+                        <button
+                          type="button"
+                          disabled={!isClickable}
+                          onClick={() => isClickable && handleStepChange?.(step.id)}
+                          className={`w-full flex items-start gap-3 p-2.5 rounded-xl text-left transition-all relative z-10 ${
+                            isActive
+                              ? "bg-primary/[0.08] border border-primary/30 shadow-2xs"
+                              : isCompleted
+                              ? "hover:bg-surface-alt/70 border border-transparent cursor-pointer"
+                              : "opacity-60 border border-transparent cursor-not-allowed"
+                          }`}
+                        >
+                          {/* Step Indicator Circle */}
+                          <div
+                            className={`size-8 rounded-xl flex items-center justify-center shrink-0 text-xs font-bold font-mono transition-all ${
+                              isCompleted
+                                ? "bg-emerald-500 text-white shadow-2xs"
+                                : isActive
+                                ? "bg-primary text-primary-foreground shadow-xs ring-4 ring-primary/15"
+                                : "bg-surface-alt text-text-muted border border-border"
+                            }`}
+                          >
+                            {isCompleted ? (
+                              <Check className="size-4 stroke-[2.5]" />
+                            ) : (
+                              <StepIcon className="size-4" />
+                            )}
+                          </div>
+
+                          {/* Step Content */}
+                          <div className="min-w-0 flex-1 pt-0.5">
+                            <div className="flex items-center justify-between">
+                              <span
+                                className={`text-xs font-bold truncate block transition-colors ${
+                                  isActive
+                                    ? "text-primary"
+                                    : isCompleted
+                                    ? "text-text"
+                                    : "text-text-muted"
+                                }`}
+                              >
+                                {step.title}
+                              </span>
+                              {isActive && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-primary/15 text-primary shrink-0">
+                                  Current
+                                </span>
+                              )}
+                              {isCompleted && (
+                                <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 shrink-0">
+                                  Done
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-text-muted block truncate mt-0.5">
+                              {step.subtitle}
+                            </span>
+                          </div>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </nav>
+
+                {/* Sidebar Utility Actions */}
+                <div className="pt-4 mt-4 border-t border-border/60 flex items-center">
+                  <UIButton
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleResetAndRefresh}
+                    loading={isLoading || isBusyFetching}
+                    disabled={isLoading || isBusyFetching}
+                    startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+                    className="h-8 px-2.5 text-xs font-medium text-text-muted hover:text-text cursor-pointer w-full justify-center"
+                  >
+                    Reset & Reload Form
+                  </UIButton>
+                </div>
               </div>
-            )}
 
-            {isFetching ? (
-              <UICard className="p-12 flex flex-col items-center justify-center text-center bg-surface border-border shadow-sm">
-                <RotateCcw className="animate-spin size-8 text-primary mb-3" />
-                <p className="text-sm text-text-muted m-0">Retrieving branch records from database...</p>
-              </UICard>
-            ) : (
-            <form onSubmit={(e) => e.preventDefault()} className="w-full">
-              {currentStep === 1 && (
-                <BranchDetailsForm
-                  formData={formData}
-                  formErrors={formErrors}
-                  branchTypeOptions={branchTypeOptions}
-                  booleanOptions={booleanOptions}
-                  handleChange={handleChange}
-                  handleCancel={handleCancel}
-                  handleContinue={handleContinue}
-                />
+              {/* Informational Guidance Badge */}
+              <div className="p-3.5 rounded-xl bg-surface border border-border/80 shadow-2xs flex items-start gap-2.5">
+                <Sparkles className="size-4 text-primary shrink-0 mt-0.5" />
+                <p className="text-[11px] text-text-muted leading-relaxed">
+                  Branch statutory records and drug licenses are verified under state pharmacy council regulations.
+                </p>
+              </div>
+            </aside>
+
+            {/* ── RIGHT COLUMN: Form Content Canvas (8 cols) ─────────── */}
+            <main className="lg:col-span-8 xl:col-span-8 min-w-0">
+              {formErrors.submit && (
+                <div className="mb-4">
+                  <UIAlert
+                    intent="danger"
+                    title="Submission Error"
+                    description={formErrors.submit}
+                  />
+                </div>
               )}
 
-              {currentStep === 2 && (
-                <AddressForm
-                  formData={formData}
-                  formErrors={formErrors}
-                  handleChange={handleChange}
-                  handleBack={handleBack}
-                  handleContinue={handleContinue}
-                />
-              )}
+              <div className="bg-surface border border-border/90 rounded-2xl shadow-xs overflow-hidden">
+                  {/* Form Canvas Header */}
+                  <div className="px-5 sm:px-7 py-4 sm:py-5 border-b border-border/60 bg-surface-alt/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base sm:text-lg font-bold text-text">
+                        {STEPS_CONFIG[currentStep - 1].title}
+                      </h3>
+                      <p className="text-xs text-text-muted mt-0.5">
+                        {STEPS_CONFIG[currentStep - 1].subtitle}
+                      </p>
+                    </div>
+                    <UIBadge variant={currentStep === 5 ? "success" : "outline"} className="self-start sm:self-auto">
+                      Step {currentStep} of {STEPS_CONFIG.length}
+                    </UIBadge>
+                  </div>
 
-              {currentStep === 3 && (
-                <LicenseForm
-                  formData={formData}
-                  formErrors={formErrors}
-                  handleChange={handleChange}
-                  handleBack={handleBack}
-                  handleContinue={handleContinue}
-                />
-              )}
+                  {/* Form Fields Canvas Body */}
+                  <div className="p-5 sm:p-7">
+                    <form onSubmit={(e) => e.preventDefault()} className="w-full">
+                      {currentStep === 1 && (
+                        <BranchDetailsForm
+                          formData={formData}
+                          formErrors={formErrors}
+                          branchTypeOptions={branchTypeOptions}
+                          booleanOptions={booleanOptions}
+                          handleChange={handleChange}
+                          handleCancel={handleCancel}
+                          handleContinue={handleContinue}
+                        />
+                      )}
 
-              {currentStep === 4 && (
-                <ComplianceContactsForm
-                  formData={formData}
-                  formErrors={formErrors}
-                  handleChange={handleChange}
-                  handleBack={handleBack}
-                  handleContinue={handleContinue}
-                />
-              )}
+                      {currentStep === 2 && (
+                        <AddressForm
+                          formData={formData}
+                          formErrors={formErrors}
+                          handleChange={handleChange}
+                          handleBack={handleBack}
+                          handleContinue={handleContinue}
+                        />
+                      )}
 
-              {currentStep === 5 && (
-                <ReviewAndCreateStep
-                  formData={formData}
-                  branchTypeOptions={branchTypeOptions}
-                  isUpdating={isLoading}
-                  onBack={handleBack}
-                  onSubmit={handleSubmit}
-                  onEditSection={handleStepChange}
-                />
-              )}
-            </form>
-            )}
+                      {currentStep === 3 && (
+                        <LicenseForm
+                          formData={formData}
+                          formErrors={formErrors}
+                          handleChange={handleChange}
+                          handleBack={handleBack}
+                          handleContinue={handleContinue}
+                        />
+                      )}
+
+                      {currentStep === 4 && (
+                        <ComplianceContactsForm
+                          formData={formData}
+                          formErrors={formErrors}
+                          handleChange={handleChange}
+                          handleBack={handleBack}
+                          handleContinue={handleContinue}
+                        />
+                      )}
+
+                      {currentStep === 5 && (
+                        <ReviewAndUpdateStep
+                          formData={formData}
+                          branchTypeOptions={branchTypeOptions}
+                          statusOptions={statusOptions}
+                          branchCode={branchCode}
+                          isUpdating={isLoading}
+                          onBack={handleBack}
+                          onSubmit={handleSubmit}
+                          onEditSection={handleStepChange}
+                        />
+                      )}
+                    </form>
+                  </div>
+                </div>
+            </main>
           </div>
         </div>
-      </section>
+      </div>
     );
   },
 );
@@ -170,101 +528,29 @@ const EditBranchDesktopPage = memo(
 EditBranchDesktopPage.displayName = "EditBranchDesktopPage";
 
 /* ==========================================================================
-   TOP WORKFLOW PROGRESS STEPPER (Compact)
+   SUB-COMPONENT: SECTION HEADER
    ========================================================================== */
 
-const TopStepper = memo(({ currentStep, onStepChange }) => {
-  const steps = [
-    { id: 1, title: "Branch Details", label: "Profile parameters" },
-    { id: 2, title: "Address Details", label: "Registered location" },
-    { id: 3, title: "Statutory Licenses", label: "Drug & FSSAI tags" },
-    { id: 4, title: "Compliance Contacts", label: "Accountability links" },
-    { id: 5, title: "Review & Save", label: "Final confirmation" },
-  ];
-
-  return (
-    <div className="w-full flex items-center justify-between overflow-x-auto no-scrollbar">
-      {steps.map((step, idx) => {
-        const active = currentStep === step.id;
-        const completed = currentStep > step.id;
-
-        return (
-          <div
-            key={step.id}
-            className="flex-1 flex items-center min-w-[150px] last:min-w-fit"
-          >
-            <button
-              type="button"
-              onClick={() => onStepChange?.(step.id)}
-              className="flex items-center gap-2 outline-none group cursor-pointer"
-            >
-              <div
-                className={`flex shrink-0 size-7 items-center justify-center rounded-full text-[11px] font-bold transition-all group-hover:ring-4 group-hover:ring-primary/10 ${
-                  completed
-                    ? "bg-primary text-primary-contrast"
-                    : active
-                      ? "bg-primary text-primary-contrast ring-4 ring-primary/10"
-                      : "bg-surface border border-border text-text-muted"
-                }`}
-              >
-                {completed ? <Check className="size-3.5" /> : step.id}
-              </div>
-              <div className="flex flex-col items-start text-left min-w-0 max-w-[130px]">
-                <span
-                  className={`text-xs font-bold truncate w-full transition-colors ${
-                    active || completed
-                      ? "text-text"
-                      : "text-text-muted group-hover:text-text"
-                  }`}
-                >
-                  {step.title}
-                </span>
-                <span className="text-[10px] text-text-muted truncate w-full">
-                  {step.label}
-                </span>
-              </div>
-            </button>
-
-            {idx < steps.length - 1 && (
-              <div className="h-[2px] bg-border flex-1 mx-3 lg:mx-5 min-w-[12px] max-w-[30px] lg:max-w-none" />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-});
-TopStepper.displayName = "TopStepper";
-
-/* ==========================================================================
-   LAYOUT COMPONENT: SPLIT SECTION
-   ========================================================================== */
-
-const SplitSection = ({ title, description, icon: Icon, children }) => (
-  <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start mb-8">
-    <div className="lg:col-span-4 lg:sticky lg:top-8">
-      <div className="flex items-center gap-3 mb-3">
-        {Icon && (
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <Icon className="size-5" />
-          </div>
-        )}
-        <h3 className="text-lg font-bold text-text m-0">{title}</h3>
+const FormSectionHeader = ({ title, description, icon: Icon }) => (
+  <div className="flex items-start gap-3 pb-3 mb-4 border-b border-border/60">
+    {Icon && (
+      <div className="size-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
+        <Icon className="size-4" />
       </div>
-      <p className="text-sm text-text-muted leading-relaxed m-0">
-        {description}
-      </p>
-    </div>
-    <div className="lg:col-span-8">
-      <UICard className="p-6 md:p-8 shadow-sm border-border bg-surface">
-        {children}
-      </UICard>
+    )}
+    <div className="min-w-0">
+      <h4 className="text-sm font-bold text-text">{title}</h4>
+      {description && (
+        <p className="text-xs text-text-muted mt-0.5 leading-relaxed">
+          {description}
+        </p>
+      )}
     </div>
   </div>
 );
 
 /* ==========================================================================
-   ACTIVE STEPS FORM MODULES
+   STEP 1: BRANCH DETAILS FORM
    ========================================================================== */
 
 const BranchDetailsForm = ({
@@ -276,24 +562,27 @@ const BranchDetailsForm = ({
   handleCancel,
   handleContinue,
 }) => (
-  <div className="space-y-2">
-    <SplitSection
-      title="Branch Core Profile"
-      description="Provide core naming structures, communications routing endpoints, and infrastructure modes."
-      icon={Building2}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+  <div className="space-y-6">
+    {/* Section 1: Core Profile */}
+    <div>
+      <FormSectionHeader
+        title="Branch Core Profile"
+        description="Provide naming structures, operation type, and primary location mapping."
+        icon={Building2}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
         <div className="md:col-span-2">
           <UIInput
             label="Branch Name"
             name="branchName"
             value={formData.branchName || ""}
             onChange={handleChange}
-            placeholder="Enter branch name"
+            placeholder="e.g. MedPlus Pharmacy - Andheri West"
             required
             error={formErrors.branchName}
           />
         </div>
+
         <UISelect
           label="Branch Type"
           name="branchType"
@@ -305,8 +594,9 @@ const BranchDetailsForm = ({
           required
           error={formErrors.branchType}
         />
+
         <UISelect
-          label="Primary Location Flag"
+          label="Primary Headquarters / Main Branch Flag"
           name="isPrimary"
           value={formData.isPrimary || "false"}
           onChange={(val) =>
@@ -317,14 +607,16 @@ const BranchDetailsForm = ({
           error={formErrors.isPrimary}
         />
       </div>
-    </SplitSection>
+    </div>
 
-    <SplitSection
-      title="Contact Details"
-      description="Provide the primary communication channels. These will be used for official notifications and support communications."
-      icon={Phone}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+    {/* Section 2: Contact Details */}
+    <div>
+      <FormSectionHeader
+        title="Contact & Communication Details"
+        description="Official communication channels for this specific branch unit."
+        icon={Phone}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
         <div className="md:col-span-2">
           <UIInput
             label="Branch Email Address"
@@ -333,54 +625,69 @@ const BranchDetailsForm = ({
             onChange={handleChange}
             placeholder="branch@company.com"
             error={formErrors.branchEmail}
-            startIcon={<Mail className="text-text-muted size-4.5" />}
+            startIcon={<Mail className="text-text-muted size-4" />}
           />
         </div>
+
         <UIInput
           label="Mobile Number"
           name="mobile"
           value={formData.mobile || ""}
           onChange={handleChange}
-          placeholder="Enter 10-digit number"
+          placeholder="10-digit mobile number"
           required
           error={formErrors.mobile}
-          startIcon={<Phone className="text-text-muted size-4.5" />}
+          startIcon={<Phone className="text-text-muted size-4" />}
         />
+
         <UIInput
           label="WhatsApp Number"
           name="whatsapp"
           value={formData.whatsapp || ""}
           onChange={handleChange}
-          placeholder="WhatsApp link"
+          placeholder="WhatsApp contact"
           error={formErrors.whatsapp}
-          startIcon={<Phone className="text-text-muted size-4.5" />}
+          startIcon={<Phone className="text-text-muted size-4" />}
         />
+
         <div className="md:col-span-2">
           <UIInput
             label="Landline Number (Optional)"
             name="landline"
             value={formData.landline || ""}
             onChange={handleChange}
-            placeholder="Enter area code and landline number"
+            placeholder="e.g. 022-26789123"
           />
         </div>
       </div>
-    </SplitSection>
+    </div>
 
-    <div className="mt-10 flex items-center justify-end gap-3 pt-6 border-t border-border">
-      <UIButton variant="ghost" onClick={handleCancel}>
+    {/* Action Footer */}
+    <div className="pt-5 border-t border-border/80 flex items-center justify-between">
+      <UIButton
+        type="button"
+        variant="ghost"
+        onClick={handleCancel}
+        className="cursor-pointer"
+      >
         Cancel
       </UIButton>
       <UIButton
+        type="button"
         variant="primary"
-        endIcon={<ArrowRight className="size-4" />}
         onClick={handleContinue}
+        endIcon={<ArrowRight className="size-4" />}
+        className="cursor-pointer font-bold shadow-xs px-5"
       >
         Save & Continue
       </UIButton>
     </div>
   </div>
 );
+
+/* ==========================================================================
+   STEP 2: ADDRESS FORM
+   ========================================================================== */
 
 const AddressForm = ({
   formData,
@@ -389,22 +696,26 @@ const AddressForm = ({
   handleBack,
   handleContinue,
 }) => (
-  <div className="space-y-2">
-    <SplitSection
-      title="Registered Branch Address"
-      description="Physical spatial mapping directly bound to tax reporting setups and invoice templates."
-      icon={MapPin}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+  <div className="space-y-6">
+    <div>
+      <FormSectionHeader
+        title="Registered Branch Address"
+        description="Physical location bound to invoices, delivery consignments, and tax reporting."
+        icon={MapPin}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
         <div className="md:col-span-2">
           <UIInput
             label="Address Line 1"
             name="addressLine1"
             value={formData.addressLine1 || ""}
             onChange={handleChange}
-            placeholder="Flat/Plot, Building, Street name"
+            placeholder="Shop/Unit No, Building, Street name"
+            required
+            error={formErrors.addressLine1}
           />
         </div>
+
         <div className="md:col-span-2">
           <UIInput
             label="Address Line 2 (Optional)"
@@ -416,28 +727,37 @@ const AddressForm = ({
         </div>
 
         <UIInput
-          label="City"
+          label="City / Town"
           name="city"
           value={formData.city || ""}
           onChange={handleChange}
           placeholder="Enter City"
+          required
+          error={formErrors.city}
         />
+
         <UIInput
           label="District"
           name="district"
           value={formData.district || ""}
           onChange={handleChange}
           placeholder="Enter District"
+          required
+          error={formErrors.district}
         />
+
         <UIInput
           label="State"
           name="state"
           value={formData.state || ""}
           onChange={handleChange}
           placeholder="Enter State"
+          required
+          error={formErrors.state}
         />
+
         <UIInput
-          label="Pincode"
+          label="PIN Code"
           name="pincode"
           value={formData.pincode || ""}
           onChange={handleChange}
@@ -445,41 +765,52 @@ const AddressForm = ({
           required
           error={formErrors.pincode}
         />
+
         <UIInput
           label="Country"
           name="country"
-          value={formData.country || ""}
+          value={formData.country || "India"}
           onChange={handleChange}
           placeholder="India"
+          disabled
         />
+
         <UIInput
-          label="Google Map Location Link"
+          label="Google Map Location Link (Optional)"
           name="googleMapLocation"
           value={formData.googleMapLocation || ""}
           onChange={handleChange}
-          placeholder="http://maps.google.com/..."
+          placeholder="https://maps.google.com/..."
         />
       </div>
-    </SplitSection>
+    </div>
 
-    <div className="mt-10 flex items-center justify-between pt-6 border-t border-border">
+    <div className="pt-5 border-t border-border/80 flex items-center justify-between">
       <UIButton
+        type="button"
         variant="outline"
-        startIcon={<ArrowLeft className="size-4" />}
         onClick={handleBack}
+        startIcon={<ArrowLeft className="size-4" />}
+        className="cursor-pointer"
       >
         Back
       </UIButton>
       <UIButton
+        type="button"
         variant="primary"
-        endIcon={<ArrowRight className="size-4" />}
         onClick={handleContinue}
+        endIcon={<ArrowRight className="size-4" />}
+        className="cursor-pointer font-bold shadow-xs px-5"
       >
         Save & Continue
       </UIButton>
     </div>
   </div>
 );
+
+/* ==========================================================================
+   STEP 3: STATUTORY LICENSES FORM
+   ========================================================================== */
 
 const LicenseForm = ({
   formData,
@@ -488,62 +819,78 @@ const LicenseForm = ({
   handleBack,
   handleContinue,
 }) => (
-  <div className="space-y-2">
-    <SplitSection
-      title="Statutory Compliance Licenses"
-      description="Configure trackable pharmacy compliance logs and operational parameters."
-      icon={Scale}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+  <div className="space-y-6">
+    <div>
+      <FormSectionHeader
+        title="Statutory Compliance Licenses"
+        description="Configure trackable pharmacy compliance licenses and regulatory credentials."
+        icon={Scale}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
         <UIInput
           label="Drug License Number"
           name="drugLicenseNumber"
           value={formData.drugLicenseNumber || ""}
           onChange={handleChange}
           placeholder="Form 20 / Form 21 identifiers"
+          error={formErrors.drugLicenseNumber}
         />
+
         <UIInput
-          label="Drug License Type"
+          label="Drug License Classification"
           name="drugLicenseType"
           value={formData.drugLicenseType || ""}
           onChange={handleChange}
-          placeholder="e.g., Retail / Wholesale"
+          placeholder="e.g. Retail / Wholesale"
+          error={formErrors.drugLicenseType}
         />
+
         <UIInput
-          label="FSSAI Number"
+          label="FSSAI License Number"
           name="fssaiNumber"
           value={formData.fssaiNumber || ""}
           onChange={handleChange}
-          placeholder="14-digit food compliance token"
+          placeholder="14-digit food safety registration"
+          error={formErrors.fssaiNumber}
         />
+
         <UIInput
           label="License Expiry Date"
           name="licenseExpiresAt"
           type="date"
           value={formData.licenseExpiresAt || ""}
           onChange={handleChange}
+          error={formErrors.licenseExpiresAt}
         />
       </div>
-    </SplitSection>
+    </div>
 
-    <div className="mt-10 flex items-center justify-between pt-6 border-t border-border">
+    <div className="pt-5 border-t border-border/80 flex items-center justify-between">
       <UIButton
+        type="button"
         variant="outline"
-        startIcon={<ArrowLeft className="size-4" />}
         onClick={handleBack}
+        startIcon={<ArrowLeft className="size-4" />}
+        className="cursor-pointer"
       >
         Back
       </UIButton>
       <UIButton
+        type="button"
         variant="primary"
-        endIcon={<ArrowRight className="size-4" />}
         onClick={handleContinue}
+        endIcon={<ArrowRight className="size-4" />}
+        className="cursor-pointer font-bold shadow-xs px-5"
       >
         Save & Continue
       </UIButton>
     </div>
   </div>
 );
+
+/* ==========================================================================
+   STEP 4: COMPLIANCE CONTACTS FORM
+   ========================================================================== */
 
 const ComplianceContactsForm = ({
   formData,
@@ -552,35 +899,43 @@ const ComplianceContactsForm = ({
   handleBack,
   handleContinue,
 }) => (
-  <div className="space-y-2">
-    <SplitSection
-      title="Pharmacist Parameters"
-      description="Link technical operators, pharmacy practitioners to records."
-      icon={Stethoscope}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+  <div className="space-y-6">
+    {/* Pharmacist Parameters */}
+    <div>
+      <FormSectionHeader
+        title="Registered Pharmacist"
+        description="Designated licensed practitioner accountable for prescription dispensing and drug storage."
+        icon={Stethoscope}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
         <UIInput
           label="Registered Pharmacist Name"
           name="pharmacistName"
           value={formData.pharmacistName || ""}
           onChange={handleChange}
-          placeholder="Full name matching council logs"
+          placeholder="Full name matching council records"
+          error={formErrors.pharmacistName}
         />
+
         <UIInput
-          label="Pharmacy Registration Number"
+          label="Pharmacy Council Reg Number"
           name="pharmacistRegistrationNumber"
           value={formData.pharmacistRegistrationNumber || ""}
           onChange={handleChange}
           placeholder="State council registration index"
+          error={formErrors.pharmacistRegistrationNumber}
         />
+
         <UIInput
           label="Pharmacist Mobile"
           name="pharmacistMobile"
           value={formData.pharmacistMobile || ""}
           onChange={handleChange}
-          placeholder="Pharmacist phone contact record"
+          placeholder="Pharmacist phone number"
           error={formErrors.pharmacistMobile}
+          startIcon={<Phone className="text-text-muted size-4" />}
         />
+
         <UIInput
           label="Pharmacist Email"
           name="pharmacistEmail"
@@ -588,55 +943,67 @@ const ComplianceContactsForm = ({
           onChange={handleChange}
           placeholder="pharmacist@company.com"
           error={formErrors.pharmacistEmail}
+          startIcon={<Mail className="text-text-muted size-4" />}
         />
       </div>
-    </SplitSection>
+    </div>
 
-    <SplitSection
-      title="Emergency Contact Link"
-      description="Emergency contacts for branch operations."
-      icon={Phone}
-    >
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+    {/* Emergency Contact */}
+    <div>
+      <FormSectionHeader
+        title="Emergency Contact Link"
+        description="Backup emergency contact for operational incidents and facility access."
+        icon={User}
+      />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
         <div className="md:col-span-2">
           <UIInput
-            label="Contact Name"
+            label="Emergency Contact Name"
             name="emergencyContactName"
             value={formData.emergencyContactName || ""}
             onChange={handleChange}
-            placeholder="Full name"
+            placeholder="Full legal name"
+            error={formErrors.emergencyContactName}
           />
         </div>
+
         <UIInput
           label="Contact Mobile"
           name="emergencyContactMobile"
           value={formData.emergencyContactMobile || ""}
           onChange={handleChange}
-          placeholder="10-digit number"
+          placeholder="10-digit emergency phone"
           error={formErrors.emergencyContactMobile}
+          startIcon={<Phone className="text-text-muted size-4" />}
         />
+
         <UIInput
-          label="Relationship Mapping"
+          label="Relationship / Role"
           name="emergencyContactRelationship"
           value={formData.emergencyContactRelationship || ""}
           onChange={handleChange}
-          placeholder="e.g., Manager / Director"
+          placeholder="e.g. Branch Manager / Assistant"
+          error={formErrors.emergencyContactRelationship}
         />
       </div>
-    </SplitSection>
+    </div>
 
-    <div className="mt-10 flex items-center justify-between pt-6 border-t border-border">
+    <div className="pt-5 border-t border-border/80 flex items-center justify-between">
       <UIButton
+        type="button"
         variant="outline"
-        startIcon={<ArrowLeft className="size-4" />}
         onClick={handleBack}
+        startIcon={<ArrowLeft className="size-4" />}
+        className="cursor-pointer"
       >
         Back
       </UIButton>
       <UIButton
+        type="button"
         variant="primary"
-        endIcon={<ArrowRight className="size-4" />}
         onClick={handleContinue}
+        endIcon={<ArrowRight className="size-4" />}
+        className="cursor-pointer font-bold shadow-xs px-5"
       >
         Continue to Review
       </UIButton>
@@ -645,190 +1012,191 @@ const ComplianceContactsForm = ({
 );
 
 /* ==========================================================================
-   STEP 5: SCREEN REVIEW SECTIONS
+   STEP 5: REVIEW AND UPDATE SUMMARY
    ========================================================================== */
 
-const ReviewAndCreateStep = ({
+const ReviewAndUpdateStep = ({
   formData,
   branchTypeOptions,
+  statusOptions = [],
+  branchCode = "",
   isUpdating,
   onBack,
   onSubmit,
   onEditSection,
 }) => {
   const resolvedTypeLabel =
-    branchTypeOptions.find((opt) => opt.value === formData.branchType)
-      ?.label || formData.branchType;
+    branchTypeOptions.find((opt) => opt.value === formData.branchType)?.label ||
+    formData.branchType ||
+    "Not provided";
+
+  const resolvedStatusLabel =
+    statusOptions.find((opt) => opt.value === formData.status)?.label ||
+    formData.status ||
+    "Active";
+
+  const displayBranchCode = formData.branchCode || branchCode;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 1. Branch Overview Summary Card */}
-      <UICard className="p-6 md:p-8 border-border bg-surface shadow-sm">
+      <div className="p-4.5 rounded-xl border border-border bg-surface-alt/30">
         <ReviewSectionHeader
           title="Branch Overview"
           stepId={1}
           onEdit={onEditSection}
         />
 
-        <div className="mt-6 flex flex-wrap items-start justify-between gap-8">
-          <div className="flex items-center gap-5 min-w-[320px]">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-border bg-primary/10 text-primary">
-              <Building2 className="size-8" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-bold text-text truncate max-w-[280px] m-0">
-                  {formData.branchName || "Unnamed Branch"}
-                </h3>
-                {formData.isPrimary === "true" && (
-                  <UIBadge variant="success">Primary</UIBadge>
-                )}
-              </div>
-              <div className="mt-2.5 space-y-2 text-[13px] text-text-muted">
-                <div className="flex items-center gap-2.5">
-                  <Mail className="size-4 shrink-0" />
-                  <span>
-                    {formData.branchEmail || "Not provided"}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2.5">
-                  <Phone className="size-4 shrink-0" />
-                  <span>
-                    {formData.mobile
-                      ? `+91 ${formData.mobile}`
-                      : "Not provided"}
-                  </span>
-                </div>
-              </div>
-            </div>
+        <div className="mt-4 flex flex-col sm:flex-row items-start gap-4">
+          <div className="size-14 shrink-0 rounded-xl border border-border bg-primary/10 text-primary flex items-center justify-center">
+            <Building2 className="size-7" />
           </div>
 
-          <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-5 max-w-[500px]">
-            <ReviewItem label="Branch Type" value={resolvedTypeLabel} />
-            <ReviewItem
-              label="WhatsApp"
-              value={formData.whatsapp || "-"}
-            />
-            <ReviewItem
-              label="Landline"
-              value={formData.landline || "-"}
-            />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h4 className="text-base font-bold text-text truncate">
+                {formData.branchName || "Unnamed Branch"}
+              </h4>
+              {displayBranchCode && (
+                <UIBadge variant="outline" className="font-mono">
+                  {displayBranchCode}
+                </UIBadge>
+              )}
+              <UIBadge variant="primary">{resolvedTypeLabel}</UIBadge>
+              {formData.isPrimary === "true" && (
+                <UIBadge variant="success">Primary Branch</UIBadge>
+              )}
+              <UIBadge variant={formData.status === "inactive" ? "outline" : "success"} className="capitalize">
+                {resolvedStatusLabel}
+              </UIBadge>
+            </div>
+
+            <div className="mt-2.5 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-text-muted">
+              <div className="flex items-center gap-2 truncate">
+                <Mail className="size-3.5 shrink-0" />
+                <span className="truncate">{formData.branchEmail || "Not provided"}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Phone className="size-3.5 shrink-0" />
+                <span>{formData.mobile ? `+91 ${formData.mobile}` : "Not provided"}</span>
+              </div>
+              {formData.whatsapp && (
+                <div className="flex items-center gap-2">
+                  <Phone className="size-3.5 shrink-0" />
+                  <span>WhatsApp: {formData.whatsapp}</span>
+                </div>
+              )}
+              {formData.landline && (
+                <div className="flex items-center gap-2">
+                  <Phone className="size-3.5 shrink-0" />
+                  <span>Landline: {formData.landline}</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </UICard>
+      </div>
 
-      {/* 2. Address Layout */}
-      <UICard className="p-6 md:p-8 border-border bg-surface shadow-sm">
-        <ReviewSectionHeader
-          title="Registered Address"
-          stepId={2}
-          onEdit={onEditSection}
-        />
-        <div className="mt-6 space-y-4">
-          <ReviewRowData
-            label="Address"
-            value={`${formData.addressLine1 || "-"} ${formData.addressLine2 || ""}`}
+      {/* 2. Registered Address & Statutory Licenses Two-Column Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Address Card */}
+        <div className="p-4 rounded-xl border border-border bg-surface-alt/30">
+          <ReviewSectionHeader
+            title="Registered Address"
+            stepId={2}
+            onEdit={onEditSection}
           />
-          <ReviewRowData label="City" value={formData.city || "-"} />
-          <ReviewRowData label="District" value={formData.district || "-"} />
-          <ReviewRowData label="State" value={formData.state || "-"} />
-          <ReviewRowData label="PIN Code" value={formData.pincode || "-"} />
-          <ReviewRowData
-            label="Country"
-            value={formData.country || "India"}
+          <div className="mt-3.5 space-y-2 text-xs">
+            <ReviewRowData
+              label="Address"
+              value={`${formData.addressLine1 || "-"} ${formData.addressLine2 || ""}`.trim()}
+            />
+            <ReviewRowData label="City / District" value={`${formData.city || "-"}, ${formData.district || "-"}`} />
+            <ReviewRowData label="State & PIN" value={`${formData.state || "-"} - ${formData.pincode || "-"}`} />
+            <ReviewRowData label="Country" value={formData.country || "India"} />
+          </div>
+        </div>
+
+        {/* Licenses Card */}
+        <div className="p-4 rounded-xl border border-border bg-surface-alt/30">
+          <ReviewSectionHeader
+            title="Statutory Licenses"
+            stepId={3}
+            onEdit={onEditSection}
           />
+          <div className="mt-3.5 space-y-2 text-xs">
+            <ReviewRowData label="Drug License" value={formData.drugLicenseNumber || "-"} />
+            <ReviewRowData label="License Type" value={formData.drugLicenseType || "-"} />
+            <ReviewRowData label="FSSAI Code" value={formData.fssaiNumber || "-"} />
+            <ReviewRowData label="Expiry Date" value={formData.licenseExpiresAt || "-"} />
+          </div>
         </div>
-      </UICard>
+      </div>
 
-      {/* 3. Statutory Licenses */}
-      <UICard className="p-6 md:p-8 border-border bg-surface shadow-sm">
+      {/* 3. Compliance Contacts Card */}
+      <div className="p-4.5 rounded-xl border border-border bg-surface-alt/30">
         <ReviewSectionHeader
-          title="Licenses & Tax Parameters"
-          stepId={3}
-          onEdit={onEditSection}
-        />
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4">
-          <ReviewRowData label="Drug License Number" value={formData.drugLicenseNumber || "-"} />
-          <ReviewRowData label="Drug License Type" value={formData.drugLicenseType || "-"} />
-          <ReviewRowData label="FSSAI Code" value={formData.fssaiNumber || "-"} />
-          <ReviewRowData label="Expires At Date" value={formData.licenseExpiresAt || "-"} />
-        </div>
-      </UICard>
-
-      {/* 4. Compliance Contacts */}
-      <UICard className="p-6 md:p-8 border-border bg-surface shadow-sm">
-        <ReviewSectionHeader
-          title="Compliance Contacts"
+          title="Compliance & Emergency Contacts"
           stepId={4}
           onEdit={onEditSection}
         />
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-4">
+        <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-xs">
           <ReviewRowData label="Pharmacist Name" value={formData.pharmacistName || "-"} />
           <ReviewRowData label="Registration Number" value={formData.pharmacistRegistrationNumber || "-"} />
           <ReviewRowData label="Pharmacist Mobile" value={formData.pharmacistMobile || "-"} />
+          <ReviewRowData label="Pharmacist Email" value={formData.pharmacistEmail || "-"} />
           <ReviewRowData label="Emergency Contact" value={formData.emergencyContactName || "-"} />
           <ReviewRowData label="Emergency Mobile" value={formData.emergencyContactMobile || "-"} />
         </div>
-      </UICard>
+      </div>
 
-      {/* 5. Action Bars Strip */}
-      <div className="mt-8 flex items-center justify-between bg-surface border border-border rounded-xl p-5 shadow-xs">
+      {/* Navigation Footer */}
+      <div className="pt-5 border-t border-border/80 flex items-center justify-between">
         <UIButton
+          type="button"
           variant="outline"
           startIcon={<ArrowLeft className="size-4" />}
           onClick={onBack}
           disabled={isUpdating}
+          className="cursor-pointer"
         >
           Back
         </UIButton>
-        <div className="flex items-center gap-3">
-          <UIButton
-            variant="primary"
-            startIcon={<CheckCircle className="size-4" />}
-            onClick={onSubmit}
-            loading={isUpdating}
-            disabled={isUpdating}
-          >
-            Save Changes
-          </UIButton>
-        </div>
+        <UIButton
+          type="button"
+          variant="primary"
+          startIcon={<CheckCircle className="size-4" />}
+          onClick={onSubmit}
+          isLoading={isUpdating}
+          loadingText="Saving Changes..."
+          disabled={isUpdating}
+          className="cursor-pointer font-bold shadow-xs px-5"
+        >
+          Save Changes
+        </UIButton>
       </div>
     </div>
   );
 };
 
 const ReviewSectionHeader = ({ title, stepId, onEdit }) => (
-  <div className="flex items-center justify-between border-b border-border pb-4">
-    <h4 className="m-0 text-base font-bold text-text">{title}</h4>
-    <UIButton
-      variant="outline"
-      size="sm"
-      className="h-8 px-2.5 text-xs bg-surface-alt"
-      startIcon={<Edit3 className="size-3.5" />}
+  <div className="flex items-center justify-between pb-2.5 border-b border-border/60">
+    <h4 className="text-xs font-bold text-text uppercase tracking-wider">{title}</h4>
+    <button
+      type="button"
       onClick={() => onEdit(stepId)}
+      className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline cursor-pointer"
     >
-      Edit
-    </UIButton>
-  </div>
-);
-
-const ReviewItem = ({ label, value }) => (
-  <div>
-    <span className="block text-[13px] font-semibold text-text-muted">
-      {label}
-    </span>
-    <span className="block mt-1 text-sm font-medium text-text">{value}</span>
+      <Edit3 className="size-3" />
+      <span>Edit</span>
+    </button>
   </div>
 );
 
 const ReviewRowData = ({ label, value }) => (
-  <div className="flex items-start justify-between gap-4 text-sm">
-    <span className="text-text-muted font-medium whitespace-nowrap">
-      {label}
-    </span>
-    <div className="text-right font-bold text-text max-w-[300px] truncate">
-      {value}
-    </div>
+  <div className="flex items-start justify-between gap-3">
+    <span className="text-text-muted shrink-0">{label}</span>
+    <span className="font-semibold text-text text-right truncate max-w-[240px]">{value}</span>
   </div>
 );
 

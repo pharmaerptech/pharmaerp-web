@@ -1,10 +1,11 @@
 // src/features/company/pages/CompaniesPage.jsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { API_STATUS } from "@/constants";
+import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import { UIConfirmDialog, UI_TOOLBAR_VIEWS } from "@/components/ui";
 
 import useCompany from "../hooks/useCompany";
@@ -105,6 +106,10 @@ const CompaniesPage = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const hasFetchedRef = useRef(false);
+  const { isSetupComplete, companyCompleted } = useSetupStatus();
+
+  // Enforce Sequential Setup: Cannot create another company before initial branch setup is complete
+  const canCreateCompany = isSetupComplete || !companyCompleted;
 
   const {
     companies,
@@ -315,8 +320,12 @@ const CompaniesPage = () => {
   }, []);
 
   const handleCreateCompany = useCallback(() => {
+    if (!canCreateCompany) {
+      navigate(ROUTES.SETUP_CENTER);
+      return;
+    }
     navigate("/companies/create");
-  }, [navigate]);
+  }, [canCreateCompany, navigate]);
 
   const handleViewCompany = useCallback(
     (company) => {
@@ -334,14 +343,6 @@ const CompaniesPage = () => {
     [navigate],
   );
 
-  const handleOpenSettings = useCallback(
-    (company) => {
-      if (!company?._id) return;
-      navigate(`/companies/${company._id}/settings`);
-    },
-    [navigate],
-  );
-
   const handleOpenEmployeesDrawer = useCallback((company) => {
     setSelectedCompanyForEmployees(company || null);
     setIsEmployeeDrawerOpen(true);
@@ -353,9 +354,10 @@ const CompaniesPage = () => {
   }, []);
 
   const handleRequestDeleteCompany = useCallback((company) => {
+    if (mappedCompanies.length <= 1) return;
     setSelectedCompany(company || null);
     setIsDeleteModalOpen(true);
-  }, []);
+  }, [mappedCompanies.length]);
 
   const handleCloseDeleteModal = useCallback(() => {
     if (isDeleting) return;
@@ -416,6 +418,8 @@ const CompaniesPage = () => {
     filteredCompaniesCount: filteredAndSortedCompanies.length,
     hasCompanies: mappedCompanies.length > 0,
     hasFilteredCompanies: filteredAndSortedCompanies.length > 0,
+    canCreateCompany,
+    canDeleteCompany: mappedCompanies.length > 1,
 
     handleFilterChange,
     handleSearchChange,
@@ -425,7 +429,6 @@ const CompaniesPage = () => {
     handleCreateCompany,
     handleViewCompany,
     handleEditCompany,
-    handleOpenSettings,
     handleViewEmployees: handleOpenEmployeesDrawer,
     handleDeleteCompany: handleRequestDeleteCompany,
     handleRefresh,

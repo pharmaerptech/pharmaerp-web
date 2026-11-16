@@ -22,8 +22,11 @@ import {
 } from "../../constants/purchasesData";
 import { CreatePurchaseOrderModal } from "../../components/CreatePurchaseOrderModal";
 import { PurchaseOrderDetailsModal } from "../../components/PurchaseOrderDetailsModal";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
+import { useBranchFilter } from "@/hooks";
 
 export const PurchasesMobilePage = () => {
+  const { isCompanyLevel, selectedBranchId, setSelectedBranchId } = useBranchFilter();
   const [orders, setOrders] = useState(PURCHASE_ORDERS);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -132,6 +135,14 @@ export const PurchasesMobilePage = () => {
 
       {/* Search & Tabs */}
       <div className="space-y-2">
+        {isCompanyLevel && (
+          <BranchFilterSelect
+            value={selectedBranchId}
+            onChange={setSelectedBranchId}
+            size="sm"
+            className="w-full"
+          />
+        )}
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-text-muted" />
           <input

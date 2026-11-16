@@ -50,6 +50,7 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
@@ -63,6 +64,7 @@ import {
   UIModalFooter,
   PermissionGate,
 } from "@/components/ui";
+import { CompanyFilterSelect, CompanyBadge } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/constants";
 import customerService from "../../services/customerService";
@@ -148,6 +150,7 @@ export const CustomersDesktopPage = ({
   handleRefresh: propHandleRefresh,
   activeSegment: propActiveSegment,
   refreshKey = 0,
+  companyFilter,
 }) => {
   const navigate = useNavigate();
   const tableContainerRef = useRef(null);
@@ -345,6 +348,7 @@ export const CustomersDesktopPage = ({
       isSystemCustomer: Boolean(c.isSystemCustomer),
       createdAt: c.createdAt || null,
       updatedAt: c.updatedAt || null,
+      companyId: c.companyId || null,
       rawCustomer: c,
     };
   }, []);
@@ -363,6 +367,10 @@ export const CustomersDesktopPage = ({
 
       if (selectedStatus !== "all") {
         params.status = selectedStatus;
+      }
+
+      if (companyFilter?.queryCompanyId) {
+        params.companyId = companyFilter.queryCompanyId;
       }
 
       // Customer type or segment scope mapping
@@ -394,7 +402,14 @@ export const CustomersDesktopPage = ({
 
       return params;
     },
-    [debouncedSearch, selectedStatus, selectedType, customerScope, sortOption],
+    [
+      debouncedSearch,
+      selectedStatus,
+      selectedType,
+      customerScope,
+      sortOption,
+      companyFilter?.queryCompanyId,
+    ],
   );
 
   // Fetch initial batch (Page 1) or full refresh
@@ -563,10 +578,10 @@ export const CustomersDesktopPage = ({
     };
   }, []);
 
-  // Initial load and auto re-fetch on filter / refreshKey changes
+  // Initial load and auto re-fetch on filter / refreshKey / company changes
   useEffect(() => {
     fetchInitialCustomers();
-  }, [fetchInitialCustomers, refreshKey]);
+  }, [fetchInitialCustomers, refreshKey, companyFilter?.selectedCompanyId]);
 
   // Unified Refresh Handler
   const handleRefresh = useCallback(() => {
@@ -931,6 +946,14 @@ export const CustomersDesktopPage = ({
           />
         </div>
 
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
+
         {/* Filter Modal Trigger Button */}
         <UIButton
           type="button"
@@ -1088,12 +1111,8 @@ export const CustomersDesktopPage = ({
       </div>
 
       {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ────── */}
-      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-        {/* Internal Scroll Container: Definitive scroll parent */}
-        <div
-          ref={tableContainerRef}
-          className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0"
-        >
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef}>
           <UITable
             stickyHeader
             containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -1188,9 +1207,14 @@ export const CustomersDesktopPage = ({
                             {getInitials(c.name)}
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-text truncate hover:text-primary transition-colors text-xs sm:text-sm leading-tight">
-                              {c.name}
-                            </span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="font-semibold text-text truncate hover:text-primary transition-colors text-xs sm:text-sm leading-tight">
+                                {c.name}
+                              </span>
+                              <CompanyBadge
+                                company={c.companyId || c.rawCustomer?.companyId}
+                              />
+                            </div>
                             <div className="flex items-center gap-1.5 text-xs text-text-muted truncate mt-0.5">
                               <span className="text-[13px] font-bold text-text/90 font-mono tracking-tight">
                                 {c.mobile && c.mobile !== "—" ? c.mobile : "—"}
@@ -1459,7 +1483,7 @@ export const CustomersDesktopPage = ({
               scrollContainerRef={tableContainerRef}
             />
           )}
-        </div>
+        </UITableScrollArea>
       </div>
 
       {/* ── Comprehensive Filter & Sort Modal Dialog ─────────────────────────── */}

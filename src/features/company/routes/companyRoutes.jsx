@@ -7,7 +7,6 @@ import {
   CreateCompanyPage,
   EditCompanyPage,
   CompanyDetailsPage,
-  CompanySettingsPage,
 } from "../pages";
 
 export const createCompanyRoutes = [
@@ -29,10 +28,6 @@ export const existingCompanyRoutes = [
   {
     path: ROUTES.COMPANY_DETAILS,
     element: <CompanyDetailsPage />,
-  },
-  {
-    path: ROUTES.COMPANY_SETTINGS,
-    element: <CompanySettingsPage />,
   },
 ];
 

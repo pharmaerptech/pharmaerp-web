@@ -49,9 +49,12 @@ import { storage } from "@/utils";
 import { useSelector, useDispatch } from "react-redux";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { useActiveShift } from "@/features/operations/shifts/hooks/useActiveShift";
-import { getOpenBusinessDay } from "@/features/operations/business-days/store/businessDayThunk";
+import { getOpenBusinessDay, abortBusinessDayClose } from "@/features/operations/business-days/store/businessDayThunk";
 import OpenBusinessDayDialog from "@/features/operations/business-days/components/OpenBusinessDayDialog";
+import { CloseBusinessDayDialog } from "@/features/operations/business-days/components/CloseBusinessDayDialog";
 import { CreateShiftDialog } from "@/features/operations/shifts/components/CreateShiftDialog";
+import { CloseShiftDialog } from "@/features/operations/shifts/components/CloseShiftDialog";
+import { abortShiftClose } from "@/features/operations/shifts/store/shiftThunk";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import invoiceService from "@/features/sales/services/invoiceService";
 import customerService from "@/features/parties/customers/services/customerService";
@@ -117,7 +120,36 @@ export const SalesMobilePage = () => {
   
   const [isBusinessDayModalOpen, setIsBusinessDayModalOpen] = useState(false);
   const [isShiftModalOpen, setIsShiftModalOpen] = useState(false);
+  const [isCloseShiftModalOpen, setIsCloseShiftModalOpen] = useState(false);
+  const [isCloseBusinessDayModalOpen, setIsCloseBusinessDayModalOpen] = useState(false);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
+
+  const handleAbortClosingShift = async () => {
+    if (!activeShift?._id) return;
+    try {
+      await dispatch(abortShiftClose(activeShift._id)).unwrap();
+      if (typeof refetchActiveShift === "function") refetchActiveShift();
+      setToastMessage("Shift closing unlocked! Shift returned to open.");
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err) {
+      setToastMessage(typeof err === "string" ? err : err?.message || "Failed to unlock shift closing");
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
+  const handleAbortClosingBusinessDay = async () => {
+    if (!openBusinessDay?._id) return;
+    try {
+      await dispatch(abortBusinessDayClose(openBusinessDay._id)).unwrap();
+      if (branchId) dispatch(getOpenBusinessDay(branchId));
+      if (typeof refetchActiveShift === "function") refetchActiveShift();
+      setToastMessage("Business day closing unlocked! Business day returned to open.");
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch (err) {
+      setToastMessage(typeof err === "string" ? err : err?.message || "Failed to unlock business day closing");
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
 
   // ── Hold Bill System ──
   const {
@@ -455,7 +487,6 @@ export const SalesMobilePage = () => {
   }, [routeInvoiceId]);
 
   const handleCompleteSale = async (saleData) => {
-    setIsCheckoutOpen(false);
     let savedSale = null;
     try {
       const targetCustomerId =
@@ -490,8 +521,18 @@ export const SalesMobilePage = () => {
           savedSale = res?.data?.data || res?.data || null;
         }
       }
+      setIsCheckoutOpen(false);
     } catch (err) {
       console.warn("Mobile sale record/update error:", err);
+      if (
+        err?.response?.status === 409 ||
+        err?.response?.data?.message?.toLowerCase().includes("closing") ||
+        err?.response?.data?.message?.toLowerCase().includes("closed")
+      ) {
+        setToastMessage(err?.response?.data?.message || "Billing Locked: Shift or Business Day closing/closed.");
+        setTimeout(() => setToastMessage(null), 5000);
+        refetchActiveShift?.();
+      }
       throw err;
     }
 
@@ -558,21 +599,68 @@ export const SalesMobilePage = () => {
     );
   }
 
-  if (!activeShift) {
-    const isDayOpen = Boolean(openBusinessDay && String(openBusinessDay.status || "").toLowerCase() === "open");
+  const isShiftOpen = activeShift && String(activeShift.status || "").toLowerCase() === "open";
+  const isShiftClosing = activeShift && String(activeShift.status || "").toLowerCase() === "closing";
+  const isDayClosing = Boolean(
+    openBusinessDay && String(openBusinessDay.status || "").toLowerCase() === "closing"
+  );
+  const isDayOpen = Boolean(
+    openBusinessDay && String(openBusinessDay.status || "").toLowerCase() === "open"
+  );
 
+  if (!activeShift || !isShiftOpen || isDayClosing || isShiftClosing) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[100dvh] p-4 bg-bg font-sans relative">
         <POSSessionGatekeeperCard
           isDayOpen={isDayOpen}
+          isDayClosing={isDayClosing}
+          isShiftClosing={isShiftClosing}
+          activeShift={activeShift}
           openBusinessDay={openBusinessDay}
           currentBranch={currentBranch}
           onOpenBusinessDay={() => setIsBusinessDayModalOpen(true)}
           onStartShift={() => setIsShiftModalOpen(true)}
+          onResumeClosing={() => setIsCloseShiftModalOpen(true)}
+          onAbortClosing={handleAbortClosingShift}
+          onResumeBusinessDayClosing={() => setIsCloseBusinessDayModalOpen(true)}
+          onAbortBusinessDayClosing={handleAbortClosingBusinessDay}
+          onRefresh={() => {
+            refetchActiveShift?.();
+            if (branchId) dispatch(getOpenBusinessDay(branchId));
+          }}
         />
 
         <OpenBusinessDayDialog isOpen={isBusinessDayModalOpen} onClose={handleCloseBusinessDayModal} />
         <CreateShiftDialog isOpen={isShiftModalOpen} onClose={handleCloseShiftModal} />
+        {activeShift && (
+          <CloseShiftDialog
+            isOpen={isCloseShiftModalOpen}
+            shift={activeShift}
+            onOpenNewShift={() => {
+              setIsCloseShiftModalOpen(false);
+              setIsShiftModalOpen(true);
+            }}
+            onCreateDayClosing={() => {
+              setIsCloseShiftModalOpen(false);
+              navigate("/operations/business-days");
+            }}
+            onClose={() => {
+              setIsCloseShiftModalOpen(false);
+              refetchActiveShift?.();
+            }}
+          />
+        )}
+        {openBusinessDay && (
+          <CloseBusinessDayDialog
+            isOpen={isCloseBusinessDayModalOpen}
+            businessDay={openBusinessDay}
+            onClose={() => {
+              setIsCloseBusinessDayModalOpen(false);
+              if (branchId) dispatch(getOpenBusinessDay(branchId));
+              refetchActiveShift?.();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -583,7 +671,11 @@ export const SalesMobilePage = () => {
       {toastMessage && (
         <div className="fixed top-4 left-4 right-4 z-[9999] flex items-center gap-2 rounded-xl border border-primary/30 bg-surface/95 p-3 text-xs font-semibold text-text shadow-xl backdrop-blur-md">
           <CheckCircle2 className="size-4 text-primary shrink-0" />
-          <span>{toastMessage}</span>
+          <span>
+            {typeof toastMessage === "object"
+              ? toastMessage?.text || toastMessage?.message || String(toastMessage)
+              : toastMessage}
+          </span>
         </div>
       )}
 
@@ -769,7 +861,20 @@ export const SalesMobilePage = () => {
                   size="md"
                   className="flex-1 justify-center text-xs font-bold"
                   disabled={cart.length === 0}
-                  onClick={() => setIsInvoicePreviewOpen(true)}
+                  onClick={() => {
+                    if (!activeShift || activeShift.status !== "open") {
+                      setToastMessage(`Billing Locked: Shift is currently ${activeShift?.status || "closed"}. Please open a shift.`);
+                      setTimeout(() => setToastMessage(null), 4000);
+                      refetchActiveShift?.();
+                      return;
+                    }
+                    if (!openBusinessDay || openBusinessDay.status !== "open") {
+                      setToastMessage(`Billing Locked: Business Day is currently ${openBusinessDay?.status || "closed"}. Please open a business day.`);
+                      setTimeout(() => setToastMessage(null), 4000);
+                      return;
+                    }
+                    setIsInvoicePreviewOpen(true);
+                  }}
                 >
                   Proceed (₹{cartGrandTotal})
                 </UIButton>
@@ -796,6 +901,11 @@ export const SalesMobilePage = () => {
         isOpen={isInvoicePreviewOpen}
         onClose={() => setIsInvoicePreviewOpen(false)}
         onProceedToCheckout={() => {
+          if (!activeShift || activeShift.status !== "open" || !openBusinessDay || openBusinessDay.status !== "open") {
+            setToastMessage("Cannot proceed: Shift or Business Day is closing or closed.");
+            setTimeout(() => setToastMessage(null), 4000);
+            return;
+          }
           setIsInvoicePreviewOpen(false);
           setIsCheckoutOpen(true);
         }}
@@ -805,6 +915,8 @@ export const SalesMobilePage = () => {
         customerPhone={selectedCustomer?.phone}
         billingMode="B2C"
         cartGrandTotal={cartGrandTotal}
+        activeShift={activeShift}
+        openBusinessDay={openBusinessDay}
       />
 
       <SalesCheckoutModal
@@ -814,6 +926,8 @@ export const SalesMobilePage = () => {
         cartSummary={{ items: cart, subtotal: cartSubtotal }}
         existingInvoiceNo={editInvoiceData?.invoiceNo || initialInvoice?.invoiceNo}
         onCompleteSale={handleCompleteSale}
+        activeShift={activeShift}
+        openBusinessDay={openBusinessDay}
       />
 
       <OrderInvoiceModal

@@ -1,51 +1,54 @@
 // src/features/access-control/pages/desktop/RolesDesktopPage.jsx
 
-import { useState } from "react";
+import React, { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   Shield,
   Plus,
   RotateCcw,
+  RefreshCw,
   Download,
-  MoreHorizontal,
+  MoreVertical,
   Edit2,
   Trash2,
   Users,
   Lock,
   Sliders,
   FileKey,
+  Search,
+  Eye,
 } from "lucide-react";
-
-import { TopBarStats } from "@/layouts/app/components/header";
-import {
-  RolesTableView,
-  RoleWorkAccessBadges,
-} from "@/features/access-control/components";
 
 import {
   UIButton,
-  UIIconButton,
+  UIInput,
   UISelect,
-  UISkeleton,
-  UIEmptyState,
+  UIBadge,
+  UITable,
+  UITableHeader,
+  UITableBody,
+  UITableRow,
+  UITableHead,
+  UITableCell,
+  UITableEmpty,
+  UITableLoading,
+  UIInfiniteScroll,
+  UITableScrollArea,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
   UIDropdownItem,
   UIDropdownDivider,
-  UIAlert,
   PermissionGate,
-  UIModal,
-  UIModalBody,
-  UIFilterToolbar,
-  UI_TOOLBAR_VIEWS,
 } from "@/components/ui";
 import { usePermission } from "@/hooks";
 import { cn } from "@/lib/utils";
+import { RoleWorkAccessBadges } from "@/features/access-control/components";
+
+const PAGE_LIMIT = 20;
 
 export default function RolesDesktopPage({
   roles = [],
   stats = [],
-
   filters = {
     search: "",
     status: "all",
@@ -53,24 +56,15 @@ export default function RolesDesktopPage({
     workMode: "all",
     workLevel: "all",
   },
-  activeFilterChips = [],
   statusOptions = [],
   typeOptions = [],
   workModeOptions = [],
   workLevelOptions = [],
-
-  viewMode,
-  onViewModeChange,
-
   isLoading = false,
   message = null,
-
-  hasFilteredRoles = false,
-
   handleFilterChange,
   handleSearchChange,
   handleClearFilters,
-
   handleRefresh,
   handleCreateRole,
   handleViewPermissions,
@@ -78,390 +72,479 @@ export default function RolesDesktopPage({
   handleViewRole,
   handleEditRole,
   handleDeleteRole,
-
   clearMessage,
 }) {
   const { can } = usePermission();
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const tableContainerRef = useRef(null);
 
-  const hasActiveModalFilters =
-    filters.status !== "all" ||
-    filters.type !== "all" ||
-    filters.workMode !== "all" ||
-    filters.workLevel !== "all";
+  // Infinite Scroll state - incremental batches
+  const [visibleCount, setVisibleCount] = useState(PAGE_LIMIT);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Reset visible count and scroll to top on filter change
+  useEffect(() => {
+    setVisibleCount(PAGE_LIMIT);
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  }, [
+    filters.search,
+    filters.status,
+    filters.type,
+    filters.workMode,
+    filters.workLevel,
+  ]);
+
+  const displayedRoles = useMemo(() => {
+    return (roles || []).slice(0, visibleCount);
+  }, [roles, visibleCount]);
+
+  const hasMore = visibleCount < (roles || []).length;
+
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount((prev) =>
+        Math.min(prev + PAGE_LIMIT, (roles || []).length)
+      );
+      setIsLoadingMore(false);
+    }, 120);
+  }, [isLoadingMore, hasMore, roles]);
+
+  const totalRolesCount = roles.length;
+  const customRolesCount = roles.filter((r) => !r.isSystem).length;
+  const systemRolesCount = roles.filter((r) => r.isSystem).length;
+  const totalAssignedMembers = roles.reduce(
+    (sum, r) => sum + (r.membersCount || 0),
+    0
+  );
+
+  const statCards = useMemo(
+    () => [
+      {
+        id: "total_roles",
+        title: "Total Roles",
+        value: totalRolesCount,
+        subtitle: "Active workspace roles",
+        color: "text-indigo-600 dark:text-indigo-400",
+        bg: "bg-indigo-500/10",
+        border: "border-indigo-500/20",
+        icon: Shield,
+      },
+      {
+        id: "custom_roles",
+        title: "Custom Roles",
+        value: customRolesCount,
+        subtitle: "Configured permissions",
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/20",
+        icon: Sliders,
+      },
+      {
+        id: "system_roles",
+        title: "System Defaults",
+        value: systemRolesCount,
+        subtitle: "Protected baseline roles",
+        color: "text-amber-600 dark:text-amber-400",
+        bg: "bg-amber-500/10",
+        border: "border-amber-500/20",
+        icon: Lock,
+      },
+      {
+        id: "assigned_members",
+        title: "Assigned Staff",
+        value: totalAssignedMembers,
+        subtitle: "Members holding roles",
+        color: "text-sky-600 dark:text-sky-400",
+        bg: "bg-sky-500/10",
+        border: "border-sky-500/20",
+        icon: Users,
+      },
+    ],
+    [totalRolesCount, customRolesCount, systemRolesCount, totalAssignedMembers]
+  );
+
+  const hasActiveFilters = Boolean(
+    filters.search ||
+      (filters.status && filters.status !== "all") ||
+      (filters.type && filters.type !== "all") ||
+      (filters.workMode && filters.workMode !== "all") ||
+      (filters.workLevel && filters.workLevel !== "all")
+  );
 
   return (
-    <div className="min-h-screen bg-bg text-text p-3 sm:p-4 lg:p-0 max-w-[1440px] mx-auto space-y-2.5">
-      {/* Feedback Toast */}
-      {message && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full px-4">
-          <UIAlert
-            intent="success"
-            title={message}
-            onClose={clearMessage}
-            className="shadow-lg"
-          />
-        </div>
-      )}
-
-      <TopBarStats stats={stats} />
-
-      {/* Action Toolbar */}
-      <UIFilterToolbar
-        searchQuery={filters.search}
-        onSearchChange={handleSearchChange}
-        onSearchClear={() => handleSearchChange({ target: { value: "" } })}
-        searchPlaceholder="Search roles by title, work mode, level or permissions..."
-        showViewSwitcher={true}
-        viewMode={viewMode}
-        onViewModeChange={onViewModeChange}
-        activeFilterChips={activeFilterChips}
-        onClearFilters={handleClearFilters}
-        filters={
-          <UIButton
-            variant="outline"
-            size="sm"
-            startIcon={<Sliders className="size-4" />}
-            onClick={() => setIsFilterModalOpen(true)}
-            className={cn(
-              "w-10 px-0 sm:w-auto sm:px-3 justify-center",
-              hasActiveModalFilters &&
-                "border-primary/50 text-primary bg-primary/5",
-            )}
-          >
-            <span className="hidden sm:inline">Filter</span>
-          </UIButton>
-        }
-        actions={
-          <div className="flex items-center gap-2 shrink-0 border-l border-border pl-2 ml-1">
-            <UIIconButton
-              variant="ghost"
-              size="sm"
-              className="text-text-muted hover:text-text h-9 w-9"
-              onClick={handleRefresh}
-              disabled={isLoading}
-              title="Refresh"
-            >
-              <RotateCcw
-                className={`size-4 ${isLoading ? "animate-spin" : ""}`}
-              />
-            </UIIconButton>
-
-            <UIButton
-              variant="outline"
-              size="sm"
-              onClick={handleExportRoles}
-              startIcon={<Download className="size-4" />}
-            >
-              Export
-            </UIButton>
-
-            <UIButton
-              variant="outline"
-              size="sm"
-              onClick={handleViewPermissions}
-              startIcon={<FileKey className="size-4 text-primary" />}
-            >
-              Permission Catalog
-            </UIButton>
-
-            <PermissionGate permission="role:create">
-              <UIButton
-                variant="primary"
-                size="sm"
-                onClick={handleCreateRole}
-                startIcon={<Plus className="size-4" />}
+    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-2 sm:px-3 pt-0 pb-1 gap-2.5 text-text font-sans transition-colors overflow-hidden select-none">
+      {/* ── 1. Compact 4-Card Statistics Grid (Matches Sales/Customer Pages) ── */}
+      <div className="shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.id}
+                className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors"
               >
-                Create Role
-              </UIButton>
-            </PermissionGate>
-          </div>
-        }
-      />
-
-      {/* Filter Modal */}
-      <UIModal
-        isOpen={isFilterModalOpen}
-        onClose={() => setIsFilterModalOpen(false)}
-        title="Filter Roles"
-        className="overflow-visible"
-      >
-        <UIModalBody className="space-y-4 overflow-visible p-4">
-          <UISelect
-            label="Role Status"
-            value={filters.status}
-            onChange={(e) => handleFilterChange({ status: e.target.value })}
-            options={statusOptions}
-          />
-          <UISelect
-            label="Role Type"
-            value={filters.type}
-            onChange={(e) => handleFilterChange({ type: e.target.value })}
-            options={typeOptions}
-          />
-          <UISelect
-            label="Allowed Work Mode"
-            value={filters.workMode}
-            onChange={(e) => handleFilterChange({ workMode: e.target.value })}
-            options={workModeOptions}
-          />
-          <UISelect
-            label="Work Level Ceiling"
-            value={filters.workLevel}
-            onChange={(e) => handleFilterChange({ workLevel: e.target.value })}
-            options={workLevelOptions}
-          />
-          {hasActiveModalFilters && (
-            <UIButton
-              variant="ghost"
-              className="w-full mt-2"
-              onClick={() => {
-                handleFilterChange({
-                  status: "all",
-                  type: "all",
-                  workMode: "all",
-                  workLevel: "all",
-                });
-                setIsFilterModalOpen(false);
-              }}
-            >
-              Clear Filters
-            </UIButton>
-          )}
-        </UIModalBody>
-      </UIModal>
-
-      {/* Main Role Cards Grid / Table */}
-      {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="bg-surface rounded-2xl p-5 border border-border/60 shadow-2xs space-y-4"
-            >
-              <div className="flex items-center justify-between">
-                <div className="space-y-1.5 flex-1">
-                  <UISkeleton className="h-5 w-40 rounded" />
-                  <UISkeleton className="h-3 w-28 rounded" />
+                <div
+                  className={cn(
+                    "size-9 rounded-lg flex items-center justify-center shrink-0 border",
+                    stat.bg,
+                    stat.border,
+                    stat.color
+                  )}
+                >
+                  <Icon className="size-4.5 stroke-[1.8]" />
                 </div>
-                <UISkeleton className="h-6 w-20 rounded-full" />
+                <div className="min-w-0">
+                  <div className="text-[11.5px] font-medium text-text-muted truncate">
+                    {stat.title}
+                  </div>
+                  <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                    {stat.value}
+                  </div>
+                  <div className="text-[10px] text-text-muted truncate mt-0.5">
+                    {stat.subtitle}
+                  </div>
+                </div>
               </div>
-              <UISkeleton className="h-10 w-full rounded" />
-              <div className="flex items-center justify-between pt-3 border-t border-border/40">
-                <UISkeleton className="h-8 w-24 rounded-lg" />
-                <UISkeleton className="h-8 w-32 rounded-lg" />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
-      ) : hasFilteredRoles ? (
-        <>
-          {viewMode === UI_TOOLBAR_VIEWS.LIST ? (
-            <RolesTableView
-              roles={roles}
-              onViewRole={handleViewRole}
-              onEditRole={handleEditRole}
-              onDeleteRole={handleDeleteRole}
+      </div>
+
+      {/* ── 2. Streamlined Single-Row Toolbar ────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {/* Search Input */}
+        <div className="flex-1 min-w-[200px] sm:min-w-[240px]">
+          <UIInput
+            type="text"
+            value={filters.search || ""}
+            onChange={handleSearchChange}
+            placeholder="Search roles by title, mode, permissions..."
+            startIcon={<Search className="size-4 text-text-muted" />}
+            size="md"
+            variant="outline"
+            isClearable
+            onClear={() => handleSearchChange?.({ target: { value: "" } })}
+            className="w-full"
+          />
+        </div>
+
+        {/* Status Select */}
+        <div className="w-[125px] sm:w-[140px]">
+          <UISelect
+            value={filters.status || "all"}
+            onChange={(val) => handleFilterChange?.({ status: val })}
+            options={statusOptions}
+            placeholder="All Status"
+            size="md"
+          />
+        </div>
+
+        {/* Type Select */}
+        <div className="w-[120px] sm:w-[135px]">
+          <UISelect
+            value={filters.type || "all"}
+            onChange={(val) => handleFilterChange?.({ type: val })}
+            options={typeOptions}
+            placeholder="All Types"
+            size="md"
+          />
+        </div>
+
+        {/* Work Mode Select */}
+        <div className="w-[135px] sm:w-[155px]">
+          <UISelect
+            value={filters.workMode || "all"}
+            onChange={(val) => handleFilterChange?.({ workMode: val })}
+            options={workModeOptions}
+            placeholder="Work Mode"
+            size="md"
+          />
+        </div>
+
+        {/* Work Level Select */}
+        <div className="w-[135px] sm:w-[155px]">
+          <UISelect
+            value={filters.workLevel || "all"}
+            onChange={(val) => handleFilterChange?.({ workLevel: val })}
+            options={workLevelOptions}
+            placeholder="Work Level"
+            size="md"
+          />
+        </div>
+
+        {/* Quick Reset */}
+        {hasActiveFilters && (
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
+            onClick={handleClearFilters}
+            startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+            className="h-10 px-2.5 text-xs text-text-muted hover:text-text"
+            title="Reset all filters"
+          >
+            Reset
+          </UIButton>
+        )}
+
+        {/* Action Cluster (Right) */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
+            disabled={isLoading}
+            onClick={handleRefresh}
+            className="h-10 w-10 p-0 text-text-muted hover:text-text cursor-pointer"
+            title="Refresh roles"
+          >
+            <RefreshCw
+              className={cn(
+                "size-4 text-text-muted hover:text-primary",
+                isLoading && "animate-spin text-primary"
+              )}
             />
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {roles.map((role) => {
-                const isSystem = Boolean(role.isSystem);
-                const memberCount = role.membersCount || 0;
-                const permissionCount =
-                  role.permissionCount ?? role.permissions?.length ?? 0;
-                const canUpdateThisRole = can("role:update") && role.canEdit;
+          </UIButton>
 
-                return (
-                  <div
-                    key={role._id}
-                    className="bg-surface rounded-2xl p-5 sm:p-5.5 border border-border/60 shadow-2xs hover:shadow-md hover:border-primary/30 transition-all duration-200 flex flex-col justify-between group relative"
-                  >
-                    <div>
-                      {/* Card Header: Title & Member Count Pill */}
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm sm:text-base font-bold text-text group-hover:text-primary transition-colors truncate">
+          <UIButton
+            type="button"
+            variant="outline"
+            size="md"
+            startIcon={<Download className="size-4" />}
+            onClick={handleExportRoles}
+            className="h-10 px-3 text-xs"
+          >
+            Export
+          </UIButton>
+
+          <UIButton
+            type="button"
+            variant="outline"
+            size="md"
+            startIcon={<FileKey className="size-4 text-primary" />}
+            onClick={handleViewPermissions}
+            className="h-10 px-3 text-xs"
+          >
+            Catalog
+          </UIButton>
+
+          <PermissionGate permission="role:create">
+            <UIButton
+              type="button"
+              variant="primary"
+              size="md"
+              startIcon={<Plus className="size-4" />}
+              onClick={handleCreateRole}
+              className="h-10 px-3.5 text-xs font-semibold shadow-xs"
+            >
+              Create Role
+            </UIButton>
+          </PermissionGate>
+        </div>
+      </div>
+
+      {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ── */}
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
+          <UITable
+            stickyHeader
+            containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
+            className="w-full"
+          >
+            {/* Sticky Table Header */}
+            <UITableHeader
+              sticky
+              className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs"
+            >
+              <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
+                <UITableHead sticky className="min-w-[200px]">Role</UITableHead>
+                <UITableHead sticky className="min-w-[100px]">Type</UITableHead>
+                <UITableHead sticky className="min-w-[210px]">Work Mode &amp; Level</UITableHead>
+                <UITableHead sticky className="min-w-[220px]">Description</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[110px]">Permissions</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[100px]">Members</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[100px]">Status</UITableHead>
+                <UITableHead sticky align="right" className="min-w-[70px]">Actions</UITableHead>
+              </UITableRow>
+            </UITableHeader>
+
+            <UITableBody>
+              {isLoading ? (
+                <UITableLoading colSpan={8} rows={8} />
+              ) : displayedRoles.length === 0 ? (
+                <UITableEmpty
+                  colSpan={8}
+                  title="No roles found"
+                  description={
+                    hasActiveFilters
+                      ? "Try adjusting search or filters to find defined roles."
+                      : "Create custom roles to configure specific permission clearances."
+                  }
+                />
+              ) : (
+                displayedRoles.map((role) => {
+                  const isSystem = Boolean(role.isSystem);
+                  const memberCount = role.membersCount || 0;
+                  const permissionCount =
+                    role.permissionCount ?? role.permissions?.length ?? 0;
+                  const status = role.displayStatus || "inactive";
+
+                  return (
+                    <UITableRow
+                      key={role._id}
+                      onClick={() => handleViewRole?.(role)}
+                      className="cursor-pointer hover:bg-surface-alt/50 transition-colors"
+                    >
+                      {/* Role Name */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="p-1.5 bg-primary/10 rounded-lg text-primary shrink-0">
+                            <Shield className="size-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-text text-xs truncate flex items-center gap-1.5">
                               {role.displayName}
-                            </h3>
-                            {isSystem ? (
-                              <span
-                                title="System Default Role"
-                                className="inline-flex items-center text-text-muted/70 hover:text-text-muted"
-                              >
-                                <Lock className="size-3.5 shrink-0" />
-                              </span>
-                            ) : null}
-                          </div>
-
-                          {/* Scope & Metadata Tag */}
-                          <div className="flex items-center gap-2 mt-0.5 text-[11.5px] text-text-muted font-medium flex-wrap">
-                            <span>
-                              Scope: {isSystem ? "Organization" : "Workspace"}
-                            </span>
-                            <span>•</span>
-                            <span>{permissionCount} Permissions</span>
-                            {role.displayStatus === "inactive" && (
-                              <>
-                                <span>•</span>
-                                <span className="text-warning font-semibold">
-                                  Inactive
-                                </span>
-                              </>
-                            )}
+                              {isSystem && (
+                                <Lock
+                                  className="size-3 text-text-muted shrink-0"
+                                  title="System Default Role"
+                                />
+                              )}
+                            </p>
                           </div>
                         </div>
+                      </UITableCell>
 
-                        {/* Member Count Pill Capsule */}
-                        <div className="shrink-0">
-                          <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-alt border border-border/50 text-text-muted shadow-2xs inline-flex items-center gap-1.5">
-                            <Users className="size-3 text-text-muted/80" />
-                            <span>
-                              {memberCount}{" "}
-                              {memberCount === 1 ? "Member" : "Members"}
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Work Mode & Level Pills */}
-                      <RoleWorkAccessBadges
-                        workAccess={role.workAccess}
-                        role={role}
-                        compact
-                        className="mt-2.5"
-                      />
-
-                      {/* Role Description */}
-                      <p className="text-xs text-text-muted mt-2.5 leading-relaxed line-clamp-2 min-h-[36px]">
-                        {role.displayDescription ||
-                          "Full access to manage members, billing, and organization-wide settings."}
-                      </p>
-                    </div>
-
-                    {/* Card Footer: Action Buttons */}
-                    <div className="flex items-center justify-between gap-2 pt-4 mt-4 border-t border-border/40">
-                      <UIButton
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewRole(role)}
-                        className="text-xs font-medium"
-                      >
-                        View Role
-                      </UIButton>
-
-                      <div className="flex items-center gap-1.5">
-                        <UIButton
-                          variant="outline"
+                      {/* Type */}
+                      <UITableCell className="py-2.5 px-3">
+                        <UIBadge
+                          variant="soft"
+                          color={isSystem ? "primary" : "neutral"}
                           size="sm"
-                          onClick={() => handleEditRole(role)}
-                          disabled={!canUpdateThisRole}
-                          className={cn(
-                            "text-xs font-semibold",
-                            canUpdateThisRole
-                              ? "text-primary hover:text-primary-hover hover:border-primary/40 hover:bg-primary/5"
-                              : "opacity-60 cursor-not-allowed",
-                          )}
+                          className="whitespace-nowrap font-semibold capitalize text-[10.5px]"
                         >
-                          {canUpdateThisRole
-                            ? `Edit ${role.displayName.split(" ")[0]}`
-                            : role.canEdit
-                              ? "Read Only"
-                              : "Protected Role"}
-                        </UIButton>
+                          {role.displayType || (isSystem ? "System" : "Custom")}
+                        </UIBadge>
+                      </UITableCell>
 
-                        {can("role:delete") && role.canDelete && (
+                      {/* Work Mode & Level */}
+                      <UITableCell className="py-2.5 px-3">
+                        <RoleWorkAccessBadges
+                          workAccess={role.workAccess}
+                          size="xs"
+                        />
+                      </UITableCell>
+
+                      {/* Description */}
+                      <UITableCell className="py-2.5 px-3">
+                        <p className="text-xs text-text-muted truncate max-w-[240px]">
+                          {role.description || "—"}
+                        </p>
+                      </UITableCell>
+
+                      {/* Permissions */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        <span className="font-mono text-xs font-semibold text-text">
+                          {permissionCount}
+                        </span>
+                      </UITableCell>
+
+                      {/* Members */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        <span className="font-mono text-xs font-semibold text-text">
+                          {memberCount}
+                        </span>
+                      </UITableCell>
+
+                      {/* Status */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        <UIBadge
+                          variant="soft"
+                          color={status === "active" ? "success" : "neutral"}
+                          size="sm"
+                          className="capitalize text-[10.5px] font-semibold"
+                        >
+                          {status}
+                        </UIBadge>
+                      </UITableCell>
+
+                      {/* Actions */}
+                      <UITableCell align="right" className="py-2.5 px-3">
+                        <div
+                          className="flex items-center justify-end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <UIDropdown>
                             <UIDropdownTrigger asChild>
-                              <UIIconButton
+                              <UIButton
+                                type="button"
                                 variant="ghost"
                                 size="sm"
-                                aria-label="More role actions"
+                                className="h-7 w-7 p-0 text-text-muted hover:text-text cursor-pointer"
                               >
-                                <MoreHorizontal className="size-3.5 text-text-muted" />
-                              </UIIconButton>
+                                <MoreVertical className="size-3.5" />
+                              </UIButton>
                             </UIDropdownTrigger>
                             <UIDropdownMenu align="end" className="w-44">
                               <UIDropdownItem
-                                icon={<Edit2 className="size-3.5" />}
-                                onClick={() => handleEditRole(role)}
+                                icon={<Eye className="size-4 text-text-muted" />}
+                                onClick={() => handleViewRole?.(role)}
                               >
-                                Edit Permissions
+                                View Details
                               </UIDropdownItem>
-                              <UIDropdownDivider />
-                              <UIDropdownItem
-                                icon={<Trash2 className="size-3.5 text-destructive" />}
-                                onClick={() => handleDeleteRole(role)}
-                                className="text-destructive font-medium focus:text-destructive"
-                              >
-                                Delete Role
-                              </UIDropdownItem>
+                              {can("role:update") && role.canEdit && (
+                                <UIDropdownItem
+                                  icon={<Edit2 className="size-4 text-text-muted" />}
+                                  onClick={() => handleEditRole?.(role)}
+                                >
+                                  Edit Role
+                                </UIDropdownItem>
+                              )}
+                              {can("role:delete") && !isSystem && (
+                                <>
+                                  <UIDropdownDivider />
+                                  <UIDropdownItem
+                                    variant="danger"
+                                    icon={<Trash2 className="size-4 text-error" />}
+                                    onClick={() => handleDeleteRole?.(role)}
+                                  >
+                                    Delete Role
+                                  </UIDropdownItem>
+                                </>
+                              )}
                             </UIDropdownMenu>
                           </UIDropdown>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                        </div>
+                      </UITableCell>
+                    </UITableRow>
+                  );
+                })
+              )}
+            </UITableBody>
+          </UITable>
 
-              {/* "Create New Role" Dashed Placeholder Card */}
-              <PermissionGate permission="role:create">
-                <div
-                  onClick={handleCreateRole}
-                  className="border-2 border-dashed border-border/80 hover:border-primary/60 bg-surface/30 hover:bg-surface/80 rounded-2xl p-6 flex flex-col items-center justify-center gap-2.5 transition-all min-h-[185px] cursor-pointer group shadow-2xs select-none"
-                >
-                  <div className="size-11 rounded-full bg-surface-alt group-hover:bg-primary/10 border border-border/60 group-hover:border-primary/30 flex items-center justify-center text-text-muted group-hover:text-primary transition-all duration-200">
-                    <Plus className="size-5" />
-                  </div>
-                  <span className="text-xs sm:text-sm font-bold text-text group-hover:text-primary transition-colors">
-                    Create New Role
+          {/* Infinite Scroll trigger */}
+          {!isLoading && (
+            <UIInfiniteScroll
+              onLoadMore={handleLoadMore}
+              hasMore={hasMore}
+              isLoading={isLoadingMore}
+              rootRef={tableContainerRef}
+              rootMargin="160px"
+              endMessage={
+                !hasMore && (roles || []).length > 0 ? (
+                  <span className="font-mono text-[11px] text-text-muted select-none">
+                    ✓ All {(roles || []).length} roles loaded
                   </span>
-                  <span className="text-[11px] text-text-muted text-center max-w-[220px]">
-                    Define Work Modes, level hierarchy, and module capabilities
-                  </span>
-                </div>
-              </PermissionGate>
-            </div>
+                ) : null
+              }
+            />
           )}
-        </>
-      ) : (
-        /* Empty State */
-        <div className="bg-surface rounded-2xl p-8 border border-border/60 shadow-2xs text-center space-y-3">
-          <UIEmptyState
-            icon={<Shield className="size-10 text-text-muted/60" />}
-            title="No Roles Found"
-            description={
-              filters.search || hasActiveModalFilters
-                ? "No roles match your current search and filter criteria. Try resetting filters."
-                : "No custom roles created yet in this workspace."
-            }
-            action={
-              filters.search || hasActiveModalFilters ? (
-                <UIButton
-                  variant="outline"
-                  size="sm"
-                  onClick={handleClearFilters}
-                >
-                  Reset Filters
-                </UIButton>
-              ) : (
-                <PermissionGate permission="role:create">
-                  <UIButton
-                    variant="primary"
-                    size="sm"
-                    onClick={handleCreateRole}
-                    startIcon={<Plus className="size-4" />}
-                  >
-                    Create First Role
-                  </UIButton>
-                </PermissionGate>
-              )
-            }
-          />
-        </div>
-      )}
+        </UITableScrollArea>
+      </div>
     </div>
   );
 }

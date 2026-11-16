@@ -5,6 +5,8 @@ import {
   listShifts,
   getOpenShift,
   updateShiftStatus,
+  initiateShiftClose,
+  abortShiftClose,
   cancelShift,
 } from "./shiftThunk";
 
@@ -19,6 +21,8 @@ const initialState = {
   listShiftsStatus: API_STATUS.IDLE,
   getOpenShiftStatus: API_STATUS.IDLE,
   updateShiftStatusStatus: API_STATUS.IDLE,
+  initiateShiftCloseStatus: API_STATUS.IDLE,
+  abortShiftCloseStatus: API_STATUS.IDLE,
 };
 
 const shiftSlice = createSlice({
@@ -97,6 +101,38 @@ const shiftSlice = createSlice({
       })
       .addCase(updateShiftStatus.rejected, (state, action) => {
         state.updateShiftStatusStatus = API_STATUS.ERROR;
+        state.error = action.payload;
+      })
+      // INITIATE SHIFT CLOSE
+      .addCase(initiateShiftClose.pending, (state) => {
+        state.initiateShiftCloseStatus = API_STATUS.LOADING;
+      })
+      .addCase(initiateShiftClose.fulfilled, (state, action) => {
+        state.initiateShiftCloseStatus = API_STATUS.SUCCESS;
+        const updated = action.payload;
+        if (updated) {
+          state.shifts = state.shifts.map((s) => (s._id === updated._id ? updated : s));
+          state.activeShift = updated;
+        }
+      })
+      .addCase(initiateShiftClose.rejected, (state, action) => {
+        state.initiateShiftCloseStatus = API_STATUS.ERROR;
+        state.error = action.payload;
+      })
+      // ABORT SHIFT CLOSE
+      .addCase(abortShiftClose.pending, (state) => {
+        state.abortShiftCloseStatus = API_STATUS.LOADING;
+      })
+      .addCase(abortShiftClose.fulfilled, (state, action) => {
+        state.abortShiftCloseStatus = API_STATUS.SUCCESS;
+        const updated = action.payload;
+        if (updated) {
+          state.shifts = state.shifts.map((s) => (s._id === updated._id ? updated : s));
+          state.activeShift = updated;
+        }
+      })
+      .addCase(abortShiftClose.rejected, (state, action) => {
+        state.abortShiftCloseStatus = API_STATUS.ERROR;
         state.error = action.payload;
       });
   },

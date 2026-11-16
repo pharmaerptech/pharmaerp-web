@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
 import { resolveRoleWorkAccess } from "@/utils/workAccess";
-import { UIConfirmDialog, UI_TOOLBAR_VIEWS } from "@/components/ui";
+import { UIConfirmDialog, UI_TOOLBAR_VIEWS, uiToast } from "@/components/ui";
 import { ResetMemberPasswordModal } from "../components";
 
 import useWorkspace from "../hooks/useWorkspace";
@@ -520,7 +520,7 @@ const WorkspaceMembersPage = () => {
   );
 
   const handleOpenResetPassword = useCallback((member) => {
-    if (!member || member.isOwner) return;
+    if (!member) return;
     setResetPasswordMember(member);
     setIsResetPasswordOpen(true);
   }, []);
@@ -537,9 +537,23 @@ const WorkspaceMembersPage = () => {
       const memberUserId =
         resetPasswordMember.user?._id ||
         resetPasswordMember.userId?._id ||
+        resetPasswordMember.userId ||
         resetPasswordMember._id;
 
-      await resetMemberPassword(workspaceId, memberUserId, newPassword);
+      try {
+        await resetMemberPassword(workspaceId, memberUserId, newPassword);
+        setIsResetPasswordOpen(false);
+        setResetPasswordMember(null);
+        uiToast.success(
+          "Password Reset Successful",
+          `Password for ${resetPasswordMember.displayName || "staff member"} has been updated.`
+        );
+      } catch (err) {
+        uiToast.error(
+          "Password Reset Failed",
+          err?.message || "Could not reset member password."
+        );
+      }
     },
     [resetMemberPassword, resetPasswordMember, workspaceId],
   );

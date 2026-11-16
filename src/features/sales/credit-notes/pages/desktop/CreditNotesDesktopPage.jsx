@@ -34,6 +34,7 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
   UIModal,
   UIModalHeader,
   UIModalTitle,
@@ -44,6 +45,8 @@ import {
 import { cn } from "@/lib/utils";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
+import { useBranchFilter } from "@/hooks";
 import creditNoteService from "../../services/creditNoteService";
 import CreditNoteDetailsDialog from "../../components/CreditNoteDetailsDialog";
 
@@ -113,6 +116,7 @@ const PAGE_LIMIT = 20;
 export const CreditNotesDesktopPage = () => {
   const { currentWorkspace } = useWorkspace();
   const { currentBranch } = useBranch();
+  const { isCompanyLevel, selectedBranchId, setSelectedBranchId, queryBranchId } = useBranchFilter();
   const tableContainerRef = useRef(null);
 
   // Credit Notes & Infinite Scroll State
@@ -223,11 +227,12 @@ export const CreditNotesDesktopPage = () => {
   const buildQueryParams = (page) => {
     const [sBy, sOrder] = sortOption.split("-");
     const dateParams = computeDateRangeParams(dateRange, customStartDate, customEndDate);
+    const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
 
     const params = {
       page,
       limit: PAGE_LIMIT,
-      branchId: currentBranch?._id || undefined,
+      branchId: activeBranchId,
       ...dateParams,
     };
 
@@ -245,10 +250,11 @@ export const CreditNotesDesktopPage = () => {
     if (!currentWorkspace) return;
     setIsLoading(true);
     try {
+      const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
       const params = buildQueryParams(1);
       const [notesRes, statsRes] = await Promise.all([
         creditNoteService.getCreditNotes(params),
-        creditNoteService.getCreditNoteStats({ branchId: currentBranch?._id || undefined }),
+        creditNoteService.getCreditNoteStats({ branchId: activeBranchId }),
       ]);
 
       const resData = notesRes.data?.data || {};
@@ -288,6 +294,8 @@ export const CreditNotesDesktopPage = () => {
   }, [
     currentWorkspace,
     currentBranch?._id,
+    isCompanyLevel,
+    queryBranchId,
     debouncedSearch,
     statusFilter,
     dateRange,
@@ -340,6 +348,8 @@ export const CreditNotesDesktopPage = () => {
     isLoadingMore,
     currentWorkspace,
     currentBranch?._id,
+    isCompanyLevel,
+    queryBranchId,
     debouncedSearch,
     statusFilter,
     dateRange,
@@ -533,6 +543,14 @@ export const CreditNotesDesktopPage = () => {
           />
         </div>
 
+        {/* Branch Filter (Company Level Only) */}
+        <BranchFilterSelect
+          value={selectedBranchId}
+          onChange={setSelectedBranchId}
+          size="md"
+          className="w-[180px] sm:w-[200px]"
+        />
+
         {/* Upfront Quick Filter: Status */}
         <div className="w-[180px] sm:w-[200px]">
           <UISelect
@@ -604,12 +622,8 @@ export const CreditNotesDesktopPage = () => {
       </div>
 
       {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ────── */}
-      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-        {/* Internal Vertical Scroll Container: The definitive scroll parent */}
-        <div
-          ref={tableContainerRef}
-          className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0 divide-y divide-border/60"
-        >
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
           <UITable
             stickyHeader
             containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -619,6 +633,9 @@ export const CreditNotesDesktopPage = () => {
             <UITableHeader sticky className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs">
               <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
                 <UITableHead sticky className="min-w-[180px]">Credit Note #</UITableHead>
+                {isCompanyLevel && (
+                  <UITableHead sticky className="min-w-[140px]">Branch</UITableHead>
+                )}
                 <UITableHead sticky className="min-w-[130px]">Issue Date</UITableHead>
                 <UITableHead sticky className="min-w-[220px]">Customer</UITableHead>
                 <UITableHead sticky align="right" className="min-w-[140px]">Total Amount</UITableHead>
@@ -630,10 +647,10 @@ export const CreditNotesDesktopPage = () => {
 
             <UITableBody>
               {isLoading ? (
-                <UITableLoading colSpan={7} rows={8} />
+                <UITableLoading colSpan={isCompanyLevel ? 8 : 7} rows={8} />
               ) : creditNotes.length === 0 ? (
                 <UITableEmpty
-                  colSpan={7}
+                  colSpan={isCompanyLevel ? 8 : 7}
                   title="No credit notes found"
                   description={
                     debouncedSearch || statusFilter !== "all" || dateRange !== "all" || billingModeFilter !== "all"
@@ -701,6 +718,13 @@ export const CreditNotesDesktopPage = () => {
                           </div>
                         </div>
                       </UITableCell>
+
+                      {/* Branch Badge (Only at Company Level) */}
+                      {isCompanyLevel && (
+                        <UITableCell className="whitespace-nowrap">
+                          <BranchBadge branch={cnItem.branchId} />
+                        </UITableCell>
+                      )}
 
                       {/* 2. Issue Date */}
                       <UITableCell className="whitespace-nowrap text-xs text-text-muted">
@@ -771,7 +795,7 @@ export const CreditNotesDesktopPage = () => {
               }
             />
           )}
-        </div>
+        </UITableScrollArea>
       </div>
 
       {/* ── 4. Filter Dialog (Modal) ──────────────────────────────────────────────── */}

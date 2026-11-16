@@ -18,8 +18,6 @@ import {
   Eye,
   Edit3,
   Trash2,
-  Table2,
-  LayoutGrid,
   Scale,
   ArrowDownRight,
   ArrowUpRight,
@@ -43,6 +41,7 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
@@ -58,6 +57,7 @@ import {
   UIAlert,
   PermissionGate,
 } from "@/components/ui";
+import { CompanyFilterSelect, CompanyBadge } from "@/components/shared";
 import { cn } from "@/lib/utils";
 import supplierService from "../../services/supplierService";
 import SupplierImportPreviewModal from "../../components/SupplierImportPreviewModal";
@@ -116,10 +116,10 @@ export const SuppliersDesktopPage = ({
   handleRefresh: propHandleRefresh,
   stats: propStats,
   error: propError,
+  companyFilter,
   clearMessage,
 }) => {
   const tableContainerRef = useRef(null);
-  const cardContainerRef = useRef(null);
 
   // Core Supplier data and infinite scroll pagination
   const [suppliers, setSuppliers] = useState([]);
@@ -134,7 +134,6 @@ export const SuppliersDesktopPage = ({
   const [selectedType, setSelectedType] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
-  const [viewMode, setViewMode] = useState("table"); // 'table' or 'grid'
 
   // Modals & Popovers
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
@@ -168,6 +167,7 @@ export const SuppliersDesktopPage = ({
       gstin: sup?.taxIdentification?.gstin || sup?.gstin || "-",
       city: sup?.address?.city || sup?.billingAddress?.city || "-",
       state: sup?.address?.state || sup?.billingAddress?.state || "-",
+      companyId: sup?.companyId || null,
     };
   }, []);
 
@@ -182,6 +182,9 @@ export const SuppliersDesktopPage = ({
       if (searchQuery.trim()) params.search = searchQuery.trim();
       if (selectedType !== "all") params.supplierType = selectedType;
       if (selectedStatus !== "all") params.status = selectedStatus;
+      if (companyFilter?.queryCompanyId) {
+        params.companyId = companyFilter.queryCompanyId;
+      }
 
       // Sort
       if (sortBy === "name_asc") {
@@ -200,7 +203,7 @@ export const SuppliersDesktopPage = ({
 
       return params;
     },
-    [searchQuery, selectedType, selectedStatus, sortBy],
+    [searchQuery, selectedType, selectedStatus, sortBy, companyFilter?.queryCompanyId],
   );
 
   // Initial Fetch
@@ -237,7 +240,7 @@ export const SuppliersDesktopPage = ({
       fetchInitialSuppliers();
     }, 300);
     return () => clearTimeout(timer);
-  }, [fetchInitialSuppliers]);
+  }, [fetchInitialSuppliers, companyFilter?.selectedCompanyId]);
 
   // Load More Infinite Scroll
   const handleLoadMore = useCallback(async () => {
@@ -563,6 +566,14 @@ export const SuppliersDesktopPage = ({
           />
         </div>
 
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
+
         {/* Filter Modal Trigger */}
         <UIButton
           type="button"
@@ -609,36 +620,6 @@ export const SuppliersDesktopPage = ({
 
         {/* Right-Aligned Action Cluster */}
         <div className="flex items-center gap-1.5 ml-auto">
-          {/* Table / Card View Toggle */}
-          <div className="flex items-center bg-surface-alt p-0.5 rounded-xl border border-border">
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              className={cn(
-                "p-1.5 rounded-lg transition-colors cursor-pointer",
-                viewMode === "table"
-                  ? "bg-surface text-primary shadow-2xs"
-                  : "text-text-muted hover:text-text",
-              )}
-              title="Table view"
-            >
-              <Table2 className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("grid")}
-              className={cn(
-                "p-1.5 rounded-lg transition-colors cursor-pointer",
-                viewMode === "grid"
-                  ? "bg-surface text-primary shadow-2xs"
-                  : "text-text-muted hover:text-text",
-              )}
-              title="Card view"
-            >
-              <LayoutGrid className="size-4" />
-            </button>
-          </div>
-
           {/* Refresh Button */}
           <UIButton
             type="button"
@@ -690,46 +671,42 @@ export const SuppliersDesktopPage = ({
       </div>
 
       {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ──── */}
-      {viewMode === "table" ? (
-        <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-          <div
-            ref={tableContainerRef}
-            className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0"
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef}>
+          <UITable
+            stickyHeader
+            containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
+            className="w-full text-xs font-sans"
           >
-            <UITable
-              stickyHeader
-              containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
-              className="w-full text-xs font-sans"
+            {/* Sticky Table Header */}
+            <UITableHeader
+              sticky
+              className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs border-b border-border"
             >
-              {/* Sticky Table Header */}
-              <UITableHeader
-                sticky
-                className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs"
-              >
-                <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
-                  <UITableHead sticky className="min-w-[220px]">
-                    Supplier Name
-                  </UITableHead>
-                  <UITableHead sticky className="min-w-[110px]">
-                    Code
-                  </UITableHead>
-                  <UITableHead sticky className="min-w-[130px]">
-                    Type
-                  </UITableHead>
-                  <UITableHead sticky className="min-w-[140px]">
-                    Mobile
-                  </UITableHead>
-                  <UITableHead sticky align="right" className="min-w-[150px]">
-                    Balance
-                  </UITableHead>
-                  <UITableHead sticky align="center" className="min-w-[100px]">
-                    Status
-                  </UITableHead>
-                  <UITableHead sticky align="right" className="w-20">
-                    Actions
-                  </UITableHead>
-                </UITableRow>
-              </UITableHeader>
+              <UITableRow className="border-b border-border text-[11px] font-semibold text-text-muted uppercase tracking-wider bg-surface-alt/70 h-10">
+                <UITableHead sticky className="min-w-[220px]">
+                  Supplier Name
+                </UITableHead>
+                <UITableHead sticky className="min-w-[110px]">
+                  Code
+                </UITableHead>
+                <UITableHead sticky className="min-w-[130px]">
+                  Type
+                </UITableHead>
+                <UITableHead sticky className="min-w-[140px]">
+                  Mobile
+                </UITableHead>
+                <UITableHead sticky align="right" className="min-w-[150px]">
+                  Balance
+                </UITableHead>
+                <UITableHead sticky align="center" className="min-w-[100px]">
+                  Status
+                </UITableHead>
+                <UITableHead sticky align="right" className="w-20">
+                  Actions
+                </UITableHead>
+              </UITableRow>
+            </UITableHeader>
 
               <UITableBody>
                 {isLoading ? (
@@ -779,9 +756,12 @@ export const SuppliersDesktopPage = ({
                               {getInitials(sup.displayName)}
                             </div>
                             <div className="min-w-0">
-                              <p className="font-semibold text-[13px] text-text truncate">
-                                {sup.displayName}
-                              </p>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <p className="font-semibold text-[13px] text-text truncate">
+                                  {sup.displayName}
+                                </p>
+                                <CompanyBadge company={sup.companyId} />
+                              </div>
                               <p className="text-[11px] text-text-muted truncate">
                                 {sup.displayEmail || sup.city || "-"}
                               </p>
@@ -900,95 +880,8 @@ export const SuppliersDesktopPage = ({
                 }
               />
             )}
-          </div>
-        </div>
-      ) : (
-        /* Grid View */
-        <div
-          ref={cardContainerRef}
-          className="relative overflow-y-auto flex-1 min-h-0 space-y-4"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {suppliers.map((sup) => (
-              <div
-                key={sup._id || sup.id}
-                onClick={() => handleViewSupplier(sup)}
-                className="bg-surface rounded-2xl border border-border p-4 shadow-2xs hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="size-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
-                        {getInitials(sup.displayName)}
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="font-bold text-sm text-text truncate">
-                          {sup.displayName}
-                        </h4>
-                        <p className="text-xs text-text-muted font-mono">
-                          {sup.displayCode}
-                        </p>
-                      </div>
-                    </div>
-                    {getStatusBadge(sup.displayStatus)}
-                  </div>
-
-                  <div className="space-y-1 text-xs text-text-muted mb-3">
-                    <div className="flex items-center gap-1.5">
-                      <Phone className="size-3" />
-                      <span>{sup.displayMobile}</span>
-                    </div>
-                    {sup.displayEmail && (
-                      <div className="flex items-center gap-1.5 truncate">
-                        <Mail className="size-3" />
-                        <span className="truncate">{sup.displayEmail}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-border/60 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] text-text-muted font-semibold uppercase">
-                      Balance
-                    </p>
-                    <p
-                      className={cn(
-                        "text-xs font-bold font-mono",
-                        sup.balanceType === "dr"
-                          ? "text-emerald-600"
-                          : "text-rose-600",
-                      )}
-                    >
-                      ₹{formatCurrency(sup.outstandingAmount)}{" "}
-                      {sup.balanceType?.toUpperCase()}
-                    </p>
-                  </div>
-                  <span className="text-[10px] font-bold text-text-muted bg-surface-alt px-2 py-0.5 rounded border border-border">
-                    {sup.displayType}
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Infinite Scroll Trigger */}
-          <UIInfiniteScroll
-            onLoadMore={handleLoadMore}
-            hasMore={hasMore}
-            isLoading={isLoadingMore}
-            rootRef={cardContainerRef}
-            rootMargin="160px"
-            endMessage={
-              !hasMore && suppliers.length > 0 ? (
-                <span className="font-mono text-[11px] text-text-muted select-none">
-                  ✓ All {totalCount} matching suppliers loaded
-                </span>
-              ) : null
-            }
-          />
-        </div>
-      )}
+        </UITableScrollArea>
+      </div>
 
       {/* ── Filter Modal ──────────────────────────────────────────────────────── */}
       <UIModal

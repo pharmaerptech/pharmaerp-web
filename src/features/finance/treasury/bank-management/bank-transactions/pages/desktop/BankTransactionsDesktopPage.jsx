@@ -47,6 +47,8 @@ import {
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
+import { useCompanyFilter } from "@/hooks";
+import { CompanyFilterSelect } from "@/components/shared";
 import useBankTransaction from "../../hooks/useBankTransaction";
 import useBankAccount from "@/features/finance/treasury/bank-management/bank-accounts/hooks/useBankAccount";
 import {
@@ -140,6 +142,7 @@ const PAGE_LIMIT = 10;
 
 export const BankTransactionsDesktopPage = () => {
   const { currentWorkspace } = useWorkspace();
+  const companyFilter = useCompanyFilter();
   const { getBankTransactions } = useBankTransaction();
   const { bankAccounts, getBankAccounts } = useBankAccount();
 
@@ -283,6 +286,7 @@ export const BankTransactionsDesktopPage = () => {
         transactionType: selectedTransactionType !== "all" ? selectedTransactionType : undefined,
         status: selectedStatus !== "all" ? selectedStatus : undefined,
         search: debouncedSearch || undefined,
+        companyId: companyFilter?.queryCompanyId,
         sortBy: sBy,
         sortOrder: sOrder,
         ...dateParams,
@@ -353,6 +357,7 @@ export const BankTransactionsDesktopPage = () => {
     sortOption,
     buildDateParams,
     getBankTransactions,
+    companyFilter?.queryCompanyId,
   ]);
 
   // Load next batch via Infinite Scroll
@@ -373,6 +378,7 @@ export const BankTransactionsDesktopPage = () => {
         transactionType: selectedTransactionType !== "all" ? selectedTransactionType : undefined,
         status: selectedStatus !== "all" ? selectedStatus : undefined,
         search: debouncedSearch || undefined,
+        companyId: companyFilter?.queryCompanyId,
         sortBy: sBy,
         sortOrder: sOrder,
         ...dateParams,
@@ -413,6 +419,7 @@ export const BankTransactionsDesktopPage = () => {
     getBankTransactions,
     totalCount,
     transactions.length,
+    companyFilter?.queryCompanyId,
   ]);
 
   // Trigger initial fetch when filters change
@@ -719,17 +726,6 @@ export const BankTransactionsDesktopPage = () => {
 
       {/* ── 2. Table Filter Toolbar (Using Reusable UI Components) ───────────────── */}
       <div className="flex flex-wrap items-center gap-2 shrink-0">
-        {/* Bank Account Selector Dropdown */}
-        <div className="w-[200px] sm:w-[240px]">
-          <UISelect
-            value={selectedBankAccount}
-            onChange={(val) => setSelectedBankAccount(val)}
-            options={bankAccountSelectOptions}
-            placeholder="Select Bank Account"
-            size="md"
-          />
-        </div>
-
         {/* Search Input */}
         <div className="flex-1 min-w-[220px] sm:min-w-[260px]">
           <UIInput
@@ -745,6 +741,25 @@ export const BankTransactionsDesktopPage = () => {
             className="w-full"
           />
         </div>
+
+        {/* Bank Account Selector Dropdown */}
+        <div className="w-[200px] sm:w-[240px]">
+          <UISelect
+            value={selectedBankAccount}
+            onChange={(val) => setSelectedBankAccount(val)}
+            options={bankAccountSelectOptions}
+            placeholder="Select Bank Account"
+            size="md"
+          />
+        </div>
+
+        {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+        <CompanyFilterSelect
+          value={companyFilter?.selectedCompanyId || "all"}
+          onChange={companyFilter?.setSelectedCompanyId}
+          size="md"
+          className="w-[170px] sm:w-[195px]"
+        />
 
         {/* Date Range Selector Dropdown */}
         <div className="w-[140px] sm:w-[160px]">

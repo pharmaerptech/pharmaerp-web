@@ -1,10 +1,12 @@
 // src/features/branch/pages/CreateBranchPage.jsx
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { API_STATUS } from "@/constants";
+import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import useCompany from "@/features/company/hooks/useCompany";
+import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 
 import useBranch from "../hooks/useBranch";
 
@@ -193,6 +195,8 @@ const validateStepData = (step, formData) => {
 const CreateBranchPage = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { isSetupComplete } = useSetupStatus();
+  const { currentCompany, companies, setCurrentCompany, getCompanies } = useCompany();
 
   const {
     createBranch,
@@ -200,6 +204,18 @@ const CreateBranchPage = () => {
     error: branchError,
     clearError,
   } = useBranch();
+
+  useEffect(() => {
+    if ((!companies || companies.length === 0) && typeof getCompanies === "function") {
+      getCompanies().catch(() => null);
+    }
+  }, [companies, getCompanies]);
+
+  useEffect(() => {
+    if (!currentCompany && Array.isArray(companies) && companies.length > 0) {
+      setCurrentCompany(companies[0]);
+    }
+  }, [currentCompany, companies, setCurrentCompany]);
 
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [formErrors, setFormErrors] = useState({});
@@ -231,8 +247,12 @@ const CreateBranchPage = () => {
   );
 
   const handleBackToBranches = useCallback(() => {
-    navigate("/branches");
-  }, [navigate]);
+    if (!isSetupComplete) {
+      navigate(ROUTES.SETUP_CENTER);
+    } else {
+      navigate("/branches");
+    }
+  }, [navigate, isSetupComplete]);
 
   const handleStepChange = useCallback(
     (step) => {
@@ -276,8 +296,12 @@ const CreateBranchPage = () => {
 
   const handleSaveDraft = useCallback(() => {
     setFormErrors({});
-    navigate("/branches");
-  }, [navigate]);
+    if (!isSetupComplete) {
+      navigate(ROUTES.SETUP_CENTER);
+    } else {
+      navigate("/branches");
+    }
+  }, [navigate, isSetupComplete]);
 
   const handleResetAndRefresh = useCallback(() => {
     setCurrentStep(1);
@@ -324,8 +348,29 @@ const CreateBranchPage = () => {
 
       try {
         const payload = buildBranchPayload(formData);
-        await createBranch(payload);
-        navigate("/branches", { replace: true });
+        const targetCompanyId =
+          currentCompany?._id ||
+          currentCompany?.id ||
+          companies?.[0]?._id ||
+          companies?.[0]?.id ||
+          (() => {
+            try {
+              return localStorage.getItem("pahuch_active_company_id");
+            } catch {
+              return null;
+            }
+          })();
+
+        await createBranch({
+          ...payload,
+          ...(targetCompanyId ? { companyId: targetCompanyId } : {}),
+        });
+
+        if (!isSetupComplete) {
+          navigate(ROUTES.SETUP_CENTER, { replace: true });
+        } else {
+          navigate("/branches", { replace: true });
+        }
       } catch (error) {
         setFormErrors({
           submit:
@@ -335,7 +380,7 @@ const CreateBranchPage = () => {
         });
       }
     },
-    [createBranch, formData, navigate],
+    [createBranch, formData, navigate, currentCompany, companies, isSetupComplete],
   );
 
   const pageProps = useMemo(

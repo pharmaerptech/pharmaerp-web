@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
+import { useNavigationPipeline, PIPELINE_LEVELS } from "@/contexts/NavigationPipelineContext";
+import { useCompanyFilter } from "@/hooks";
 
 import useBankAccount from "../hooks/useBankAccount";
 import BankAccountsDesktopPage from "./desktop/BankAccountsDesktopPage";
@@ -77,6 +79,11 @@ import { UIConfirmDialog, uiToast } from "@/components/ui";
 const BankAccountsPage = () => {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { currentLevel } = useNavigationPipeline();
+  const isWorkspaceLevel =
+    currentLevel === PIPELINE_LEVELS.WORKSPACE || currentLevel === "workspace";
+  const companyFilter = useCompanyFilter();
+
   const hasFetchedRef = useRef(false);
 
   const [filters, setFilters] = useState({
@@ -128,22 +135,23 @@ const BankAccountsPage = () => {
 
   const fetchAccountsData = useCallback(async () => {
     try {
-      await getBankAccounts();
+      const params = {};
+      if (isWorkspaceLevel && companyFilter.queryCompanyId) {
+        params.companyId = companyFilter.queryCompanyId;
+      }
+      await getBankAccounts(params);
     } catch (err) {
       console.error("Failed to fetch bank accounts:", err);
     }
-  }, [getBankAccounts]);
+  }, [getBankAccounts, isWorkspaceLevel, companyFilter.queryCompanyId]);
 
   useEffect(() => {
     clearError();
-    if (!hasFetchedRef.current) {
-      hasFetchedRef.current = true;
-      fetchAccountsData();
-    }
+    fetchAccountsData();
     return () => {
       clearError();
     };
-  }, [clearError, fetchAccountsData]);
+  }, [clearError, fetchAccountsData, companyFilter.selectedCompanyId]);
 
   // Ephemeral toast feedback for operations (creates, updates, deletes, primary) - strictly no read toasts
   useEffect(() => {
@@ -401,6 +409,7 @@ const BankAccountsPage = () => {
     handleViewDetails,
     handleSetPrimary,
     handleDeleteAccount,
+    companyFilter,
     clearMessage,
   };
 

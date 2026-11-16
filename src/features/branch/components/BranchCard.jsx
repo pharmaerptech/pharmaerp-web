@@ -1,13 +1,12 @@
 // src/features/branch/components/BranchCard.jsx
 
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   GitBranch,
-  MoreHorizontal,
   Eye,
   Edit3,
-  Settings,
+  MoreHorizontal,
   Users,
   Trash2,
   Layers,
@@ -15,10 +14,8 @@ import {
   Sparkles,
   ShieldCheck,
   TrendingUp,
-  Activity,
   HeartPulse,
   Database,
-  Building2,
 } from "lucide-react";
 import {
   UIDropdown,
@@ -118,7 +115,6 @@ export const BranchCard = ({
   branch,
   onView,
   onEdit,
-  onSettings,
   onViewEmployees,
   onDelete,
 }) => {
@@ -175,12 +171,12 @@ export const BranchCard = ({
               </UIIconButton>
             </UIDropdownTrigger>
 
-            <UIDropdownMenu width="w-48">
+            <UIDropdownMenu width="w-44">
               <UIDropdownItem
                 icon={<Eye className="w-4 h-4" />}
                 onClick={() => onView?.(branch)}
               >
-                View Details
+                View Branch
               </UIDropdownItem>
               <UIDropdownItem
                 icon={<Edit3 className="w-4 h-4" />}
@@ -188,20 +184,18 @@ export const BranchCard = ({
               >
                 Edit Branch
               </UIDropdownItem>
-              <UIDropdownItem
-                icon={<Users className="w-4 h-4" />}
-                onClick={() => onViewEmployees?.(branch)}
-              >
-                Staff & Access
-              </UIDropdownItem>
-              <UIDropdownDivider />
-              <UIDropdownItem
-                destructive
-                icon={<Trash2 className="w-4 h-4" />}
-                onClick={() => onDelete?.(branch)}
-              >
-                Delete Branch
-              </UIDropdownItem>
+              {onDelete && (
+                <>
+                  <UIDropdownDivider />
+                  <UIDropdownItem
+                    destructive
+                    icon={<Trash2 className="w-4 h-4" />}
+                    onClick={() => onDelete?.(branch)}
+                  >
+                    Delete Branch
+                  </UIDropdownItem>
+                </>
+              )}
             </UIDropdownMenu>
           </UIDropdown>
         </div>

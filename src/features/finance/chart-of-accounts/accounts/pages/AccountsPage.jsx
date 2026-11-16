@@ -8,7 +8,7 @@ import React, {
 import { useNavigate } from "react-router-dom";
 
 import { ROUTES, API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useCompanyFilter } from "@/hooks";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { UIConfirmDialog } from "@/components/ui";
 
@@ -29,6 +29,7 @@ const AccountsPage = () => {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const { currentBranch } = useBranch();
+  const companyFilter = useCompanyFilter();
   const hasFetchedGroupsRef = useRef(false);
 
   const {
@@ -79,11 +80,12 @@ const AccountsPage = () => {
       accountType: filters.accountType === "all" ? undefined : filters.accountType,
       status: filters.status === "all" ? undefined : filters.status,
       accountGroupId: filters.accountGroupId === "all" ? undefined : filters.accountGroupId,
+      companyId: companyFilter?.queryCompanyId,
     };
     getAccounts(query).catch((err) =>
       console.error("Failed to load accounts:", err)
     );
-  }, [currentPage, pageSize, filters, getAccounts]);
+  }, [currentPage, pageSize, filters, getAccounts, companyFilter?.queryCompanyId]);
 
   useEffect(() => {
     fetchAccountsList();
@@ -233,6 +235,7 @@ const AccountsPage = () => {
     },
     stats,
     filters,
+    companyFilter,
     activeFilterChips,
     accountTypeOptions,
     statusOptions,

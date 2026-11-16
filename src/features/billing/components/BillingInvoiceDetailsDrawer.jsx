@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
@@ -1402,6 +1402,10 @@ export const BillingInvoiceDetailsDrawer = ({
               {isShiftOpen ? (
                 <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
                   <Unlock className="size-3.5 text-emerald-600" /> Shift Open (Editable)
+                </span>
+              ) : resolvedShiftStatus === "closing" ? (
+                <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300 flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20">
+                  <Lock className="size-3.5 text-amber-600" /> Shift Closing (Locked)
                 </span>
               ) : invoice.status === "Cancelled" ? (
                 <span className="text-[11px] text-error font-medium flex items-center gap-1.5 bg-error-soft px-2.5 py-1.5 rounded-lg border border-error/30">

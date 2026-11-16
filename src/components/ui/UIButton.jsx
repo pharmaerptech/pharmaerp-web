@@ -62,6 +62,7 @@ export const UIButton = forwardRef(
       size = "md",
       rounded,
       isLoading = false,
+      loading = false,
       loadingText,
       startIcon,
       endIcon,
@@ -73,20 +74,21 @@ export const UIButton = forwardRef(
     },
     ref
   ) => {
+    const isSpinnerLoading = Boolean(isLoading || loading);
     const isLink = variant === "link";
     const appliedSize = isLink ? "" : (buttonSizes[size] || buttonSizes.md);
     const appliedVariant = buttonVariants[variant] || buttonVariants.primary;
     const appliedRounded = rounded ? roundedMap[rounded] || rounded : "";
     const currentIconSize = iconSizes[size] || iconSizes.md;
 
-    const isDisabled = disabled || isLoading;
+    const isDisabled = disabled || isSpinnerLoading;
 
     return (
       <motion.button
         ref={ref}
         type={type}
         disabled={isDisabled}
-        aria-busy={isLoading}
+        aria-busy={isSpinnerLoading}
         whileTap={!isDisabled && !isLink ? { scale: 0.97 } : undefined}
         transition={{ type: "spring", stiffness: 500, damping: 25 }}
         onClick={isDisabled ? undefined : onClick}
@@ -104,7 +106,7 @@ export const UIButton = forwardRef(
         )}
         {...props}
       >
-        {isLoading ? (
+        {isSpinnerLoading ? (
           <span className="inline-flex flex-row flex-nowrap items-center justify-center gap-2 whitespace-nowrap shrink-0">
             <Loader2 className={cn("animate-spin shrink-0 self-center", currentIconSize)} />
             <span className="whitespace-nowrap shrink-0 self-center">{loadingText || children}</span>

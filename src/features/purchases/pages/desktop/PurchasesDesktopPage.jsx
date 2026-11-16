@@ -31,12 +31,15 @@ import {
   UITableEmpty,
   UITableLoading,
   UIInfiniteScroll,
+  UITableScrollArea,
   PermissionGate,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import { PurchaseBillPreviewModal } from "../../components/PurchaseBillPreviewModal";
 import { MakePaymentModal } from "../../components/MakePaymentModal";
 import { BulkPaymentModal } from "../../components/BulkPaymentModal";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
+import { useBranchFilter } from "@/hooks";
 import purchaseBillService from "../../services/purchaseBillService";
 
 const PAGE_LIMIT = 20;
@@ -72,6 +75,7 @@ const STATUS_SELECT_OPTIONS = [
 
 export const PurchasesDesktopPage = () => {
   const navigate = useNavigate();
+  const { isCompanyLevel, selectedBranchId, setSelectedBranchId, queryBranchId } = useBranchFilter();
   const tableContainerRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -103,6 +107,7 @@ export const PurchasesDesktopPage = () => {
       };
       if (searchQuery.trim()) params.search = searchQuery.trim();
       if (selectedStatus !== "all") params.status = selectedStatus;
+      if (queryBranchId) params.branchId = queryBranchId;
 
       const res = await purchaseBillService.getPurchaseBills(params);
       const data = res.data?.data || {};
@@ -120,7 +125,7 @@ export const PurchasesDesktopPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [searchQuery, selectedStatus]);
+  }, [searchQuery, selectedStatus, queryBranchId]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -142,6 +147,7 @@ export const PurchasesDesktopPage = () => {
       };
       if (searchQuery.trim()) params.search = searchQuery.trim();
       if (selectedStatus !== "all") params.status = selectedStatus;
+      if (queryBranchId) params.branchId = queryBranchId;
 
       const res = await purchaseBillService.getPurchaseBills(params);
       const data = res.data?.data || {};
@@ -166,7 +172,7 @@ export const PurchasesDesktopPage = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [currentPage, hasMore, isLoading, isLoadingMore, searchQuery, selectedStatus, totalBills]);
+  }, [currentPage, hasMore, isLoading, isLoadingMore, searchQuery, selectedStatus, queryBranchId, totalBills]);
 
   // Reset Filters
   const handleResetFilters = () => {
@@ -349,6 +355,14 @@ export const PurchasesDesktopPage = () => {
           />
         </div>
 
+        {/* Branch Filter (Company Level Only) */}
+        <BranchFilterSelect
+          value={selectedBranchId}
+          onChange={setSelectedBranchId}
+          size="md"
+          className="w-[180px] sm:w-[200px]"
+        />
+
         {/* Status Dropdown */}
         <div className="w-[160px] sm:w-[180px]">
           <UISelect
@@ -446,11 +460,8 @@ export const PurchasesDesktopPage = () => {
       </div>
 
       {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ──── */}
-      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col">
-        <div
-          ref={tableContainerRef}
-          className="relative overflow-y-auto overflow-x-auto flex-1 min-h-0 divide-y divide-border/60"
-        >
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
           <UITable
             stickyHeader
             containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
@@ -460,6 +471,9 @@ export const PurchasesDesktopPage = () => {
             <UITableHeader sticky className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs">
               <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
                 <UITableHead sticky className="min-w-[150px]">Bill Number</UITableHead>
+                {isCompanyLevel && (
+                  <UITableHead sticky className="min-w-[130px]">Branch</UITableHead>
+                )}
                 <UITableHead sticky className="min-w-[220px]">Supplier</UITableHead>
                 <UITableHead sticky className="min-w-[120px]">Bill Date</UITableHead>
                 <UITableHead sticky className="min-w-[100px]">Rate Basis</UITableHead>
@@ -472,10 +486,10 @@ export const PurchasesDesktopPage = () => {
 
             <UITableBody>
               {isLoading ? (
-                <UITableLoading colSpan={8} rows={6} />
+                <UITableLoading colSpan={isCompanyLevel ? 9 : 8} rows={6} />
               ) : bills.length === 0 ? (
                 <UITableEmpty
-                  colSpan={8}
+                  colSpan={isCompanyLevel ? 9 : 8}
                   title="No purchase bills found"
                   description={
                     searchQuery || selectedStatus !== "all"
@@ -507,6 +521,13 @@ export const PurchasesDesktopPage = () => {
                         {bill.purchaseBillNo || "-"}
                       </span>
                     </UITableCell>
+
+                    {/* Branch Badge (Only at Company Level) */}
+                    {isCompanyLevel && (
+                      <UITableCell className="whitespace-nowrap">
+                        <BranchBadge branch={bill.branchId} />
+                      </UITableCell>
+                    )}
 
                     {/* Supplier */}
                     <UITableCell>
@@ -594,7 +615,7 @@ export const PurchasesDesktopPage = () => {
               }
             />
           )}
-        </div>
+        </UITableScrollArea>
       </div>
 
       {/* Details Preview Modal */}

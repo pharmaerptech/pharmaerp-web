@@ -238,7 +238,6 @@ export const UIDropdownMenu = forwardRef(
   ) => {
     const context = useContext(UIDropdownContext);
     const isOpen = context?.isOpen ?? false;
-    const setIsOpen = context?.setIsOpen;
     const triggerRect = context?.triggerRect;
     const menuRef = context?.menuRef;
     const usePortal = explicitUsePortal ?? context?.usePortal ?? true;
@@ -371,7 +370,7 @@ export const UIDropdownItem = forwardRef(
         disabled={disabled}
         onClick={handleClick}
         className={cn(
-          "flex items-center justify-between w-full px-3 py-2 text-xs sm:text-[13px] font-medium rounded-xl cursor-pointer select-none",
+          "flex flex-row items-center justify-between w-full px-3 py-2 text-xs sm:text-[13px] font-medium rounded-xl cursor-pointer select-none whitespace-nowrap",
           "transition-colors duration-100 ease-out",
           destructive
             ? "text-error hover:bg-error/10 active:bg-error/20"
@@ -381,23 +380,24 @@ export const UIDropdownItem = forwardRef(
         )}
         {...props}
       >
-
-        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+        <div className="flex flex-row items-center gap-2.5 min-w-0 flex-1 whitespace-nowrap text-left">
           {icon && (
             <span
               className={cn(
-                "shrink-0 size-4 flex items-center justify-center",
+                "shrink-0 size-4 inline-flex items-center justify-center",
                 destructive ? "text-error" : "text-text-muted"
               )}
             >
               {icon}
             </span>
           )}
-          <span className="truncate">{children}</span>
+          <span className="truncate inline-flex items-center gap-2 whitespace-nowrap leading-none">
+            {children}
+          </span>
         </div>
 
         {shortcut && (
-          <span className="font-mono text-[10px] font-semibold text-text-muted uppercase tracking-wider bg-surface-alt px-1.5 py-0.5 rounded border border-border/60">
+          <span className="shrink-0 ml-2 font-mono text-[10px] font-semibold text-text-muted uppercase tracking-wider bg-surface-alt px-1.5 py-0.5 rounded border border-border/60">
             {shortcut}
           </span>
         )}

@@ -80,9 +80,16 @@ export const CreateShiftDialog = ({ isOpen, onClose }) => {
   const { openBusinessDay } = useSelector((state) => state.businessDay);
   const { currentBranch } = useBranch();
 
-  // Check if another shift is currently open
+  // Check if another shift or business day is currently open or closing
+  const isDayClosing = Boolean(
+    openBusinessDay && String(openBusinessDay.status || "").toLowerCase() === "closing"
+  );
+  const isShiftClosing = Boolean(
+    (activeShift && String(activeShift.status || "").toLowerCase() === "closing") ||
+    (Array.isArray(shifts) && shifts.some((s) => s.status === "closing"))
+  );
   const hasOpenShift = Boolean(
-    activeShift ||
+    (activeShift && String(activeShift.status || "").toLowerCase() === "open") ||
     (Array.isArray(shifts) && shifts.some((s) => s.status === "open"))
   );
 
@@ -255,7 +262,15 @@ export const CreateShiftDialog = ({ isOpen, onClose }) => {
 
       <UIModalBody className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4">
         {/* ── Active Shift Detected Alert Banner ── */}
-        {hasOpenShift && (
+        {isShiftClosing && (
+          <UIAlert
+            intent="danger"
+            title="A shift is currently in the closing process."
+            description="The current shift is being reconciled and closed on another device. You must wait for it to be completely closed before starting a new shift."
+          />
+        )}
+
+        {hasOpenShift && !isShiftClosing && (
           <UIAlert
             intent="danger"
             title="Another shift is open so you cannot create a new shift."
@@ -263,7 +278,15 @@ export const CreateShiftDialog = ({ isOpen, onClose }) => {
           />
         )}
 
-        {!openBusinessDay && !hasOpenShift && (
+        {isDayClosing && (
+          <UIAlert
+            intent="danger"
+            title="Business Day Closing in Progress"
+            description="The current Business Day is in the process of being closed. Cannot open any new shifts."
+          />
+        )}
+
+        {!openBusinessDay && !hasOpenShift && !isShiftClosing && !isDayClosing && (
           <UIAlert
             intent="warning"
             title="No Open Business Day"
@@ -534,7 +557,7 @@ export const CreateShiftDialog = ({ isOpen, onClose }) => {
           size="sm"
           onClick={handleCreate}
           isLoading={createShiftStatus === API_STATUS.LOADING}
-          disabled={hasOpenShift || !branchCash || loadingCash || !openBusinessDay}
+          disabled={hasOpenShift || isShiftClosing || isDayClosing || !branchCash || loadingCash || !openBusinessDay || openBusinessDay?.status !== "open"}
           startIcon={<Play className="size-3.5 fill-current" />}
           className="h-9 px-4.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
         >

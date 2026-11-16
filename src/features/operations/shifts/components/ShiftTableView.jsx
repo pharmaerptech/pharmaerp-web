@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { Eye, LockKeyhole, MoreVertical } from "lucide-react";
+import { BranchBadge } from "@/components/shared";
+import { useBranchFilter } from "@/hooks";
 
 const formatDate = (val) => {
   if (!val) return "-";
@@ -85,6 +87,7 @@ export const ShiftTableView = ({
   onView,
   onCloseShift,
 }) => {
+  const { isCompanyLevel } = useBranchFilter();
   const [activeMenuRowId, setActiveMenuRowId] = useState(null);
 
   // Close actions dropdown on click outside
@@ -106,6 +109,11 @@ export const ShiftTableView = ({
             <th className="py-3.5 px-4 font-semibold whitespace-nowrap">
               Shift Name
             </th>
+            {isCompanyLevel && (
+              <th className="py-3.5 px-4 font-semibold whitespace-nowrap">
+                Branch
+              </th>
+            )}
             <th className="py-3.5 px-4 font-semibold whitespace-nowrap">
               Date & Time
             </th>
@@ -137,6 +145,7 @@ export const ShiftTableView = ({
           {shifts.map((shift, idx) => {
             const shiftName = getShiftTitle(shift);
             const isShiftOpen = shift.status === "open";
+            const isShiftClosing = shift.status === "closing";
 
             const businessDateStr = formatDate(
               shift.businessDate || shift.date || shift.openedAt
@@ -201,6 +210,8 @@ export const ShiftTableView = ({
                 className={`transition-colors cursor-pointer text-text ${
                   isShiftOpen
                     ? "bg-emerald-500/[0.08] hover:bg-emerald-500/[0.14] dark:bg-emerald-500/[0.12] dark:hover:bg-emerald-500/[0.18] border-l-4 border-l-emerald-500 font-medium"
+                    : isShiftClosing
+                    ? "bg-amber-500/[0.08] hover:bg-amber-500/[0.14] dark:bg-amber-500/[0.12] dark:hover:bg-amber-500/[0.18] border-l-4 border-l-amber-500 font-medium"
                     : "hover:bg-surface-hover/70"
                 }`}
               >
@@ -214,6 +225,12 @@ export const ShiftTableView = ({
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                         <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         OPEN
+                      </span>
+                    )}
+                    {isShiftClosing && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                        <span className="size-1.5 rounded-full bg-amber-500 animate-ping" />
+                        CLOSING
                       </span>
                     )}
                   </div>
@@ -235,6 +252,13 @@ export const ShiftTableView = ({
                     )}
                   </div>
                 </td>
+
+                {/* Branch Badge (Company Level Only) */}
+                {isCompanyLevel && (
+                  <td className="py-3.5 px-4 whitespace-nowrap">
+                    <BranchBadge branch={shift.branchId} />
+                  </td>
+                )}
 
                 {/* Column 2: Date & Time (Line 1: Date, Line 2: Time range on single line) */}
                 <td className="py-3.5 px-4 whitespace-nowrap">
@@ -306,8 +330,8 @@ export const ShiftTableView = ({
                       <Eye className="size-4" />
                     </button>
 
-                    {/* Lock Shift Icon Button (only if open) */}
-                    {isShiftOpen && (
+                    {/* Lock Shift Icon Button (if open or closing) */}
+                    {(isShiftOpen || isShiftClosing) && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -315,9 +339,13 @@ export const ShiftTableView = ({
                           e.stopPropagation();
                           onCloseShift?.(shift);
                         }}
-                        className="p-1.5 rounded-md text-warning hover:text-warning-hover hover:bg-warning-soft transition-colors cursor-pointer"
-                        title="Close Shift"
-                        aria-label="Close Shift"
+                        className={`p-1.5 rounded-md transition-colors cursor-pointer ${
+                          isShiftClosing
+                            ? "text-amber-600 hover:text-amber-700 bg-amber-500/15"
+                            : "text-warning hover:text-warning-hover hover:bg-warning-soft"
+                        }`}
+                        title={isShiftClosing ? "Resume Closing" : "Start Closing"}
+                        aria-label={isShiftClosing ? "Resume Closing" : "Start Closing"}
                       >
                         <LockKeyhole className="size-4" />
                       </button>
@@ -360,7 +388,7 @@ export const ShiftTableView = ({
                             <span>View Details</span>
                           </button>
 
-                          {isShiftOpen && (
+                          {(isShiftOpen || isShiftClosing) && (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -372,7 +400,7 @@ export const ShiftTableView = ({
                               className="w-full text-left px-3 py-2 text-xs font-medium text-warning hover:bg-warning-soft flex items-center gap-2 transition-colors cursor-pointer"
                             >
                               <LockKeyhole className="size-3.5" />
-                              <span>Close Shift</span>
+                              <span>{isShiftClosing ? "Resume Closing" : "Start Closing"}</span>
                             </button>
                           )}
                         </div>

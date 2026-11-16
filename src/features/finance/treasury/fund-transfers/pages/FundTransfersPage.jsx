@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useCompanyFilter } from "@/hooks";
 import { uiToast } from "@/components/ui";
 
 import useFundTransfer from "../hooks/useFundTransfer";
@@ -76,6 +76,7 @@ const FundTransfersPage = () => {
     status: "all",
   });
 
+  const { companyFilter } = useCompanyFilter();
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
 
@@ -86,11 +87,12 @@ const FundTransfersPage = () => {
       search: searchParams.search || undefined,
       transferType: searchParams.transferType === "all" ? undefined : searchParams.transferType,
       status: searchParams.status === "all" ? undefined : searchParams.status,
+      companyId: companyFilter?.queryCompanyId,
     };
     getFundTransfers(query).catch((err) =>
       console.error("Failed to load fund transfers:", err)
     );
-  }, [currentPage, pageSize, searchParams, getFundTransfers]);
+  }, [currentPage, pageSize, searchParams, getFundTransfers, companyFilter?.queryCompanyId]);
 
   useEffect(() => {
     fetchTransfersData();
@@ -190,6 +192,7 @@ const FundTransfersPage = () => {
     handleViewDetails,
     handleCreateNew,
     handleRefresh,
+    companyFilter,
   };
 
   return (

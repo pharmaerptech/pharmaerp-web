@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { useSelector, useDispatch } from "react-redux";
+import { API_STATUS } from "@/constants";
 import {
   UIButton,
   UIAlert,
@@ -10,6 +11,8 @@ import {
 import { useBranchCash } from "../hooks/useBranchCash";
 import { deriveBranchCashViewState } from "../utils/branchCashViewState";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { useBranchFilter } from "@/hooks";
+import { BranchFilterSelect } from "@/components/shared";
 import useActiveShift from "@/features/operations/shifts/hooks/useActiveShift";
 import { getOpenBusinessDay } from "@/features/operations/business-days/store/businessDayThunk";
 import { cn } from "@/lib/utils";
@@ -28,6 +31,7 @@ import {
   Layers,
   BarChart2,
   Table as TableIcon,
+  Building2,
 } from "lucide-react";
 import InitializeBranchCashModal from "../components/InitializeBranchCashModal";
 import DepositModal from "../components/DepositModal";
@@ -66,8 +70,30 @@ const countNotes = (denominations = []) =>
 export const BranchCashPage = () => {
   const dispatch = useDispatch();
   const { currentBranch } = useBranch();
-  const { currentBranchCash, fetchBranchCash, fetchStatus, error } = useBranchCash();
-  const { activeShift, refetch: refetchActiveShift } = useActiveShift(currentBranch?._id);
+  const {
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
+    queryBranchId,
+    branches,
+  } = useBranchFilter();
+
+  const isAllBranches = isCompanyLevel && (!selectedBranchId || selectedBranchId === "all");
+
+  const effectiveBranchId = !isCompanyLevel
+    ? currentBranch?._id
+    : (selectedBranchId !== "all" ? selectedBranchId : null);
+
+  const {
+    currentBranchCash,
+    fetchBranchCash,
+    fetchStatus,
+    error,
+    allBranchCash,
+    listBranchCash,
+    listStatus,
+  } = useBranchCash();
+  const { activeShift, refetch: refetchActiveShift } = useActiveShift(effectiveBranchId);
   const { openBusinessDay } = useSelector((state) => state.businessDay || {});
 
   const [activeTab, setActiveTab] = useState("drawers"); // "drawers" | "matrix"
@@ -77,35 +103,126 @@ export const BranchCashPage = () => {
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
 
   useEffect(() => {
-    if (currentBranch?._id) {
-      fetchBranchCash(currentBranch._id);
-      dispatch(getOpenBusinessDay(currentBranch._id));
+    if (isAllBranches) {
+      listBranchCash();
+    } else if (effectiveBranchId) {
+      fetchBranchCash(effectiveBranchId);
+      dispatch(getOpenBusinessDay(effectiveBranchId));
       refetchActiveShift?.();
     }
-  }, [currentBranch?._id, fetchBranchCash, dispatch, refetchActiveShift]);
+  }, [isAllBranches, effectiveBranchId, listBranchCash, fetchBranchCash, dispatch, refetchActiveShift]);
 
   const {
     activeBranchCash,
-    isLoading,
-    isInitialized,
-    hasError,
+    isLoading: singleIsLoading,
+    isInitialized: singleIsInitialized,
+    hasError: singleHasError,
   } = deriveBranchCashViewState({
-    branchId: currentBranch?._id,
+    branchId: effectiveBranchId,
     currentBranchCash,
     fetchStatus,
     error,
   });
 
+  // Aggregated multi-branch calculations when at Company level with "All Branches"
+  const aggregatedData = useMemo(() => {
+    if (!isAllBranches) return null;
+    const list = Array.isArray(allBranchCash) ? allBranchCash : [];
+
+    const runningMap = new Map();
+    const frozenMap = new Map();
+    DENOMINATIONS_CONFIG.forEach(({ note }) => {
+      runningMap.set(note, 0);
+      frozenMap.set(note, 0);
+    });
+
+    let totalRunning = 0;
+    let totalFrozen = 0;
+
+    list.forEach((b) => {
+      const bRunningDenoms =
+        b.denominationBalance?.runningDenominations ||
+        b.balance?.runningDenominations ||
+        [];
+      const bFrozenDenoms =
+        b.denominationBalance?.frozenDenominations ||
+        b.balance?.frozenDenominations ||
+        [];
+
+      let bRunningSum = 0;
+      bRunningDenoms.forEach((d) => {
+        const val = Number(d.denomination);
+        const qty = Number(d.quantity) || Number(d.count) || 0;
+        if (runningMap.has(val)) {
+          runningMap.set(val, runningMap.get(val) + qty);
+        }
+        bRunningSum += val * qty;
+      });
+
+      let bFrozenSum = 0;
+      bFrozenDenoms.forEach((d) => {
+        const val = Number(d.denomination);
+        const qty = Number(d.quantity) || Number(d.count) || 0;
+        if (frozenMap.has(val)) {
+          frozenMap.set(val, frozenMap.get(val) + qty);
+        }
+        bFrozenSum += val * qty;
+      });
+
+      const bRunning = typeof b.runningCash === "number"
+        ? b.runningCash
+        : (typeof b.runningCashTotal === "number" ? b.runningCashTotal : bRunningSum);
+      const bFrozen = typeof b.frozenCash === "number"
+        ? b.frozenCash
+        : (typeof b.frozenCashTotal === "number" ? b.frozenCashTotal : bFrozenSum);
+
+      totalRunning += bRunning;
+      totalFrozen += bFrozen;
+    });
+
+    const runningDenominations = DENOMINATIONS_CONFIG.map(({ note }) => ({
+      denomination: note,
+      quantity: runningMap.get(note) || 0,
+      total: (runningMap.get(note) || 0) * note,
+    }));
+
+    const frozenDenominations = DENOMINATIONS_CONFIG.map(({ note }) => ({
+      denomination: note,
+      quantity: frozenMap.get(note) || 0,
+      total: (frozenMap.get(note) || 0) * note,
+    }));
+
+    return {
+      runningTotal: totalRunning,
+      frozenTotal: totalFrozen,
+      totalVault: totalRunning + totalFrozen,
+      runningDenominations,
+      frozenDenominations,
+      isInitialized: list.length > 0 ? list.some((b) => b.isInitialized !== false) : true,
+    };
+  }, [isAllBranches, allBranchCash]);
+
   // Denominations lists
-  const runningDenominations =
+  const singleRunningDenominations =
     activeBranchCash?.denominationBalance?.runningDenominations || [];
-  const frozenDenominations =
+  const singleFrozenDenominations =
     activeBranchCash?.denominationBalance?.frozenDenominations ||
     activeBranchCash?.balance?.frozenDenominations ||
     [];
 
-  const runningTotal = sumDenominations(runningDenominations);
-  const frozenTotal = sumDenominations(frozenDenominations);
+  const runningDenominations = isAllBranches
+    ? (aggregatedData?.runningDenominations || [])
+    : singleRunningDenominations;
+  const frozenDenominations = isAllBranches
+    ? (aggregatedData?.frozenDenominations || [])
+    : singleFrozenDenominations;
+
+  const runningTotal = isAllBranches
+    ? (aggregatedData?.runningTotal || 0)
+    : sumDenominations(runningDenominations);
+  const frozenTotal = isAllBranches
+    ? (aggregatedData?.frozenTotal || 0)
+    : sumDenominations(frozenDenominations);
   const totalVault = runningTotal + frozenTotal;
 
   const runningNotesCount = countNotes(runningDenominations);
@@ -118,6 +235,18 @@ export const BranchCashPage = () => {
   const frozenDenomsCount = frozenDenominations.filter(
     (d) => (Number(d.quantity) || Number(d.count) || 0) > 0
   ).length;
+
+  const isLoading = isAllBranches
+    ? listStatus === API_STATUS.LOADING
+    : singleIsLoading;
+
+  const isInitialized = isAllBranches
+    ? (aggregatedData?.isInitialized ?? true)
+    : singleIsInitialized;
+
+  const hasError = isAllBranches
+    ? (listStatus === API_STATUS.ERROR && (!allBranchCash || allBranchCash.length === 0))
+    : singleHasError;
 
   // Initialization state is derived safely in deriveBranchCashViewState
 
@@ -192,7 +321,12 @@ export const BranchCashPage = () => {
 
   const businessDateDisplay = realBusinessDateDisplay || "Today";
 
-  const branchName = currentBranch?.name || "Makati Branch";
+  const activeBranchObj = isCompanyLevel
+    ? branches.find((b) => String(b._id) === String(effectiveBranchId))
+    : currentBranch;
+  const branchName = isAllBranches
+    ? "All Branches (Company Vault)"
+    : (activeBranchObj?.name || currentBranch?.name || "Branch Vault");
 
 
   // Denomination Matrix Rows
@@ -277,54 +411,72 @@ export const BranchCashPage = () => {
           </div>
         </div>
 
-        {/* Card 4: Shift & Business Day (Live Real Status) */}
+        {/* Card 4: Shift & Business Day (Live Real Status or Company Overview) */}
         <div className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs">
           <div
             className={cn(
               "size-9 rounded-lg flex items-center justify-center shrink-0",
-              isShiftActive
+              isAllBranches
+                ? "bg-primary/10 text-primary"
+                : isShiftActive
                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 : isBusinessDayOpen
                 ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
                 : "bg-surface-alt text-text-muted"
             )}
           >
-            <Clock className="size-4.5 stroke-[1.8]" />
+            {isAllBranches ? (
+              <Building2 className="size-4.5 stroke-[1.8]" />
+            ) : (
+              <Clock className="size-4.5 stroke-[1.8]" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[11.5px] font-medium text-text-muted truncate flex items-center justify-between gap-1">
-              <span>Shift & Business Day</span>
-              {isBusinessDayOpen && realBusinessDateDisplay ? (
+              <span>{isAllBranches ? "Consolidated Scope" : "Shift & Business Day"}</span>
+              {isAllBranches ? (
+                <span className="text-[10px] font-semibold text-primary px-1.5 py-0.2 rounded bg-primary/10 truncate font-mono">
+                  {branches.length || (allBranchCash || []).length} Branches
+                </span>
+              ) : isBusinessDayOpen && realBusinessDateDisplay ? (
                 <span className="text-[10px] font-semibold text-primary px-1.5 py-0.2 rounded bg-primary/10 truncate font-mono">
                   {realBusinessDateDisplay}
                 </span>
               ) : null}
             </div>
             <div className="text-sm sm:text-base font-bold text-text leading-tight flex items-center gap-1.5 truncate mt-0.5">
-              <span
-                className={cn(
-                  "size-2 rounded-full shrink-0",
-                  isShiftActive
-                    ? "bg-emerald-500 animate-pulse"
-                    : isBusinessDayOpen
-                    ? "bg-amber-500"
-                    : "bg-slate-400"
-                )}
-              />
-              <span className="truncate">
-                {isShiftActive
-                  ? realShiftTitle
-                  : isBusinessDayOpen
-                  ? "Shift Closed"
-                  : "Business Day Closed"}
-              </span>
+              {isAllBranches ? (
+                <span>All Company Branches</span>
+              ) : (
+                <>
+                  <span
+                    className={cn(
+                      "size-2 rounded-full shrink-0",
+                      isShiftActive
+                        ? "bg-emerald-500 animate-pulse"
+                        : isBusinessDayOpen
+                        ? "bg-amber-500"
+                        : "bg-slate-400"
+                    )}
+                  />
+                  <span className="truncate">
+                    {isShiftActive
+                      ? realShiftTitle
+                      : isBusinessDayOpen
+                      ? "Shift Closed"
+                      : "Business Day Closed"}
+                  </span>
+                </>
+              )}
             </div>
             <div className="text-[10px] text-text-muted mt-0.5 truncate">
-              {isShiftActive
-                ? realShiftSubtext || (realBusinessDateDisplay ? `Day: ${realBusinessDateDisplay}` : "Shift Active")
-                : isBusinessDayOpen
-                ? `Business Day Open${openBusinessDay?.shifts?.length ? ` • ${openBusinessDay.shifts.length} shift${openBusinessDay.shifts.length === 1 ? "" : "s"} today` : " • Ready for shift"}`
-                : "No active business day"}
+              {isAllBranches
+                ? `${totalNotesCount} notes in total across all vaults`
+                : (isShiftActive
+                  ? realShiftSubtext || (realBusinessDateDisplay ? `Day: ${realBusinessDateDisplay}` : "Shift Active")
+                  : isBusinessDayOpen
+                  ? `Business Day Open${openBusinessDay?.shifts?.length ? ` • ${openBusinessDay.shifts.length} shift${openBusinessDay.shifts.length === 1 ? "" : "s"} today` : " • Ready for shift"}`
+                  : "No active business day")}
             </div>
           </div>
         </div>
@@ -332,37 +484,50 @@ export const BranchCashPage = () => {
 
       {/* ── 2. Streamlined Toolbar: Navigation Tabs & Actions ── */}
       <div className="flex flex-wrap items-center justify-between gap-2 shrink-0">
-        {/* Navigation Tabs */}
-        {isInitialized ? (
-          <div className="flex items-center gap-1 bg-surface-alt/80 p-1 rounded-xl border border-border">
-            <button
-              type="button"
-              onClick={() => setActiveTab("drawers")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "drawers"
-                  ? "bg-surface text-primary shadow-2xs border border-border/80"
-                  : "text-text-muted hover:text-text"
-              }`}
-            >
-              <Wallet className="size-3.5" />
-              Visual Drawers
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("matrix")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                activeTab === "matrix"
-                  ? "bg-surface text-primary shadow-2xs border border-border/80"
-                  : "text-text-muted hover:text-text"
-              }`}
-            >
-              <TableIcon className="size-3.5" />
-              Vault Denomination Matrix
-            </button>
-          </div>
-        ) : (
-          <div className="text-xs font-bold text-text-muted">Branch Cash Overview</div>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Branch Filter (Company Level Only) */}
+          {isCompanyLevel && (
+            <div className="w-[190px] sm:w-[220px] shrink-0">
+              <BranchFilterSelect
+                value={selectedBranchId}
+                onChange={setSelectedBranchId}
+                size="md"
+                className="w-full"
+              />
+            </div>
+          )}
+
+          {isInitialized ? (
+            <div className="flex items-center gap-1 bg-surface-alt/80 p-1 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => setActiveTab("drawers")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "drawers"
+                    ? "bg-surface text-primary shadow-2xs border border-border/80"
+                    : "text-text-muted hover:text-text"
+                }`}
+              >
+                <Wallet className="size-3.5" />
+                Visual Drawers
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("matrix")}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  activeTab === "matrix"
+                    ? "bg-surface text-primary shadow-2xs border border-border/80"
+                    : "text-text-muted hover:text-text"
+                }`}
+              >
+                <TableIcon className="size-3.5" />
+                Vault Denomination Matrix
+              </button>
+            </div>
+          ) : (
+            <div className="text-xs font-bold text-text-muted">Branch Cash Overview</div>
+          )}
+        </div>
 
         {/* Action Buttons Cluster */}
         <div className="flex items-center gap-2 ml-auto">
@@ -372,9 +537,11 @@ export const BranchCashPage = () => {
             variant="outline"
             size="sm"
             onClick={() => {
-              if (currentBranch?._id) {
-                fetchBranchCash(currentBranch._id);
-                dispatch(getOpenBusinessDay(currentBranch._id));
+              if (isAllBranches) {
+                listBranchCash();
+              } else if (effectiveBranchId) {
+                fetchBranchCash(effectiveBranchId);
+                dispatch(getOpenBusinessDay(effectiveBranchId));
                 refetchActiveShift?.();
               }
             }}
@@ -386,8 +553,8 @@ export const BranchCashPage = () => {
             Refresh
           </UIButton>
 
-          {/* Initialize Cash button: Only show when NOT initialized */}
-          {!isInitialized && (
+          {/* Initialize Cash button: Only show when NOT initialized and at Branch level (branch context) */}
+          {!isInitialized && !isCompanyLevel && (
             <UIButton
               type="button"
               size="sm"
@@ -399,8 +566,8 @@ export const BranchCashPage = () => {
             </UIButton>
           )}
 
-          {/* Deposit & Withdraw Buttons: Only shown when initialized and shift is active */}
-          {isInitialized && isShiftActive && (
+          {/* Deposit & Withdraw Buttons: Only shown when initialized, at Branch level, and shift is active */}
+          {isInitialized && isShiftActive && !isCompanyLevel && (
             <>
               <UIButton
                 type="button"
@@ -602,7 +769,13 @@ export const BranchCashPage = () => {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => currentBranch?._id && fetchBranchCash(currentBranch._id)}
+                onClick={() => {
+                  if (isAllBranches) {
+                    listBranchCash();
+                  } else if (effectiveBranchId) {
+                    fetchBranchCash(effectiveBranchId);
+                  }
+                }}
                 startIcon={<RefreshCw className="size-3.5" />}
                 className="rounded-xl text-xs font-semibold cursor-pointer"
               >
@@ -706,14 +879,20 @@ export const BranchCashPage = () => {
               </p>
             </div>
 
-            <UIButton
-              type="button"
-              onClick={() => setIsInitModalOpen(true)}
-              startIcon={<Coins className="size-4" />}
-              className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
-            >
-              Initialize Branch Cash
-            </UIButton>
+            {!isCompanyLevel ? (
+              <UIButton
+                type="button"
+                onClick={() => setIsInitModalOpen(true)}
+                startIcon={<Coins className="size-4" />}
+                className="px-6 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+              >
+                Initialize Branch Cash
+              </UIButton>
+            ) : (
+              <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold">
+                <span>Switch to Branch mode to initialize opening vault cash for this branch</span>
+              </div>
+            )}
           </div>
 
           {/* 4 Bottom Benefit Feature Cards */}
@@ -826,8 +1005,8 @@ export const BranchCashPage = () => {
               </div>
             </div>
 
-            {/* Actions: Only show when shift is active */}
-            {isShiftActive && (
+            {/* Actions: Only show when shift is active and at Branch level */}
+            {isShiftActive && !isCompanyLevel && (
               <div className="grid grid-cols-2 gap-2.5 pt-3 border-t border-border/60 mt-3">
                 <UIButton
                   type="button"

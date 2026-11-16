@@ -40,25 +40,42 @@ export const setupInterceptors = (apiClient, store) => {
       if (store) {
         const state = store.getState();
 
+        let currentLevel = null;
+        try {
+          currentLevel = localStorage.getItem("pahuch_pipeline_level") || null;
+        } catch {}
+
         const workspaceId =
           state.workspace?.currentWorkspace?._id ||
           state.workspace?.currentWorkspace?.id;
-        let companyId =
-          state.company?.currentCompany?._id ||
-          state.company?.currentCompany?.id;
-        if (!companyId) {
-          try {
-            companyId = localStorage.getItem("pahuch_active_company_id") || null;
-          } catch {}
+        // Attach company ID automatically if active pipeline level is company/branch OR if request targets branch creation/operations
+        let companyId = null;
+        if (!currentLevel || currentLevel !== "workspace" || config.url?.includes("/branches")) {
+          companyId =
+            config.headers["x-company-id"] ||
+            state.company?.currentCompany?._id ||
+            state.company?.currentCompany?.id;
+          if (!companyId) {
+            try {
+              companyId = localStorage.getItem("pahuch_active_company_id") || null;
+            } catch {}
+          }
+          if (!companyId && state.company?.companies?.length > 0) {
+            companyId = state.company.companies[0]._id || state.company.companies[0].id;
+          }
         }
 
-        let branchId =
-          state.branch?.currentBranch?._id ||
-          state.branch?.currentBranch?.id;
-        if (!branchId) {
-          try {
-            branchId = localStorage.getItem("pahuch_active_branch_id") || null;
-          } catch {}
+        // Only attach branch ID automatically if active pipeline level is branch (or uninitialized)
+        let branchId = null;
+        if (!currentLevel || currentLevel === "branch") {
+          branchId =
+            state.branch?.currentBranch?._id ||
+            state.branch?.currentBranch?.id;
+          if (!branchId) {
+            try {
+              branchId = localStorage.getItem("pahuch_active_branch_id") || null;
+            } catch {}
+          }
         }
 
         if (workspaceId) {
@@ -69,7 +86,7 @@ export const setupInterceptors = (apiClient, store) => {
           config.headers["x-company-id"] = companyId;
         }
 
-        if (branchId) {
+        if (branchId && !config.headers["x-branch-id"]) {
           config.headers["x-branch-id"] = branchId;
         }
       }

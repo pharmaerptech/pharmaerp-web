@@ -6,6 +6,8 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { API_STATUS, ROUTES } from "@/constants";
 import { useIsMobile } from "@/hooks";
 import { UIConfirmDialog } from "@/components/ui";
+import { useNavigationPipeline, PIPELINE_LEVELS } from "@/contexts/NavigationPipelineContext";
+import { useCompanyFilter } from "@/hooks";
 
 import useCustomer from "../hooks/useCustomer";
 import useCompany from "@/features/company/hooks/useCompany";
@@ -72,6 +74,11 @@ const CustomersPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
+  const { currentLevel } = useNavigationPipeline();
+  const isWorkspaceLevel =
+    currentLevel === PIPELINE_LEVELS.WORKSPACE || currentLevel === "workspace";
+  const companyFilter = useCompanyFilter();
+
   const { currentCompany } = useCompany();
   const companyId = currentCompany?._id;
 
@@ -139,6 +146,7 @@ const CustomersPage = () => {
         status: filters.status !== "all" ? filters.status : undefined,
         customerType: apiCustomerType,
         sort: "-updatedAt",
+        companyId: isWorkspaceLevel ? companyFilter.queryCompanyId : undefined,
       });
     } catch {
       // Regulated by store selectors
@@ -151,12 +159,14 @@ const CustomersPage = () => {
     filters.status,
     filters.type,
     activeSegment,
+    isWorkspaceLevel,
+    companyFilter.queryCompanyId,
   ]);
 
   useEffect(() => {
-    if (!companyId) return;
+    if (!isWorkspaceLevel && !companyId) return;
     fetchCustomers();
-  }, [fetchCustomers, companyId]);
+  }, [fetchCustomers, companyId, isWorkspaceLevel, companyFilter.selectedCompanyId]);
 
   useEffect(() => {
     if (!message) return undefined;
@@ -618,6 +628,7 @@ const CustomersPage = () => {
     handleViewTransactions,
     handleRefresh,
     refreshKey,
+    companyFilter,
 
     clearMessage,
   };

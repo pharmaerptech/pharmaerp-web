@@ -1,7 +1,6 @@
 // src/features/company/pages/desktop/CompaniesDesktopPage.jsx
 
-import React, { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import {
   Building2,
   CheckCircle2,
@@ -9,62 +8,126 @@ import {
   AlertTriangle,
   Plus,
   RefreshCw,
+  RotateCcw,
+  Search,
   Copy,
-  Check,
   MapPin,
   Mail,
   Phone,
-  Globe,
-  Users,
-  GitBranch,
-  ShieldCheck,
-  Settings,
   Edit3,
   Trash2,
-  MoreHorizontal,
-  ExternalLink,
-  Calendar,
+  MoreVertical,
+  Eye,
 } from "lucide-react";
+
 import {
   UIButton,
+  UIInput,
+  UISelect,
   UIBadge,
-  UIEmptyState,
-  UIAlert,
-  UISkeleton,
-  PermissionGate,
+  UITable,
+  UITableHeader,
+  UITableBody,
+  UITableRow,
+  UITableHead,
+  UITableCell,
+  UITableEmpty,
+  UITableLoading,
+  UIInfiniteScroll,
+  UITableScrollArea,
   UIDropdown,
   UIDropdownTrigger,
   UIDropdownMenu,
   UIDropdownItem,
   UIDropdownDivider,
-  UIIconButton,
+  PermissionGate,
   uiToast,
 } from "@/components/ui";
 import useCompany from "@/features/company/hooks/useCompany";
 import { cn } from "@/lib/utils";
 
-import { CompanyEmployeesDrawer } from "../../components";
+const PAGE_LIMIT = 20;
+
+const statusBadgeVariant = (status) => {
+  switch (status) {
+    case "active":
+      return { variant: "soft", color: "success", label: "Active" };
+    case "inactive":
+      return { variant: "soft", color: "neutral", label: "Inactive" };
+    case "suspended":
+      return { variant: "soft", color: "danger", label: "Suspended" };
+    default:
+      return { variant: "soft", color: "neutral", label: status || "Unknown" };
+  }
+};
 
 export const CompaniesDesktopPage = ({
   companies = [],
-  isLoading,
-  hasError,
-  error,
-  message,
+  allCompanies = [],
+  stats = [],
+
+  filters = { search: "", status: "all", type: "all" },
+  statusOptions = [],
+  companyTypeOptions = [],
+
+  isLoading = false,
+
+  handleFilterChange,
+  handleSearchChange,
+  handleClearFilters,
+  canCreateCompany = true,
+  canDeleteCompany = true,
+
   handleRefresh,
   handleCreateCompany,
   handleViewCompany,
   handleEditCompany,
-  handleOpenSettings,
-  handleViewEmployees,
   handleDeleteCompany,
-  selectedCompanyForEmployees,
-  isEmployeeDrawerOpen,
-  handleCloseEmployeesDrawer,
-  clearMessage,
 }) => {
-  const navigate = useNavigate();
-  const { currentCompany, setCurrentCompany } = useCompany();
+  const tableContainerRef = useRef(null);
+  const { currentCompany } = useCompany();
+
+  // Infinite Scroll state - incremental client-side batches
+  const [visibleCount, setVisibleCount] = useState(PAGE_LIMIT);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Sync visible count during render when filters change
+  const currentFilterKey = `${filters.search || ""}-${filters.status || ""}-${filters.type || ""}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(currentFilterKey);
+  if (prevFilterKey !== currentFilterKey) {
+    setPrevFilterKey(currentFilterKey);
+    setVisibleCount(PAGE_LIMIT);
+  }
+
+  // Scroll to top on filter change
+  useEffect(() => {
+    if (tableContainerRef.current) {
+      tableContainerRef.current.scrollTop = 0;
+    }
+  }, [currentFilterKey]);
+
+  const displayedCompanies = useMemo(() => {
+    return (companies || []).slice(0, visibleCount);
+  }, [companies, visibleCount]);
+
+  const hasMore = visibleCount < (companies || []).length;
+
+  const handleLoadMore = useCallback(() => {
+    if (isLoadingMore || !hasMore) return;
+    setIsLoadingMore(true);
+    setTimeout(() => {
+      setVisibleCount((prev) =>
+        Math.min(prev + PAGE_LIMIT, (companies || []).length)
+      );
+      setIsLoadingMore(false);
+    }, 120);
+  }, [isLoadingMore, hasMore, companies]);
+
+  const hasActiveFilters = Boolean(
+    filters.search ||
+      (filters.status && filters.status !== "all") ||
+      (filters.type && filters.type !== "all")
+  );
 
   const handleCopy = useCallback((text, label) => {
     if (!text || text === "-") return;
@@ -72,508 +135,450 @@ export const CompaniesDesktopPage = ({
     uiToast.success(`${label} Copied`, `"${text}" copied to clipboard.`);
   }, []);
 
-  const handleSwitchCompany = useCallback(
-    (company) => {
-      if (!company?._id) return;
-      if (currentCompany?._id === company._id) return;
-      setCurrentCompany(company);
-      uiToast.success(
-        "Active Company Switched",
-        `Now operating under "${company.displayName || company.name}".`
-      );
-    },
-    [currentCompany?._id, setCurrentCompany]
-  );
+  // 4 Top Stat Cards
+  const statCards = useMemo(() => {
+    const list = allCompanies.length ? allCompanies : companies;
+    const total = list.length;
+    const active = list.filter((c) => c.status === "active").length;
+    const inactive = list.filter((c) => c.status === "inactive").length;
+    const suspended = list.filter((c) => c.status === "suspended").length;
+
+    return [
+      {
+        id: "total",
+        title: "Total Companies",
+        value: stats.find((s) => s.id === "total")?.value ?? total,
+        subtitle: "Registered legal entities",
+        icon: Building2,
+        color: "text-indigo-600 dark:text-indigo-400",
+        bg: "bg-indigo-500/10",
+        border: "border-indigo-500/20",
+      },
+      {
+        id: "active",
+        title: "Active Profiles",
+        value: stats.find((s) => s.id === "active")?.value ?? active,
+        subtitle: "Operational business units",
+        icon: CheckCircle2,
+        color: "text-emerald-600 dark:text-emerald-400",
+        bg: "bg-emerald-500/10",
+        border: "border-emerald-500/20",
+      },
+      {
+        id: "inactive",
+        title: "Inactive Profiles",
+        value: stats.find((s) => s.id === "inactive")?.value ?? inactive,
+        subtitle: "Dormant or paused",
+        icon: Clock,
+        color: "text-amber-600 dark:text-amber-400",
+        bg: "bg-amber-500/10",
+        border: "border-amber-500/20",
+      },
+      {
+        id: "suspended",
+        title: "Suspended",
+        value: stats.find((s) => s.id === "suspended")?.value ?? suspended,
+        subtitle: "Compliance locks",
+        icon: AlertTriangle,
+        color: "text-rose-600 dark:text-rose-400",
+        bg: "bg-rose-500/10",
+        border: "border-rose-500/20",
+      },
+    ];
+  }, [allCompanies, companies, stats]);
 
   return (
-    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-3 sm:px-4 lg:px-5 pt-1 pb-2 gap-3 text-text font-sans overflow-hidden select-none">
-      {/* ── Global Error Banner ── */}
-      {error && !hasError && (
-        <UIAlert
-          intent="danger"
-          title="Something went wrong"
-          description={error}
-          onClose={clearMessage}
-        />
-      )}
+    <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-2 sm:px-3 pt-0 pb-1 gap-2.5 text-text font-sans transition-colors overflow-hidden select-none">
+      {/* ── 1. Top Stat Cards Grid ───────────────────────────────────────── */}
+      <div className="shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <div
+                key={stat.id}
+                className="bg-surface rounded-xl border border-border p-3 flex items-center gap-3 shadow-2xs transition-colors"
+              >
+                <div
+                  className={cn(
+                    "size-9 rounded-lg flex items-center justify-center shrink-0 border",
+                    stat.bg,
+                    stat.border,
+                    stat.color
+                  )}
+                >
+                  <Icon className="size-4.5 stroke-[1.8]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11.5px] font-medium text-text-muted truncate">
+                    {stat.title}
+                  </div>
+                  <div className="text-xl sm:text-[22px] font-bold text-text leading-tight font-mono tabular-nums">
+                    {stat.value}
+                  </div>
+                  <div className="text-[10px] text-text-muted truncate mt-0.5">
+                    {stat.subtitle}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
-      {/* ── Slim Executive Header Bar ── */}
-      <div className="flex items-center justify-between gap-3 shrink-0 py-1 border-b border-border/60">
-        <div className="flex items-center gap-3">
-          <div className="size-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
-            <Building2 className="size-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold text-text tracking-tight">
-                Company Entities & Legal Profiles
-              </h1>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface-alt border border-border text-[11px] font-semibold text-text font-mono">
-                {companies.length} {companies.length === 1 ? "Entity" : "Entities"}
-              </span>
-            </div>
-            <p className="text-xs text-text-muted mt-0.5">
-              Manage legal business registrations, tax credentials, and operational company units
-            </p>
-          </div>
+      {/* ── 2. Streamlined Single-Row Toolbar ────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+        {/* Search Input */}
+        <div className="flex-1 min-w-[200px] sm:min-w-[240px]">
+          <UIInput
+            type="text"
+            value={filters.search || ""}
+            onChange={(e) => handleSearchChange?.(e.target.value)}
+            placeholder="Search company by name, code, GSTIN, PAN, city..."
+            startIcon={<Search className="size-4 text-text-muted" />}
+            size="md"
+            variant="outline"
+            isClearable
+            onClear={() => handleSearchChange?.("")}
+            className="w-full"
+          />
         </div>
 
-        {/* Action Cluster */}
-        <div className="flex items-center gap-2 ml-auto">
+        {/* Company Type Select */}
+        <div className="w-[150px] sm:w-[170px]">
+          <UISelect
+            value={filters.type || "all"}
+            onChange={(val) => handleFilterChange?.({ type: val })}
+            options={companyTypeOptions}
+            placeholder="All Types"
+            size="md"
+          />
+        </div>
+
+        {/* Status Select */}
+        <div className="w-[130px] sm:w-[145px]">
+          <UISelect
+            value={filters.status || "all"}
+            onChange={(val) => handleFilterChange?.({ status: val })}
+            options={statusOptions}
+            placeholder="All Status"
+            size="md"
+          />
+        </div>
+
+        {/* Quick Reset */}
+        {hasActiveFilters && (
           <UIButton
             type="button"
             variant="ghost"
-            size="sm"
+            size="md"
+            onClick={handleClearFilters}
+            startIcon={<RotateCcw className="size-3.5 text-text-muted" />}
+            className="h-10 px-2.5 text-xs text-text-muted hover:text-text"
+            title="Reset all filters"
+          >
+            Reset
+          </UIButton>
+        )}
+
+        {/* Action Cluster (Right) */}
+        <div className="flex items-center gap-1.5 ml-auto">
+          <UIButton
+            type="button"
+            variant="ghost"
+            size="md"
             disabled={isLoading}
             onClick={handleRefresh}
-            className="h-9 px-3 text-xs font-semibold text-text-muted hover:text-text cursor-pointer"
+            className="h-10 w-10 p-0 text-text-muted hover:text-text cursor-pointer"
             title="Refresh company profiles"
           >
             <RefreshCw
               className={cn(
-                "size-3.5 mr-1.5",
+                "size-4 text-text-muted hover:text-primary",
                 isLoading && "animate-spin text-primary"
               )}
             />
-            Refresh
           </UIButton>
 
-          <PermissionGate permission="company:create">
-            <UIButton
-              type="button"
-              variant="primary"
-              size="sm"
-              startIcon={<Plus className="size-4" />}
-              onClick={handleCreateCompany}
-              className="h-9 px-3.5 text-xs font-semibold shadow-xs"
-            >
-              Add Company
-            </UIButton>
-          </PermissionGate>
+          {canCreateCompany && (
+            <PermissionGate permission="company:create">
+              <UIButton
+                type="button"
+                variant="primary"
+                size="md"
+                startIcon={<Plus className="size-4" />}
+                onClick={handleCreateCompany}
+                className="h-10 px-3.5 text-xs font-semibold shadow-xs"
+              >
+                Add Company
+              </UIButton>
+            </PermissionGate>
+          )}
         </div>
       </div>
 
-      {/* ── Main Scrollable Area ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto pr-0.5">
-        {hasError ? (
-          <div className="m-auto py-16 px-6 text-center space-y-3 max-w-md">
-            <AlertTriangle className="size-10 text-error mx-auto" />
-            <h3 className="text-base font-bold text-text">
-              Unable to load company profiles
-            </h3>
-            <p className="text-xs text-text-muted">
-              {error || "An error occurred while connecting to the workspace servers. Please retry."}
-            </p>
-            <UIButton
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleRefresh}
-              className="mt-2"
-            >
-              Retry Connection
-            </UIButton>
-          </div>
-        ) : isLoading && !companies.length ? (
-          /* Shimmer Loading Cards */
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            {Array.from({ length: 2 }).map((_, idx) => (
-              <div
-                key={idx}
-                className="bg-surface rounded-2xl p-5 border border-border shadow-xs space-y-4 animate-pulse"
-              >
-                <div className="flex items-center gap-3">
-                  <UISkeleton className="size-12 rounded-xl" />
-                  <div className="space-y-2 flex-1">
-                    <UISkeleton className="h-5 w-48 rounded" />
-                    <UISkeleton className="h-3.5 w-32 rounded" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/40">
-                  <UISkeleton className="h-16 rounded-xl" />
-                  <UISkeleton className="h-16 rounded-xl" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : companies.length === 0 ? (
-          /* Empty State */
-          <div className="m-auto py-16">
-            <UIEmptyState
-              icon={<Building2 className="size-12 text-primary" />}
-              title="No company profiles found"
-              description="Register your primary pharmacy legal entity to unlock billing, inventory, and regulatory reporting."
-              primaryAction={
-                <PermissionGate permission="company:create">
-                  <UIButton
-                    variant="primary"
-                    size="sm"
-                    startIcon={<Plus className="size-4" />}
-                    onClick={handleCreateCompany}
-                  >
-                    Register First Company
-                  </UIButton>
-                </PermissionGate>
-              }
-            />
-          </div>
-        ) : (
-          /* ── Executive Company Hub Cards ── */
-          <div
-            className={cn(
-              "grid gap-4",
-              companies.length === 1
-                ? "grid-cols-1 max-w-4xl mx-auto"
-                : "grid-cols-1 xl:grid-cols-2"
-            )}
+      {/* ── 3. Constrained-Height Table with Sticky Header & Infinite Scroll ── */}
+      <div className="flex-1 min-h-0 rounded-2xl border border-border bg-surface shadow-2xs overflow-hidden flex flex-col relative">
+        <UITableScrollArea containerRef={tableContainerRef} className="divide-y divide-border/60">
+          <UITable
+            stickyHeader
+            containerClassName="static overflow-visible rounded-none border-0 shadow-none bg-transparent isolate-auto"
+            className="w-full"
           >
-            {companies.map((company) => {
-              const isCurrent = currentCompany?._id === company._id;
-              const name = company.displayName || company.name || "Untitled Company";
-              const code = company.companyCode || "N/A";
-              const type = company.displayType || company.type || "Proprietorship";
-              const gstin = company.displayGstin || company.gstin || "-";
-              const pan = company.displayPan || company.pan || "-";
-              const email = company.displayEmail || company.email || "-";
-              const phone = company.displayPhone || company.phones?.mobile || "-";
-              const owner = company.displayOwnerName || company.owner?.name || "-";
-              const location =
-                company.locationSummary ||
-                company.addressLine1 ||
-                [company.address?.city, company.address?.state].filter(Boolean).join(", ") ||
-                "Registered Office Not Set";
-              const memberCount = company.memberCount ?? company.membersCount ?? 0;
-              const branchesCount = company.branchesCount ?? company.branches?.length ?? null;
+            {/* Sticky Table Header */}
+            <UITableHeader
+              sticky
+              className="sticky top-0 z-20 bg-surface-alt/95 backdrop-blur-xs select-none shadow-xs"
+            >
+              <UITableRow className="border-b border-border text-[11px] font-semibold text-text uppercase tracking-wider bg-surface-alt">
+                <UITableHead sticky className="min-w-[280px]">Company Entity &amp; Code</UITableHead>
+                <UITableHead sticky className="min-w-[130px]">Business Type</UITableHead>
+                <UITableHead sticky className="min-w-[170px]">GSTIN &amp; PAN</UITableHead>
+                <UITableHead sticky className="min-w-[200px]">Contact Info</UITableHead>
+                <UITableHead sticky className="min-w-[210px]">Registered Location</UITableHead>
+                <UITableHead sticky align="center" className="min-w-[90px]">Status</UITableHead>
+                <UITableHead sticky align="right" className="w-14 min-w-[56px] text-right">Actions</UITableHead>
+              </UITableRow>
+            </UITableHeader>
 
-              return (
-                <div
-                  key={company._id}
-                  className={cn(
-                    "rounded-2xl border bg-surface transition-all duration-200 flex flex-col overflow-hidden shadow-2xs hover:shadow-xs",
-                    isCurrent
-                      ? "border-primary/40 ring-1 ring-primary/25"
-                      : "border-border hover:border-border/90"
-                  )}
-                >
-                  {/* Card Banner / Accent Line */}
-                  {isCurrent && (
-                    <div className="h-1.5 w-full bg-gradient-to-r from-primary via-primary/80 to-primary/40" />
-                  )}
-
-                  {/* Card Header */}
-                  <div className="p-4 sm:p-5 flex items-start justify-between gap-3 border-b border-border/60">
-                    <div className="flex items-start gap-3.5 min-w-0">
-                      {/* Avatar / Brand Icon */}
-                      <div className="size-11 rounded-xl bg-primary/10 text-primary font-bold text-sm flex items-center justify-center shrink-0 border border-primary/20 shadow-2xs uppercase">
-                        {name.charAt(0) || "C"}
-                      </div>
-
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h2
-                            onClick={() => handleViewCompany?.(company)}
-                            className="text-base sm:text-[17px] font-bold text-text truncate hover:text-primary cursor-pointer transition-colors"
-                            title={name}
-                          >
-                            {name}
-                          </h2>
-
-                          {/* Code Badge */}
-                          <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-surface-alt border border-border text-text-muted">
-                            {code}
-                          </span>
-
-                          {/* Type Pill */}
-                          <UIBadge
-                            variant="soft"
-                            color="primary"
-                            className="text-[11px] font-semibold capitalize"
-                          >
-                            {type}
-                          </UIBadge>
-                        </div>
-
-                        {/* Status Strip & Active Context Indicator */}
-                        <div className="flex items-center gap-2 mt-1">
-                          {isCurrent ? (
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
-                              <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                              Active Workspace Company
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-surface-alt text-text-muted text-[11px] font-medium border border-border/60">
-                              Secondary Entity
-                            </span>
-                          )}
-
-                          <span className="text-[11px] text-text-muted">
-                            • Status:{" "}
-                            <strong className="text-text capitalize font-semibold">
-                              {company.status || "active"}
-                            </strong>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Actions Menu */}
-                    <UIDropdown align="right" usePortal={true}>
-                      <UIDropdownTrigger asChild>
-                        <UIIconButton
-                          variant="ghost"
-                          size="sm"
-                          aria-label="Actions"
-                          className="h-8 w-8 text-text-muted hover:text-text hover:bg-surface-hover shrink-0"
-                        >
-                          <MoreHorizontal className="size-4" />
-                        </UIIconButton>
-                      </UIDropdownTrigger>
-
-                      <UIDropdownMenu width="w-48">
-                        <UIDropdownItem
-                          icon={<Edit3 className="size-4" />}
-                          onClick={() => handleEditCompany?.(company)}
-                        >
-                          Edit Company Profile
-                        </UIDropdownItem>
-                        <UIDropdownItem
-                          icon={<Users className="size-4" />}
-                          onClick={() => handleViewEmployees?.(company)}
-                        >
-                          Manage Staff Access
-                        </UIDropdownItem>
-                        <UIDropdownItem
-                          icon={<Settings className="size-4" />}
-                          onClick={() => handleOpenSettings?.(company)}
-                        >
-                          Company Settings
-                        </UIDropdownItem>
-                        <UIDropdownDivider />
-                        <UIDropdownItem
-                          destructive
-                          icon={<Trash2 className="size-4" />}
-                          onClick={() => handleDeleteCompany?.(company)}
-                        >
-                          Delete Company
-                        </UIDropdownItem>
-                      </UIDropdownMenu>
-                    </UIDropdown>
-                  </div>
-
-                  {/* Operational Metrics Strip */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 divide-x divide-border/60 border-b border-border/60 bg-surface-alt/40 text-xs">
-                    {/* Metric 1: Branches */}
-                    <div
-                      onClick={() => navigate("/branches")}
-                      className="p-3 text-center cursor-pointer hover:bg-surface-hover/70 transition-colors group"
-                      title="Click to view company branches"
-                    >
-                      <div className="text-[11px] font-medium text-text-muted flex items-center justify-center gap-1 group-hover:text-primary">
-                        <GitBranch className="size-3.5" />
-                        Branches
-                      </div>
-                      <div className="text-base font-bold text-text font-mono tabular-nums mt-0.5 group-hover:text-primary">
-                        {branchesCount !== null ? branchesCount : "View"}
-                      </div>
-                    </div>
-
-                    {/* Metric 2: Staff */}
-                    <div
-                      onClick={() => handleViewEmployees?.(company)}
-                      className="p-3 text-center cursor-pointer hover:bg-surface-hover/70 transition-colors group"
-                      title="Click to view staff members"
-                    >
-                      <div className="text-[11px] font-medium text-text-muted flex items-center justify-center gap-1 group-hover:text-primary">
-                        <Users className="size-3.5" />
-                        Team Access
-                      </div>
-                      <div className="text-base font-bold text-text font-mono tabular-nums mt-0.5 group-hover:text-primary">
-                        {memberCount} {memberCount === 1 ? "User" : "Users"}
-                      </div>
-                    </div>
-
-                    {/* Metric 3: Created */}
-                    <div className="p-3 text-center col-span-2 sm:col-span-1 border-t sm:border-t-0 border-border/60">
-                      <div className="text-[11px] font-medium text-text-muted flex items-center justify-center gap-1">
-                        <Calendar className="size-3.5" />
-                        Profile Age
-                      </div>
-                      <div className="text-xs font-semibold text-text mt-1 truncate">
-                        {company.displayCreatedAt || "Active"}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Two-Column Structured Intel Section */}
-                  <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 gap-4 flex-1 text-xs">
-                    {/* Column 1: Statutory & Tax Compliance */}
-                    <div className="space-y-3 bg-surface-alt/30 p-3.5 rounded-xl border border-border/50">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5 pb-1 border-b border-border/40">
-                        <ShieldCheck className="size-3.5 text-primary" />
-                        Tax & Compliance
-                      </div>
-
-                      {/* GSTIN */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium">GSTIN:</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-text select-all">
-                            {gstin}
-                          </span>
-                          {gstin !== "-" && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(gstin, "GSTIN")}
-                              className="p-1 rounded hover:bg-surface text-text-muted hover:text-primary transition-colors cursor-pointer"
-                              title="Copy GSTIN"
-                            >
-                              <Copy className="size-3" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* PAN */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium">PAN Number:</span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-mono font-bold text-text select-all">
-                            {pan}
-                          </span>
-                          {pan !== "-" && (
-                            <button
-                              type="button"
-                              onClick={() => handleCopy(pan, "PAN")}
-                              className="p-1 rounded hover:bg-surface text-text-muted hover:text-primary transition-colors cursor-pointer"
-                              title="Copy PAN"
-                            >
-                              <Copy className="size-3" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Owner / Director */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium">Director / Owner:</span>
-                        <span className="font-semibold text-text truncate max-w-[160px]">
-                          {owner}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Column 2: Registered Office & Contact */}
-                    <div className="space-y-3 bg-surface-alt/30 p-3.5 rounded-xl border border-border/50">
-                      <div className="text-[11px] font-bold uppercase tracking-wider text-text-muted flex items-center gap-1.5 pb-1 border-b border-border/40">
-                        <MapPin className="size-3.5 text-info" />
-                        Registered Office
-                      </div>
-
-                      {/* Address */}
-                      <div className="flex items-start gap-2">
-                        <span className="text-text-muted font-medium shrink-0">Address:</span>
-                        <span
-                          className="text-text font-medium leading-relaxed truncate"
-                          title={location}
-                        >
-                          {location}
-                        </span>
-                      </div>
-
-                      {/* Phone */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium flex items-center gap-1">
-                          <Phone className="size-3 text-text-muted" /> Phone:
-                        </span>
-                        <span className="font-mono font-semibold text-text">
-                          {phone}
-                        </span>
-                      </div>
-
-                      {/* Email */}
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-text-muted font-medium flex items-center gap-1">
-                          <Mail className="size-3 text-text-muted" /> Email:
-                        </span>
-                        <span
-                          className="font-medium text-text truncate max-w-[160px]"
-                          title={email}
-                        >
-                          {email}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Action Bar (Footer) */}
-                  <div className="p-3 sm:px-4 bg-surface-alt/50 border-t border-border/60 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      {isCurrent ? (
-                        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-xs border border-emerald-500/20 select-none">
-                          <CheckCircle2 className="size-3.5" />
-                          Currently Active
-                        </div>
-                      ) : (
+            <UITableBody>
+              {isLoading && displayedCompanies.length === 0 ? (
+                <UITableLoading colSpan={7} rows={8} />
+              ) : displayedCompanies.length === 0 ? (
+                <UITableEmpty
+                  colSpan={7}
+                  title="No companies found"
+                  description={
+                    hasActiveFilters
+                      ? "No company profiles match your active search or filter criteria."
+                      : "Register your primary legal entity to unlock billing and accounting."
+                  }
+                  action={
+                    hasActiveFilters ? (
+                      <UIButton variant="outline" size="sm" onClick={handleClearFilters}>
+                        Clear Filters
+                      </UIButton>
+                    ) : (
+                      <PermissionGate permission="company:create">
                         <UIButton
-                          type="button"
-                          variant="outline"
+                          variant="primary"
                           size="sm"
-                          onClick={() => handleSwitchCompany(company)}
-                          className="h-8 px-3 text-xs font-semibold hover:border-primary hover:text-primary cursor-pointer shadow-2xs"
+                          onClick={handleCreateCompany}
+                          startIcon={<Plus className="size-4" />}
                         >
-                          Switch to this Company
+                          Register First Company
                         </UIButton>
+                      </PermissionGate>
+                    )
+                  }
+                />
+              ) : (
+                displayedCompanies.map((company) => {
+                  const isCurrent = currentCompany?._id === company._id;
+                  const name = company.displayName || company.name || "Untitled Company";
+                  const code = company.companyCode || "N/A";
+                  const type = company.displayType || company.type || "Proprietorship";
+                  const gstin = company.displayGstin || company.gstin || "-";
+                  const pan = company.displayPan || company.pan || "-";
+                  const email = company.displayEmail || company.email || "-";
+                  const phone = company.displayPhone || company.phones?.mobile || "-";
+                  const location =
+                    company.locationSummary ||
+                    company.addressLine1 ||
+                    [company.address?.city, company.address?.state].filter(Boolean).join(", ") ||
+                    "Registered Office Not Set";
+                  const statusMeta = statusBadgeVariant(company.status);
+
+                  return (
+                    <UITableRow
+                      key={company._id}
+                      onClick={() => handleViewCompany?.(company)}
+                      className={cn(
+                        "hover:bg-surface-alt/50 transition-colors cursor-pointer",
+                        isCurrent && "bg-primary/[0.03]"
                       )}
+                    >
+                      {/* Company Name & Code */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="size-8 rounded-lg bg-primary/10 text-primary font-bold text-xs flex items-center justify-center shrink-0 border border-primary/20 uppercase shadow-2xs">
+                            {name.charAt(0) || "C"}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span
+                                onClick={() => handleViewCompany?.(company)}
+                                className="font-bold text-xs text-text hover:text-primary transition-colors cursor-pointer truncate"
+                                title={name}
+                              >
+                                {name}
+                              </span>
+                              <span className="font-mono text-[10.5px] font-bold px-1.5 py-0.2 rounded bg-surface-alt border border-border text-text-muted">
+                                {code}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {isCurrent ? (
+                                <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
+                                  <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  Active Context
+                                </span>
+                              ) : (
+                                <span className="text-[10.5px] text-text-muted">
+                                  {company.displayOwnerName ? `Owner: ${company.displayOwnerName}` : "Company Entity"}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </UITableCell>
 
-                      <UIButton
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewEmployees?.(company)}
-                        startIcon={<Users className="size-3.5 text-text-muted" />}
-                        className="h-8 px-2.5 text-xs text-text-muted hover:text-text cursor-pointer"
-                      >
-                        Staff Access
-                      </UIButton>
-                    </div>
+                      {/* Business Type */}
+                      <UITableCell className="py-2.5 px-3">
+                        <UIBadge variant="soft" color="primary" size="xs" className="capitalize">
+                          {type}
+                        </UIBadge>
+                      </UITableCell>
 
-                    <div className="flex items-center gap-1.5 ml-auto">
-                      <UIButton
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => navigate("/branches")}
-                        startIcon={<GitBranch className="size-3.5 text-text-muted" />}
-                        className="h-8 px-2.5 text-xs text-text-muted hover:text-text cursor-pointer"
-                      >
-                        Branches
-                      </UIButton>
+                      {/* Tax Credentials (GSTIN / PAN) */}
+                      <UITableCell className="py-2.5 px-3">
+                        <div className="space-y-0.5 text-xs font-mono">
+                          {gstin !== "-" ? (
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-text-muted font-sans font-semibold">GST:</span>
+                              <span className="font-bold text-text truncate max-w-[110px]" title={gstin}>
+                                {gstin}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopy(gstin, "GSTIN");
+                                }}
+                                className="p-0.5 text-text-muted hover:text-text cursor-pointer"
+                                title="Copy GSTIN"
+                              >
+                                <Copy className="size-2.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-text-muted text-[11px] font-sans">No GSTIN</span>
+                          )}
 
-                      <UIButton
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleOpenSettings?.(company)}
-                        startIcon={<Settings className="size-3.5 text-text-muted" />}
-                        className="h-8 px-3 text-xs font-semibold shadow-2xs"
+                          {pan !== "-" && (
+                            <div className="flex items-center gap-1 text-[11px]">
+                              <span className="text-[10px] text-text-muted font-sans font-semibold">PAN:</span>
+                              <span className="text-text-muted truncate max-w-[90px]">{pan}</span>
+                            </div>
+                          )}
+                        </div>
+                      </UITableCell>
+
+                      {/* Contact Info */}
+                      <UITableCell className="py-2.5 px-3 min-w-[200px]">
+                        <div className="space-y-0.5 text-xs">
+                          {email !== "-" && (
+                            <div className="flex items-center gap-1.5 text-text truncate max-w-[190px]" title={email}>
+                              <Mail className="size-3 text-text-muted shrink-0" />
+                              <span className="truncate">{email}</span>
+                            </div>
+                          )}
+                          {phone !== "-" && (
+                            <div className="flex items-center gap-1.5 text-text-muted text-[11px]">
+                              <Phone className="size-3 text-text-muted shrink-0" />
+                              <span>{phone}</span>
+                            </div>
+                          )}
+                          {email === "-" && phone === "-" && (
+                            <span className="text-text-muted text-xs">—</span>
+                          )}
+                        </div>
+                      </UITableCell>
+
+                      {/* Registered Location */}
+                      <UITableCell className="py-2.5 px-3 min-w-[210px]">
+                        <div className="flex items-center gap-1.5 text-xs text-text-muted max-w-[200px] truncate" title={location}>
+                          <MapPin className="size-3 text-text-muted shrink-0" />
+                          <span className="truncate">{location}</span>
+                        </div>
+                      </UITableCell>
+
+                      {/* Status */}
+                      <UITableCell align="center" className="py-2.5 px-3">
+                        <UIBadge
+                          variant={statusMeta.variant}
+                          color={statusMeta.color}
+                          size="xs"
+                        >
+                          {statusMeta.label}
+                        </UIBadge>
+                      </UITableCell>
+
+                      {/* Actions */}
+                      <UITableCell
+                        align="right"
+                        className="py-2.5 px-3 w-14 min-w-[56px]"
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        Settings
-                      </UIButton>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                        <div className="flex items-center justify-end">
+                          {/* Overflow Menu */}
+                          <UIDropdown>
+                            <UIDropdownTrigger asChild>
+                              <UIButton
+                                type="button"
+                                variant="ghost"
+                                size="xs"
+                                className="size-7 p-0 text-text-muted hover:text-text cursor-pointer"
+                                title="More options"
+                              >
+                                <MoreVertical className="size-3.5" />
+                              </UIButton>
+                            </UIDropdownTrigger>
+                            <UIDropdownMenu align="end" className="w-44">
+                              <UIDropdownItem
+                                icon={<Eye className="size-4" />}
+                                onClick={() => handleViewCompany?.(company)}
+                              >
+                                View Company
+                              </UIDropdownItem>
+                              <UIDropdownItem
+                                icon={<Edit3 className="size-4" />}
+                                onClick={() => handleEditCompany?.(company)}
+                              >
+                                Edit Company
+                              </UIDropdownItem>
+                              {canDeleteCompany && (
+                                <>
+                                  <UIDropdownDivider />
+                                  <UIDropdownItem
+                                    destructive
+                                    icon={<Trash2 className="size-4" />}
+                                    onClick={() => handleDeleteCompany?.(company)}
+                                  >
+                                    Delete Company
+                                  </UIDropdownItem>
+                                </>
+                              )}
+                            </UIDropdownMenu>
+                          </UIDropdown>
+                        </div>
+                      </UITableCell>
+                    </UITableRow>
+                  );
+                })
+              )}
+            </UITableBody>
+          </UITable>
+
+          {/* Infinite Scroll sentinel */}
+          <UIInfiniteScroll
+            hasMore={hasMore}
+            isLoading={isLoadingMore}
+            onLoadMore={handleLoadMore}
+            scrollThreshold={0.8}
+          />
+        </UITableScrollArea>
       </div>
-
-      {/* ── Slide-over Company Employees & Access Drawer ── */}
-      <CompanyEmployeesDrawer
-        isOpen={isEmployeeDrawerOpen}
-        onClose={handleCloseEmployeesDrawer}
-        company={selectedCompanyForEmployees}
-      />
     </div>
   );
 };

@@ -152,7 +152,7 @@ export const PostShiftCloseDialog = ({
               </div>
             </button>
 
-            {/* Action 2: Close Business Day */}
+            {/* Action 2: Go to Business Day Page */}
             <button
               type="button"
               onClick={onCreateDayClosing}
@@ -164,10 +164,10 @@ export const PostShiftCloseDialog = ({
                 </div>
                 <div className="min-w-0">
                   <span className="font-bold text-sm text-text group-hover:text-primary transition-colors">
-                    Close Business Day
+                    Go to Business Day Page
                   </span>
                   <p className="text-xs text-text-muted mt-0.5 truncate">
-                    End business day session and lock day-end records
+                    Navigate to Business Days page to audit and close the day
                   </p>
                 </div>
               </div>

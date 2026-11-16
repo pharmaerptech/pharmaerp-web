@@ -1,15 +1,25 @@
 // src/layouts/app/desktop/AppDesktopSidebar.jsx
 
 import { useMemo, useState, useRef, useEffect } from "react";
-import { LogOut, ChevronLeft } from "lucide-react";
+import {
+  LogOut,
+  ChevronLeft,
+  Sparkles,
+  Building2,
+  Store,
+  Settings,
+  HelpCircle,
+} from "lucide-react";
 import { ROUTES } from "@/constants";
 import useAuth from "@/features/auth/hooks/useAuth";
+import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useCompany from "@/features/company/hooks/useCompany";
 import useBranch from "@/features/branch/hooks/useBranch";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import { usePermission } from "@/hooks";
 import { useWorkMode } from "@/contexts";
 import { UIConfirmDialog } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 import {
   SIDEBAR_NAV_GROUPS,
@@ -46,7 +56,9 @@ const AppDesktopSidebar = ({
   const autoCloseTimerRef = useRef(null);
   const { currentCompany } = useCompany();
   const { currentBranch } = useBranch();
-  const { isSetupComplete, companyCompleted, branchCompleted } = useSetupStatus();
+  const { currentWorkspace, activeWorkspace } = useWorkspace();
+  const workspaceName = currentWorkspace?.name || activeWorkspace?.name || "Pahuch ERP";
+  const { isSetupComplete, companyCompleted, branchCompleted, completedCount } = useSetupStatus();
   const { can, canAny, isOwner, workAccess } = usePermission();
   const { workMode } = useWorkMode();
   const { currentLevel } = useNavigationPipeline();
@@ -100,6 +112,64 @@ const AppDesktopSidebar = ({
   // Filter nav groups by active pipeline level and workMode first, then by permissions,
   // and finally apply curated essential rail filtering when the sidebar is collapsed.
   const visibleNavGroups = useMemo(() => {
+    if (!isSetupComplete) {
+      const onboardingGroups = [
+        {
+          id: "setup-flow",
+          label: "Workspace Setup",
+          items: [
+            {
+              id: "setup-center",
+              label: "Setup Center",
+              path: ROUTES.SETUP_CENTER,
+              icon: Sparkles,
+              badge: `${completedCount}/2`,
+              collapsedRail: true,
+            },
+            {
+              id: "companies",
+              label: companyCompleted ? "Manage Companies" : "1. Create Company",
+              path: companyCompleted ? ROUTES.COMPANIES : ROUTES.CREATE_COMPANY,
+              icon: Building2,
+              collapsedRail: true,
+            },
+            {
+              id: "branches",
+              label: branchCompleted ? "Manage Branches" : "2. Create Branch",
+              path: branchCompleted ? ROUTES.BRANCHES : ROUTES.CREATE_BRANCH,
+              icon: Store,
+              disabled: !companyCompleted,
+              collapsedRail: true,
+            },
+          ],
+        },
+        {
+          id: "general-support",
+          label: "Support",
+          items: [
+            {
+              id: "settings",
+              label: "Settings",
+              path: ROUTES.SETTINGS,
+              icon: Settings,
+              collapsedRail: true,
+            },
+            {
+              id: "help",
+              label: "Help Center",
+              path: ROUTES.HELP_CENTER,
+              icon: HelpCircle,
+              collapsedRail: true,
+            },
+          ],
+        },
+      ];
+
+      return collapsed
+        ? filterNavForCollapsedRail(onboardingGroups)
+        : onboardingGroups;
+    }
+
     const pipelineFiltered = filterNavByPipeline(SIDEBAR_NAV_GROUPS, currentLevel, workMode);
     const permissionFiltered = filterNavByPermission(
       pipelineFiltered,
@@ -129,6 +199,7 @@ const AppDesktopSidebar = ({
     isSetupComplete,
     companyCompleted,
     branchCompleted,
+    completedCount,
     currentCompany,
     currentBranch,
   ]);
@@ -168,6 +239,35 @@ const AppDesktopSidebar = ({
     }
   };
 
+  /**
+   * When the sidebar drawer is closed/collapsed, clicking any non-interactive empty space
+   * in the sidebar opens/expands the drawer. Clicking an icon/menu item/button performs
+   * its own action and does NOT expand the drawer.
+   */
+  const handleSidebarClick = (e) => {
+    if (!collapsed) return;
+
+    // Check if the user clicked an interactive icon, button, link, or menu item
+    const interactive = e.target.closest(
+      "button, a, [role='button'], input, select, textarea, [data-sidebar-item]"
+    );
+
+    // If an icon or menu item or control was clicked:
+    if (interactive) {
+      // If it's explicitly marked to expand the sidebar (like the top level indicator icon or arrow button):
+      if (
+        interactive.dataset.sidebarExpand === "true" ||
+        interactive.closest("[data-sidebar-expand='true']")
+      ) {
+        handleSidebarExpand();
+      }
+      return;
+    }
+
+    // User clicked empty space anywhere in the sidebar -> open the drawer
+    handleSidebarExpand();
+  };
+
   const currentWidth = collapsed ? SIDEBAR_COLLAPSED_WIDTH : SIDEBAR_EXPANDED_WIDTH;
 
   return (
@@ -176,13 +276,46 @@ const AppDesktopSidebar = ({
       style={{ width: currentWidth }}
     >
       <aside
+        onClick={handleSidebarClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
-        className="fixed left-0 top-0 z-30 h-[100dvh] border-r border-border bg-surface shadow-xs transition-[width] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] overflow-hidden flex flex-col justify-between"
+        className={cn(
+          "fixed left-0 top-0 z-30 h-[100dvh] border-r border-border bg-surface shadow-xs transition-[width] duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] overflow-hidden flex flex-col justify-between",
+          collapsed && "cursor-ew-resize select-none"
+        )}
         style={{ width: currentWidth }}
       >
-        {/* ── TOP: Brand Header (Choose Mode) OR Company & Branch Selector ───────────────────── */}
-        {!workMode ? (
+        {/* ── TOP: Setup Header OR Brand Header (Choose Mode) OR Level Indicator ── */}
+        {!isSetupComplete ? (
+          <div className="relative flex h-13 shrink-0 items-center justify-between border-b border-border px-3 bg-surface">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex size-7.5 shrink-0 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shadow-2xs">
+                <Sparkles className="size-4" />
+              </div>
+              {!collapsed && (
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-bold text-text leading-tight truncate">
+                    {workspaceName}
+                  </div>
+                  <div className="text-[10px] text-primary font-semibold truncate">
+                    Workspace Setup ({completedCount}/2)
+                  </div>
+                </div>
+              )}
+            </div>
+            {!collapsed && onToggleCollapse && (
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+                className="ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[6px] text-text-muted transition hover:bg-surface-hover hover:text-text active:scale-[0.95]"
+              >
+                <ChevronLeft className="size-4" />
+              </button>
+            )}
+          </div>
+        ) : !workMode ? (
           <div className="relative flex h-13 shrink-0 items-center justify-between border-b border-border px-3">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="flex size-7.5 shrink-0 items-center justify-center rounded-[8px] bg-primary/10 border border-primary/20 text-primary shadow-2xs">
@@ -264,10 +397,12 @@ const AppDesktopSidebar = ({
 
         {/* ── BOTTOM: Work Mode Switcher & User Profile ───────────── */}
         <div className="shrink-0">
-          <SidebarWorkModeSwitcher
-            collapsed={collapsed}
-            onConfirmOpenChange={setIsModeDialogOpen}
-          />
+          {isSetupComplete && (
+            <SidebarWorkModeSwitcher
+              collapsed={collapsed}
+              onConfirmOpenChange={setIsModeDialogOpen}
+            />
+          )}
           <SidebarUserProfile
             user={user}
             collapsed={collapsed}

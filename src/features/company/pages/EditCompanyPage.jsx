@@ -13,6 +13,7 @@ const INITIAL_FORM_DATA = {
   // Step 1: Company Details
   companyName: "",
   companyType: "private_limited",
+  industry: "",
   companyEmail: "",
   companyPhone: "",
   website: "",
@@ -60,6 +61,20 @@ const companyTypeOptions = [
   { label: "Other", value: "other" },
 ];
 
+const industryOptions = [
+  { label: "Select industry", value: "" },
+  { label: "Healthcare & Wellness", value: "healthcare_wellness" },
+  { label: "Pharmaceuticals", value: "pharmaceuticals" },
+  { label: "Retail Pharmacy", value: "retail_pharmacy" },
+  { label: "Wholesale Distribution", value: "wholesale_distribution" },
+  { label: "Medical Devices", value: "medical_devices" },
+  { label: "Hospital & Clinical", value: "hospital_clinical" },
+  { label: "Biotechnology", value: "biotechnology" },
+  { label: "Nutraceuticals", value: "nutraceuticals" },
+  { label: "Ayurveda & Herbal", value: "ayurveda_herbal" },
+  { label: "Other", value: "other" },
+];
+
 const licenseStatusOptions = [
   { label: "Pending", value: "pending" },
   { label: "Active", value: "active" },
@@ -94,6 +109,7 @@ const buildCompanyPayload = (formData) => {
   return {
     name: normalizeText(formData.companyName),
     type: formData.companyType || "private_limited",
+    industry: formData.industry || null,
     status: formData.status || "active",
     logo: formData.logo || null,
     email: normalizeLowerText(formData.companyEmail) || null,
@@ -152,6 +168,10 @@ const validateStepData = (step, formData) => {
       errors.companyName = "Company name must be at least 2 characters";
     } else if (companyName.length > 160) {
       errors.companyName = "Company name cannot exceed 160 characters";
+    }
+
+    if (!formData.industry) {
+      errors.industry = "Industry selection is required";
     }
 
     if (companyEmail && !EMAIL_REGEX.test(companyEmail)) {
@@ -223,9 +243,10 @@ const EditCompanyPage = () => {
   const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [formErrors, setFormErrors] = useState({});
   const [currentStep, setCurrentStep] = useState(1);
+  const [loadedCompanyId, setLoadedCompanyId] = useState(null);
 
   const isLoading = updateCompanyStatus === API_STATUS.LOADING;
-  const isFetching = getCompanyStatus === API_STATUS.LOADING;
+  const isFetching = getCompanyStatus === API_STATUS.LOADING || loadedCompanyId !== companyId;
 
   const loadCompanyData = useCallback(async () => {
     if (!companyId) return;
@@ -237,6 +258,7 @@ const EditCompanyPage = () => {
           // Step 1: Company Profile Parameters
           companyName: data.name || "",
           companyType: data.type || "private_limited",
+          industry: data.industry || "",
           companyEmail: data.email || "",
           companyPhone: data.phones?.mobile || "",
           website: data.website || "",
@@ -263,16 +285,20 @@ const EditCompanyPage = () => {
           gstNumber: data.gstin || "",
           panNumber: data.pan || "",
           licenseType: data.license?.licenseType || "",
-          retailLicenseNumber: data.license?.retailLicenseNumber || "",
-          wholesaleLicenseNumber: data.license?.wholesaleLicenseNumber || "",
+          retailLicenseNumber:
+            data.license?.retailLicenseNumber || "",
+          wholesaleLicenseNumber:
+            data.license?.wholesaleLicenseNumber || "",
           fssaiNumber: data.license?.fssaiNumber || "",
           licenseIssuedAt: formatIsoToYmd(data.license?.issuedAt),
           licenseExpiresAt: formatIsoToYmd(data.license?.expiresAt),
           licenseStatus: data.license?.status || "pending",
           licenseDocument: data.license?.document || null,
         });
+        setLoadedCompanyId(companyId);
       }
-    } catch (err) {
+    } catch {
+      setLoadedCompanyId(companyId);
       setFormErrors({
         submit: "Unable to retrieve company records. Returning to dashboard.",
       });
@@ -280,11 +306,11 @@ const EditCompanyPage = () => {
         navigate("/companies");
       }, 2500);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, navigate]);
+  }, [companyId, getCompanyById, navigate]);
 
-  // FIXED: Trigger load action exclusively on companyId parameter shifting
+  // Trigger load action on companyId parameter shifting
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCompanyData();
   }, [companyId, loadCompanyData]);
 
@@ -384,6 +410,7 @@ const EditCompanyPage = () => {
         setFormErrors(structuralErrors);
         if (
           structuralErrors.companyName ||
+          structuralErrors.industry ||
           structuralErrors.companyEmail ||
           structuralErrors.companyPhone
         ) {
@@ -420,6 +447,11 @@ const EditCompanyPage = () => {
     [companyId, formData, navigate],
   );
 
+  const handleReload = useCallback(() => {
+    setLoadedCompanyId(null);
+    loadCompanyData();
+  }, [loadCompanyData]);
+
   const desktopProps = useMemo(
     () => ({
       formData,
@@ -429,6 +461,7 @@ const EditCompanyPage = () => {
       currentStep,
 
       companyTypeOptions,
+      industryOptions,
       licenseStatusOptions,
 
       handleChange: handleFieldChange,
@@ -438,7 +471,7 @@ const EditCompanyPage = () => {
       handleStepChange,
       handleSaveDraft,
       handleCancel: handleBackToCompanies,
-      handleReload: loadCompanyData,
+      handleReload,
     }),
     [
       formData,
@@ -453,7 +486,7 @@ const EditCompanyPage = () => {
       handleStepChange,
       handleSaveDraft,
       handleBackToCompanies,
-      loadCompanyData,
+      handleReload,
     ],
   );
 

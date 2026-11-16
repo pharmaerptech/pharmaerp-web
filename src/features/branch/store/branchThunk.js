@@ -7,9 +7,19 @@ import { invalidateSetupStatus } from "@/features/workspace/store/workspaceSlice
 
 export const createBranch = createAsyncThunk(
   "branch/createBranch",
-  async (payload, { rejectWithValue, dispatch }) => {
+  async (payload, { rejectWithValue, dispatch, getState }) => {
     try {
-      const response = await branchService.createBranch(payload);
+      const state = getState();
+      const companyId =
+        payload?.companyId ||
+        state.company?.currentCompany?._id ||
+        state.company?.currentCompany?.id ||
+        state.company?.companies?.[0]?._id ||
+        state.company?.companies?.[0]?.id ||
+        null;
+
+      const { companyId: _discard, ...cleanPayload } = payload || {};
+      const response = await branchService.createBranch(cleanPayload, companyId);
       dispatch(invalidateSetupStatus()); // bump → Setup Center refetches
       return response.data?.data;
     } catch (error) {

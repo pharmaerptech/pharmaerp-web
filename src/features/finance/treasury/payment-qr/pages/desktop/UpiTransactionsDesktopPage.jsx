@@ -37,6 +37,8 @@ import {
 import { cn } from "@/lib/utils";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { useBranchFilter } from "@/hooks";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 import usePaymentQr from "../../hooks/usePaymentQr";
 import {
   UpiTransactionDetailsDialog,
@@ -94,6 +96,14 @@ const PAGE_LIMIT = 10;
 export const UpiTransactionsDesktopPage = () => {
   const { currentWorkspace } = useWorkspace();
   const { currentBranch } = useBranch();
+  const {
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
+    queryBranchId,
+  } = useBranchFilter();
+  const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
+
   const { paymentQrs, getPaymentQrs, getUpiTransactions } = usePaymentQr();
 
   const tableContainerRef = useRef(null);
@@ -149,19 +159,19 @@ export const UpiTransactionsDesktopPage = () => {
   useEffect(() => {
     if (currentWorkspace) {
       getPaymentQrs({
-        branchId: currentBranch?._id || undefined,
+        branchId: activeBranchId,
         status: "ACTIVE",
       });
     }
-  }, [currentWorkspace, currentBranch?._id, getPaymentQrs]);
+  }, [currentWorkspace, activeBranchId, getPaymentQrs]);
 
   // Branch UPI options for select dropdown
   const upiQrOptions = useMemo(() => {
     const list = (paymentQrs || []).filter((q) => {
       if (q.status && q.status !== "ACTIVE") return false;
-      if (!currentBranch?._id) return true;
+      if (!activeBranchId) return true;
       const qBranchId = q.branchId?._id || q.branchId;
-      return !qBranchId || String(qBranchId) === String(currentBranch._id);
+      return !qBranchId || String(qBranchId) === String(activeBranchId);
     });
 
     return [
@@ -183,7 +193,7 @@ export const UpiTransactionsDesktopPage = () => {
         };
       }),
     ];
-  }, [paymentQrs, currentBranch?._id]);
+  }, [paymentQrs, activeBranchId]);
 
   // Active filter count for badge
   const activeFiltersCount = useMemo(() => {
@@ -265,7 +275,7 @@ export const UpiTransactionsDesktopPage = () => {
       const params = {
         page: 1,
         limit: PAGE_LIMIT,
-        branchId: currentBranch?._id || undefined,
+        branchId: activeBranchId,
         paymentQrId: selectedPaymentQr !== "all" ? selectedPaymentQr : undefined,
         sourceType: selectedSourceType !== "all" ? selectedSourceType : undefined,
         search: debouncedSearch || undefined,
@@ -332,7 +342,7 @@ export const UpiTransactionsDesktopPage = () => {
     }
   }, [
     currentWorkspace,
-    currentBranch?._id,
+    activeBranchId,
     selectedPaymentQr,
     selectedSourceType,
     splitFilter,
@@ -355,7 +365,7 @@ export const UpiTransactionsDesktopPage = () => {
       const params = {
         page: nextPage,
         limit: PAGE_LIMIT,
-        branchId: currentBranch?._id || undefined,
+        branchId: activeBranchId,
         paymentQrId: selectedPaymentQr !== "all" ? selectedPaymentQr : undefined,
         sourceType: selectedSourceType !== "all" ? selectedSourceType : undefined,
         search: debouncedSearch || undefined,
@@ -400,7 +410,7 @@ export const UpiTransactionsDesktopPage = () => {
     isLoading,
     isLoadingMore,
     currentWorkspace,
-    currentBranch?._id,
+    activeBranchId,
     selectedPaymentQr,
     selectedSourceType,
     splitFilter,
@@ -621,9 +631,21 @@ export const UpiTransactionsDesktopPage = () => {
       </div>
 
       {/* ── 2. Table Filter Toolbar (Using Reusable UI Components) ───────────────── */}
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-3.5 shrink-0">
+        {/* Branch Filter (Company Level Only) */}
+        {isCompanyLevel && (
+          <div className="w-[190px] sm:w-[210px] shrink-0">
+            <BranchFilterSelect
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              size="md"
+              className="w-full"
+            />
+          </div>
+        )}
+
         {/* Branch UPI Selector Dropdown */}
-        <div className="w-[200px] sm:w-[240px]">
+        <div className="w-[200px] sm:w-[240px] shrink-0">
           <UISelect
             value={selectedPaymentQr}
             onChange={(val) => setSelectedPaymentQr(val)}
@@ -634,7 +656,7 @@ export const UpiTransactionsDesktopPage = () => {
         </div>
 
         {/* Search Input */}
-        <div className="flex-1 min-w-[220px] sm:min-w-[260px]">
+        <div className="w-[240px] sm:w-[280px] lg:w-[320px] shrink-0">
           <UIInput
             type="text"
             value={searchQuery}
@@ -771,6 +793,9 @@ export const UpiTransactionsDesktopPage = () => {
                 >
                   Reference #
                 </UITableHead>
+                {isCompanyLevel && (
+                  <UITableHead sticky className="min-w-[140px]">Branch</UITableHead>
+                )}
                 <UITableHead sticky className="min-w-[150px]">Source</UITableHead>
                 <UITableHead
                   sticky
@@ -799,10 +824,10 @@ export const UpiTransactionsDesktopPage = () => {
 
             <UITableBody>
               {isLoading ? (
-                <UITableLoading colSpan={7} rows={7} />
+                <UITableLoading colSpan={isCompanyLevel ? 8 : 7} rows={7} />
               ) : transactions.length === 0 ? (
                 <UITableEmpty
-                  colSpan={7}
+                  colSpan={isCompanyLevel ? 8 : 7}
                   title="No UPI Transactions Found"
                   description={
                     debouncedSearch || selectedPaymentQr !== "all" || selectedDateRange !== "today"
@@ -847,6 +872,13 @@ export const UpiTransactionsDesktopPage = () => {
                           )}
                         </div>
                       </UITableCell>
+
+                      {/* Branch (Company Level) */}
+                      {isCompanyLevel && (
+                        <UITableCell>
+                          <BranchBadge branch={txn.branchId} />
+                        </UITableCell>
+                      )}
 
                       {/* Source */}
                       <UITableCell className="whitespace-nowrap">

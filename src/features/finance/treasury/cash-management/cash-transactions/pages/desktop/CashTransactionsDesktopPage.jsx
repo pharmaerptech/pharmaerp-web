@@ -40,6 +40,8 @@ import {
 import { cn } from "@/lib/utils";
 import useWorkspace from "@/features/workspace/hooks/useWorkspace";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { useBranchFilter } from "@/hooks";
+import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 import useCashTransaction from "../../hooks/useCashTransaction";
 import {
   CashTransactionDetailsDialog,
@@ -102,6 +104,14 @@ const PAGE_LIMIT = 10;
 export const CashTransactionsDesktopPage = () => {
   const { currentWorkspace } = useWorkspace();
   const { currentBranch } = useBranch();
+  const {
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
+    queryBranchId,
+  } = useBranchFilter();
+  const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
+
   const { getCashTransactions } = useCashTransaction();
 
   const tableContainerRef = useRef(null);
@@ -218,7 +228,7 @@ export const CashTransactionsDesktopPage = () => {
       const params = {
         page: 1,
         limit: PAGE_LIMIT,
-        branchId: currentBranch?._id || undefined,
+        branchId: activeBranchId,
         partition: selectedPartition !== "all" ? selectedPartition : undefined,
         direction: selectedDirection !== "all" ? selectedDirection : undefined,
         transactionType: selectedTransactionType !== "all" ? selectedTransactionType : undefined,
@@ -292,7 +302,7 @@ export const CashTransactionsDesktopPage = () => {
     }
   }, [
     currentWorkspace,
-    currentBranch?._id,
+    activeBranchId,
     selectedPartition,
     selectedDirection,
     selectedTransactionType,
@@ -316,7 +326,7 @@ export const CashTransactionsDesktopPage = () => {
       const params = {
         page: nextPage,
         limit: PAGE_LIMIT,
-        branchId: currentBranch?._id || undefined,
+        branchId: activeBranchId,
         partition: selectedPartition !== "all" ? selectedPartition : undefined,
         direction: selectedDirection !== "all" ? selectedDirection : undefined,
         transactionType: selectedTransactionType !== "all" ? selectedTransactionType : undefined,
@@ -362,7 +372,7 @@ export const CashTransactionsDesktopPage = () => {
     currentWorkspace,
     currentPage,
     totalCount,
-    currentBranch?._id,
+    activeBranchId,
     selectedPartition,
     selectedDirection,
     selectedTransactionType,
@@ -611,9 +621,21 @@ export const CashTransactionsDesktopPage = () => {
       </div>
 
       {/* ── 2. Table Filter Toolbar (Using Reusable UI Components) ───────────────── */}
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
+      <div className="flex flex-wrap items-center gap-3 sm:gap-3.5 shrink-0">
+        {/* Branch Filter (Company Level Only) */}
+        {isCompanyLevel && (
+          <div className="w-[190px] sm:w-[210px] shrink-0">
+            <BranchFilterSelect
+              value={selectedBranchId}
+              onChange={setSelectedBranchId}
+              size="md"
+              className="w-full"
+            />
+          </div>
+        )}
+
         {/* Cash Partition Selector */}
-        <div className="w-[160px] sm:w-[180px]">
+        <div className="w-[160px] sm:w-[180px] shrink-0">
           <UISelect
             value={selectedPartition}
             onChange={(val) => setSelectedPartition(val)}
@@ -624,7 +646,7 @@ export const CashTransactionsDesktopPage = () => {
         </div>
 
         {/* Search Input */}
-        <div className="flex-1 min-w-[220px] sm:min-w-[260px]">
+        <div className="w-[240px] sm:w-[280px] lg:w-[320px] shrink-0">
           <UIInput
             type="text"
             value={searchQuery}
@@ -761,6 +783,9 @@ export const CashTransactionsDesktopPage = () => {
                 >
                   Transaction / Bill #
                 </UITableHead>
+                {isCompanyLevel && (
+                  <UITableHead sticky className="min-w-[140px]">Branch</UITableHead>
+                )}
                 <UITableHead sticky className="min-w-[150px]">Source / Type</UITableHead>
                 <UITableHead
                   sticky
@@ -789,10 +814,10 @@ export const CashTransactionsDesktopPage = () => {
 
             <UITableBody>
               {isLoading ? (
-                <UITableLoading colSpan={7} rows={7} />
+                <UITableLoading colSpan={isCompanyLevel ? 8 : 7} rows={7} />
               ) : transactions.length === 0 ? (
                 <UITableEmpty
-                  colSpan={7}
+                  colSpan={isCompanyLevel ? 8 : 7}
                   title="No Cash Transactions Found"
                   description={
                     debouncedSearch || selectedPartition !== "all" || selectedDirection !== "all" || selectedDateRange !== "today"
@@ -879,6 +904,13 @@ export const CashTransactionsDesktopPage = () => {
                           ) : null}
                         </div>
                       </UITableCell>
+
+                      {/* Branch (Company Level) */}
+                      {isCompanyLevel && (
+                        <UITableCell>
+                          <BranchBadge branch={txn.branchId} />
+                        </UITableCell>
+                      )}
 
                       {/* Source / Type */}
                       <UITableCell className="whitespace-nowrap">

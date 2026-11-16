@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { API_STATUS } from "@/constants";
-import { useIsMobile } from "@/hooks";
+import { useIsMobile, useBranchFilter } from "@/hooks";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useActiveShift from "@/features/operations/shifts/hooks/useActiveShift";
 import { uiToast } from "@/components/ui";
@@ -21,7 +21,15 @@ const CashExchangesPage = () => {
   const isMobile = useIsMobile();
   const [searchParamsUrl, setSearchParamsUrl] = useSearchParams();
   const { currentBranch } = useBranch();
-  const { activeShift } = useActiveShift(currentBranch?._id);
+  const {
+    isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
+    queryBranchId,
+  } = useBranchFilter();
+  const activeBranchId = isCompanyLevel ? queryBranchId : (currentBranch?._id || undefined);
+
+  const { activeShift } = useActiveShift(activeBranchId);
   const isShiftActive = Boolean(activeShift);
 
   const {
@@ -83,9 +91,9 @@ const CashExchangesPage = () => {
       page: currentPage,
       limit: pageSize,
       search: searchParams.search || undefined,
-      branchId: currentBranch?._id || undefined,
+      branchId: activeBranchId,
     }),
-    [currentPage, pageSize, searchParams.search, currentBranch?._id]
+    [currentPage, pageSize, searchParams.search, activeBranchId]
   );
 
   const fetchData = useCallback(() => {
@@ -170,6 +178,10 @@ const CashExchangesPage = () => {
     handleViewDetails,
     handleCreateNew,
     handleRefresh,
+    isCompanyLevel,
+    canCreateExchange: !isCompanyLevel,
+    selectedBranchId,
+    setSelectedBranchId,
   };
 
   return (

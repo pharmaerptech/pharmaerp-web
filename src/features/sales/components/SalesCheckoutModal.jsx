@@ -14,6 +14,7 @@ import {
   User,
   RotateCcw,
   X,
+  Lock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
@@ -645,6 +646,19 @@ export const SalesCheckoutModal = ({
   const [errorMessage, setErrorMessage] = useState(null);
 
   const handleProcessSale = async () => {
+    const shiftStatus = activeShift?.status;
+    const dayStatus = openBusinessDay?.status;
+
+    if (dayStatus === "closing") {
+      setErrorMessage("Cannot create sale bill: Business Day closing has been initiated on another device. Billing is locked.");
+      return;
+    }
+
+    if (shiftStatus === "closing") {
+      setErrorMessage("Cannot create sale bill: Shift closing has been initiated on another device. Billing is locked.");
+      return;
+    }
+
     if (isBusinessDayClosed && isShiftClosed) {
       setErrorMessage("Cannot create sale bill. The shift is closed, the business day is closed.");
       return;
@@ -1055,6 +1069,23 @@ export const SalesCheckoutModal = ({
               >
                 Auto-Balance Split
               </button>
+            </div>
+          )}
+
+          {/* Session Blocked Banner (Closing or Closed) */}
+          {isSessionBlocked && (
+            <div className="mx-5 mt-3 p-3 rounded-xl bg-amber-500/15 border-2 border-amber-500/40 text-amber-900 dark:text-amber-200 flex items-start gap-2.5 animate-in fade-in shrink-0">
+              <Lock className="size-4.5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider block">
+                  Billing Locked
+                </span>
+                <p className="text-xs font-semibold leading-relaxed">
+                  {activeShift?.status === "closing" || openBusinessDay?.status === "closing"
+                    ? "Shift or Business Day closing has been initiated on another device. Confirming bills is disabled."
+                    : "Active shift or business day is closed. Confirming bills is disabled."}
+                </p>
+              </div>
             </div>
           )}
 

@@ -6,8 +6,9 @@ export const UITable = forwardRef(
   ({ children, className, containerClassName, containerRef, stickyHeader = false, ...props }, ref) => (
     <div
       ref={containerRef}
+      data-table-scroll="true"
       className={cn(
-        "relative w-full overflow-x-auto rounded-2xl border border-border bg-surface shadow-2xs isolate",
+        "relative w-full overflow-x-auto rounded-2xl border border-border bg-surface shadow-2xs isolate table-scroll-container",
         containerClassName
       )}
     >

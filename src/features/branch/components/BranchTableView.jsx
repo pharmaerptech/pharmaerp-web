@@ -1,18 +1,15 @@
 // src/features/branch/components/BranchTableView.jsx
 
-import React from "react";
 import {
   GitBranch,
   Users,
   MoreHorizontal,
   Eye,
   Edit3,
-  Settings,
   Trash2,
   Mail,
   Phone,
   MapPin,
-  Building2,
 } from "lucide-react";
 import {
   UITable,
@@ -58,7 +55,6 @@ export const BranchTableView = ({
   branches = [],
   onView,
   onEdit,
-  onSettings,
   onViewEmployees,
   onDelete,
   stickyHeader = true,
@@ -188,12 +184,12 @@ export const BranchTableView = ({
                         </UIIconButton>
                       </UIDropdownTrigger>
 
-                      <UIDropdownMenu width="w-48">
+                      <UIDropdownMenu width="w-44">
                         <UIDropdownItem
                           icon={<Eye className="w-4 h-4" />}
                           onClick={() => onView?.(branch)}
                         >
-                          View Details
+                          View Branch
                         </UIDropdownItem>
                         <UIDropdownItem
                           icon={<Edit3 className="w-4 h-4" />}
@@ -201,20 +197,18 @@ export const BranchTableView = ({
                         >
                           Edit Branch
                         </UIDropdownItem>
-                        <UIDropdownItem
-                          icon={<Users className="w-4 h-4" />}
-                          onClick={() => onViewEmployees?.(branch)}
-                        >
-                          Staff & Access
-                        </UIDropdownItem>
-                        <UIDropdownDivider />
-                        <UIDropdownItem
-                          destructive
-                          icon={<Trash2 className="w-4 h-4" />}
-                          onClick={() => onDelete?.(branch)}
-                        >
-                          Delete Branch
-                        </UIDropdownItem>
+                        {onDelete && (
+                          <>
+                            <UIDropdownDivider />
+                            <UIDropdownItem
+                              destructive
+                              icon={<Trash2 className="w-4 h-4" />}
+                              onClick={() => onDelete?.(branch)}
+                            >
+                              Delete Branch
+                            </UIDropdownItem>
+                          </>
+                        )}
                       </UIDropdownMenu>
                     </UIDropdown>
                   </UITableCell>

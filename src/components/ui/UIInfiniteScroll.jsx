@@ -84,7 +84,10 @@ export const UIInfiniteScroll = ({
   }, [onLoadMore, resolvedRoot, rootMargin, safeThreshold, disabled]);
 
   return (
-    <div className={cn("w-full flex flex-col", className)}>
+    <div
+      data-infinite-scroll="true"
+      className={cn("w-full flex flex-col ui-infinite-scroll", className)}
+    >
       {children}
 
       {/* Sentinel Trigger */}

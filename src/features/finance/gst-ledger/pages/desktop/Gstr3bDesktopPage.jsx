@@ -4,6 +4,7 @@ import AppDesktopHeader from "@/layouts/app/desktop/AppDesktopHeader";
 import { ROUTES } from "@/constants";
 import { useGstr3b } from "../../hooks/useGstr3b";
 import Gstr3bDrillDownModal from "../../components/Gstr3bDrillDownModal";
+import { CompanyFilterSelect } from "@/components/shared";
 import {
   FiCalendar,
   FiDownload,
@@ -37,6 +38,8 @@ export const Gstr3bDesktopPage = () => {
     branches,
     branchId,
     setBranchId,
+    companyId,
+    setCompanyId,
     currentBranch,
     summaryData,
     loading,
@@ -142,6 +145,14 @@ export const Gstr3bDesktopPage = () => {
                 ))}
               </select>
             </div>
+
+            {/* Workspace Level Company Filter (Zero width/elements at Company level) */}
+            <CompanyFilterSelect
+              value={companyId || "all"}
+              onChange={(val) => setCompanyId(val || "all")}
+              size="sm"
+              className="w-[170px] sm:w-[195px]"
+            />
 
             {/* Branch Selector */}
             <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-surface-alt px-3 py-1.5 rounded-xl border border-slate-200 dark:border-border">

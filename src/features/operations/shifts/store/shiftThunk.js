@@ -59,6 +59,30 @@ export const updateShiftStatus = createAsyncThunk(
   }
 );
 
+export const initiateShiftClose = createAsyncThunk(
+  "shift/initiateShiftClose",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await shiftService.initiateShiftClose(id);
+      return response.data?.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+export const abortShiftClose = createAsyncThunk(
+  "shift/abortShiftClose",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await shiftService.abortShiftClose(id);
+      return response.data?.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 export const cancelShift = createAsyncThunk(
   "shift/cancelShift",
   async ({ id, payload }, { rejectWithValue }) => {

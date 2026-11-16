@@ -188,11 +188,15 @@ export const OpenBusinessDayDialog = ({ isOpen, onClose }) => {
         </button>
       </div>
 
-      {/* Existing Open Day Warning (if any) */}
+      {/* Existing Open Day / Closing Day Warning (if any) */}
       {hasOpenDay && (
         <UIAlert
           intent="warning"
-          title="Active Business Day Exists"
+          title={
+            suggestedBusinessDate?.status === "closing"
+              ? "Business Day Closing in Progress"
+              : "Active Business Day Exists"
+          }
           description={suggestedBusinessDate?.reason}
         />
       )}
