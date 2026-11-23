@@ -18,6 +18,8 @@ import {
   CalendarDays,
   Store,
   Building2,
+  Trash2,
+  Undo2,
   Search,
   X,
   ArrowRight,
@@ -46,6 +48,8 @@ const ICON_MAP = {
   CalendarDays,
   Store,
   Building2,
+  Trash2,
+  Undo2,
 };
 
 // Color theme styles for icons and badges

@@ -18,6 +18,8 @@ import {
   CalendarDays,
   Store,
   Building2,
+  Trash2,
+  Undo2,
   Search,
   X,
   ChevronRight,
@@ -42,6 +44,8 @@ const ICON_MAP = {
   CalendarDays,
   Store,
   Building2,
+  Trash2,
+  Undo2,
 };
 
 const COLOR_STYLES = {

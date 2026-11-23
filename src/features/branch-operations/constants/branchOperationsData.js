@@ -172,6 +172,49 @@ export const BRANCH_OPERATIONS_MODULES = [
       "reorder",
     ],
   },
+  {
+    id: "expired-scrap",
+    categoryId: "inventory-purchases",
+    title: "Expired & Scrap Bin",
+    subtitle: "Quarantine, Scrap & Fresh Returns",
+    description:
+      "Audit shelf-expired items, damaged/broken medicines, scrap bin batches, and route fresh returns to inventory.",
+    badge: "Scrap Bin",
+    badgeColor: "rose",
+    colorVariant: "rose",
+    iconName: "Trash2",
+    path: ROUTES.EXPIRED_SCRAP_ITEMS,
+    keywords: [
+      "expired items",
+      "scrap bin",
+      "broken returns",
+      "fresh returns",
+      "quarantine",
+      "disposal",
+    ],
+  },
+  {
+    id: "purchase-returns",
+    categoryId: "inventory-purchases",
+    title: "Purchase Returns",
+    subtitle: "Supplier Returns & Transport Boxes",
+    description:
+      "Initiate vendor returns, generate GST Debit Notes, print hierarchical transport box labels, and dispatch consignments.",
+    badge: "Debit Notes",
+    badgeColor: "amber",
+    colorVariant: "amber",
+    iconName: "RotateCcw",
+    path: ROUTES.PURCHASE_RETURNS,
+    keywords: [
+      "purchase returns",
+      "debit notes",
+      "supplier returns",
+      "vendor returns",
+      "transport labels",
+      "dispatch",
+      "scrap return",
+    ],
+  },
 
   // ── 3. Till & Cash Treasury ─────────────────────────────────────────────
   {
