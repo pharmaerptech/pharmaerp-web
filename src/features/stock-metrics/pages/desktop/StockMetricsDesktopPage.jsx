@@ -741,7 +741,7 @@ export const StockMetricsDesktopPage = () => {
           {/* Add Expired / Broken Stock Button */}
           <UIButton
             type="button"
-            variant="default"
+            variant="primary"
             size="md"
             onClick={() => setIsAddExpiredBrokenModalOpen(true)}
             startIcon={<Plus className="size-4" />}

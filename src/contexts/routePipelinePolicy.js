@@ -268,6 +268,14 @@ export const ROUTE_POLICY_RULES = [
     modes: BOTH_MODES,
   },
   {
+    id: "branch-expired-scrap",
+    match: (p) =>
+      p === "/inventory/expired-scrap" ||
+      p.startsWith("/inventory/expired-scrap/"),
+    levels: [PIPELINE_LEVELS.WORKSPACE, PIPELINE_LEVELS.COMPANY, PIPELINE_LEVELS.BRANCH],
+    modes: BOTH_MODES,
+  },
+  {
     id: "branch-inventory-ops",
     match: (p) => p === "/inventory" || p.startsWith("/inventory/"),
     levels: [PIPELINE_LEVELS.COMPANY, PIPELINE_LEVELS.BRANCH],

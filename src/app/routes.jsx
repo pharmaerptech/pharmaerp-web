@@ -47,6 +47,7 @@ import UIShowcasePage from "@/pages/UIShowcasePage";
 
 import { LandingPage } from "@/features/landing";
 import StockMetricsPage from "@/features/stock-metrics/pages/StockMetricsPage";
+import ExpiredScrapItemsPage from "@/features/stock-metrics/pages/ExpiredScrapItemsPage";
 import TransferOrdersPage from "@/pages/inventory/TransferOrdersPage";
 import CreateTransferOrderPage from "@/pages/inventory/CreateTransferOrderPage";
 import hsnMasterRoutes from "@/features/hsn-master/routes/hsnMasterRoutes";
@@ -671,6 +672,34 @@ export const router = createBrowserRouter([
                   {
                     path: "/stock-metrics",
                     element: <Navigate to="/inventory/stock-metrics" replace />,
+                  },
+                  {
+                    path: "/inventory/expired-scrap",
+                    element: (
+                      <PermissionGuard
+                        permissions={[
+                          "stock:view",
+                          "product:view",
+                          "inventory:view",
+                        ]}
+                      >
+                        <ExpiredScrapItemsPage />
+                      </PermissionGuard>
+                    ),
+                  },
+                  {
+                    path: ROUTES.EXPIRED_SCRAP_ITEMS,
+                    element: (
+                      <PermissionGuard
+                        permissions={[
+                          "stock:view",
+                          "product:view",
+                          "inventory:view",
+                        ]}
+                      >
+                        <ExpiredScrapItemsPage />
+                      </PermissionGuard>
+                    ),
                   },
                   {
                     path: "/inventory/transfer-orders",

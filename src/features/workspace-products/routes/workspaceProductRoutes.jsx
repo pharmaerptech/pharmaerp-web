@@ -1,6 +1,5 @@
 import { ROUTES } from "@/constants";
 
-import { StockMetricsPage, ExpiredScrapItemsPage } from "@/features/stock-metrics";
 import {
   WorkspaceProductsPage,
   CreateWorkspaceProductPage,
@@ -11,18 +10,6 @@ import {
 } from "../pages";
 
 const workspaceProductRoutes = [
-  {
-    path: ROUTES.STOCK_METRICS,
-    element: <StockMetricsPage />,
-  },
-  {
-    path: ROUTES.EXPIRED_SCRAP_ITEMS,
-    element: <ExpiredScrapItemsPage />,
-  },
-  {
-    path: "/inventory/expired-scrap",
-    element: <ExpiredScrapItemsPage />,
-  },
   {
     path: ROUTES.WORKSPACE_PRODUCTS,
     element: <WorkspaceProductsPage />,
