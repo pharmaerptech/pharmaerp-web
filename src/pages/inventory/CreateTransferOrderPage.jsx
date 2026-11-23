@@ -1,7 +1,7 @@
 // src/pages/inventory/CreateTransferOrderPage.jsx
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,6 +19,7 @@ import {
   Truck,
   Plus,
   ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { uiToast as toast } from "@/components/ui";
 import useBranch from "../../features/branch/hooks/useBranch";
@@ -33,8 +34,13 @@ import {
 
 const CreateTransferOrderPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const isEditMode = Boolean(id);
+
+  const prefilledState = location.state || null;
+  const isPrefilledScrap = prefilledState?.transferType === "SCRAP";
+  const [isScrapOrder, setIsScrapOrder] = useState(isPrefilledScrap);
 
   const { currentCompany } = useCompany();
   const { currentBranch, branches = [], getCompanyBranches } = useBranch();
@@ -49,6 +55,31 @@ const CreateTransferOrderPage = () => {
   const [items, setItems] = useState([]);
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Prefill items from location.state (e.g. from Expired & Scrap Register)
+  const prefilledLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!isEditMode && prefilledState?.prefilledItems && !prefilledLoadedRef.current) {
+      prefilledLoadedRef.current = true;
+      if (
+        prefilledState.sourceBranchId &&
+        currentBranch?._id &&
+        String(prefilledState.sourceBranchId) !== String(currentBranch._id)
+      ) {
+        toast.error(
+          "Items were prefilled for another branch. Transfer orders can only be created from your current active branch."
+        );
+        navigate("/inventory/transfer-orders");
+        return;
+      }
+      setItems(prefilledState.prefilledItems);
+      if (prefilledState.transferType === "SCRAP") {
+        setIsScrapOrder(true);
+        setRemarks(prefilledState.remarks || "Quarantined scrap & expired stock transfer to store");
+      }
+      toast.info(`Prefilled ${prefilledState.prefilledItems.length} quarantined items for transfer.`);
+    }
+  }, [isEditMode, prefilledState, currentBranch?._id, navigate]);
 
   // Search & Batch Modal State
   const [searchQuery, setSearchQuery] = useState("");
@@ -89,6 +120,7 @@ const CreateTransferOrderPage = () => {
         }
 
         setExistingOrder(order);
+        setIsScrapOrder(order.transferType === "SCRAP");
         setDestinationBranchId(
           order.destinationBranchId?._id || order.destinationBranchId || ""
         );
@@ -99,6 +131,9 @@ const CreateTransferOrderPage = () => {
           productName: item.product?.name || "Product",
           batch: item.batch?._id || item.batch,
           batchNo: item.batchNo,
+          originalBatchNo: item.originalBatchNo || item.batchNo,
+          scrapType: item.scrapType || (order.transferType === "SCRAP" ? "EXPIRED" : "NONE"),
+          isScrap: order.transferType === "SCRAP" || (item.scrapType && item.scrapType !== "NONE"),
           transferQty: item.transferQty,
           availableQty: 99999,
         }));
@@ -251,6 +286,9 @@ const CreateTransferOrderPage = () => {
     if (!sourceBranchId) {
       return toast.error("Active facility not identified. Please refresh or select a facility.");
     }
+    if (currentBranch?._id && String(sourceBranchId) !== String(currentBranch._id)) {
+      return toast.error("Transfer orders can only be dispatched from your current active branch.");
+    }
     if (!destinationBranchId) {
       return toast.error("Please select a destination facility.");
     }
@@ -269,11 +307,14 @@ const CreateTransferOrderPage = () => {
       setSubmitting(true);
       const payload = {
         destinationBranchId,
+        transferType: isScrapOrder ? "SCRAP" : "STANDARD",
         remarks: remarks.trim(),
         items: items.map((i) => ({
           product: i.product,
           batch: i.batch,
           batchNo: i.batchNo,
+          originalBatchNo: i.originalBatchNo || i.batchNo,
+          scrapType: i.scrapType || (isScrapOrder ? "EXPIRED" : "NONE"),
           transferQty: i.transferQty,
         })),
       };
@@ -288,7 +329,11 @@ const CreateTransferOrderPage = () => {
           sourceBranchId,
           ...payload,
         });
-        toast.success("Transfer order created successfully!");
+        toast.success(
+          isScrapOrder
+            ? "Quarantined scrap transfer order dispatched successfully!"
+            : "Transfer order created successfully!"
+        );
       }
 
       navigate("/inventory/transfer-orders");
@@ -332,16 +377,27 @@ const CreateTransferOrderPage = () => {
               <h1 className="text-xl font-bold tracking-tight text-text">
                 {isEditMode
                   ? `Edit Transfer Order ${existingOrder?.transferNo ? `(${existingOrder.transferNo})` : ""}`
+                  : isScrapOrder
+                  ? "Dispatch Scrap Stock Transfer"
                   : "Create Transfer Order"}
               </h1>
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
-                <Truck className="size-3" />
-                {isEditMode ? "Edit Mode" : "Inter-Facility"}
-              </span>
+              {isScrapOrder ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20">
+                  <Trash2 className="size-3" />
+                  Quarantined Scrap Mode
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 text-primary border border-primary/20">
+                  <Truck className="size-3" />
+                  {isEditMode ? "Edit Mode" : "Inter-Facility"}
+                </span>
+              )}
             </div>
             <p className="text-xs text-text-muted mt-0.5">
               {isEditMode
                 ? "Modify destination branch, remarks, or transfer quantities"
+                : isScrapOrder
+                ? "Dispatch damaged or expired scrap inventory directly to target branch's scrap bin"
                 : "Dispatch inventory batches from your current facility to a target branch"}
             </p>
           </div>
@@ -445,6 +501,23 @@ const CreateTransferOrderPage = () => {
         </div>
       </div>
 
+      {/* Quarantined Scrap Notice Banner */}
+      {isScrapOrder && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-3 shadow-2xs">
+          <AlertTriangle className="size-5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+          <div className="space-y-1">
+            <div className="font-bold text-sm text-amber-900 dark:text-amber-100">
+              Quarantined Stock Transfer Mode
+            </div>
+            <p className="leading-relaxed text-text-muted">
+              These items are drawn from your current branch's quarantined scrap bin or shelf-expired inventory.
+              Upon dispatch and receipt at the destination store, they will be credited strictly to the destination facility's
+              <strong> scrap bin</strong> and remain isolated from sellable stock.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── 3. Main Form Section (2-Column Grid) ─────────────────────────── */}
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Product Search & Staged Items Table (8 Cols) */}
@@ -458,7 +531,9 @@ const CreateTransferOrderPage = () => {
                   Select Products to Transfer
                 </h2>
                 <p className="text-xs text-text-muted mt-0.5">
-                  Search medicines and inventory available at <strong>{currentBranch?.name || "current facility"}</strong>
+                  {isScrapOrder
+                    ? "Items prefilled from Expired & Scrap Register. Search below if you need to add more items."
+                    : `Search medicines and inventory available at ${currentBranch?.name || "current facility"}`}
                 </p>
               </div>
               <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-surface-alt border border-border text-text">
@@ -511,6 +586,7 @@ const CreateTransferOrderPage = () => {
                       <th className="py-3 px-4 w-12 text-center">#</th>
                       <th className="py-3 px-4">Product</th>
                       <th className="py-3 px-4">Batch Number</th>
+                      {isScrapOrder && <th className="py-3 px-4">Quarantine Type</th>}
                       <th className="py-3 px-4 text-right">Available Stock</th>
                       <th className="py-3 px-4 text-right w-36">Transfer Qty</th>
                       <th className="py-3 px-4 text-center w-16">Action</th>
@@ -535,6 +611,27 @@ const CreateTransferOrderPage = () => {
                             {item.batchNo}
                           </span>
                         </td>
+                        {isScrapOrder && (
+                          <td className="py-3.5 px-4">
+                            {item.scrapType === "FRESH_RETURN" || item.category === "fresh_return" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                                Fresh Return
+                              </span>
+                            ) : item.scrapType === "BROKEN" || item.category === "broken" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+                                Broken Return
+                              </span>
+                            ) : item.scrapType === "EXPIRED" || item.category === "scrap_expired" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                                Expired Return
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
+                                Shelf Expired
+                              </span>
+                            )}
+                          </td>
+                        )}
                         <td className="py-3.5 px-4 text-right">
                           <span className="font-semibold text-text font-mono">
                             {item.availableQty}
@@ -659,12 +756,24 @@ const CreateTransferOrderPage = () => {
               {submitting ? (
                 <>
                   <RefreshCw className="size-4 animate-spin" />
-                  <span>{isEditMode ? "Updating Transfer Order..." : "Creating Transfer Order..."}</span>
+                  <span>
+                    {isEditMode
+                      ? "Updating Transfer Order..."
+                      : isScrapOrder
+                      ? "Dispatching Scrap Transfer..."
+                      : "Creating Transfer Order..."}
+                  </span>
                 </>
               ) : (
                 <>
                   <ArrowRight className="size-4" />
-                  <span>{isEditMode ? "Save Changes" : "Dispatch Transfer Order"}</span>
+                  <span>
+                    {isEditMode
+                      ? "Save Changes"
+                      : isScrapOrder
+                      ? "Dispatch Scrap Transfer"
+                      : "Dispatch Transfer Order"}
+                  </span>
                 </>
               )}
             </button>

@@ -126,6 +126,12 @@ const getPageTitle = (pathname) => {
 
   // Inventory & Catalog
   if (
+    pathname.startsWith("/inventory/expired-scrap") ||
+    pathname === ROUTES.EXPIRED_SCRAP_ITEMS
+  ) {
+    return "Expired & Scrap Items Register";
+  }
+  if (
     pathname.startsWith("/inventory/stock-metrics") ||
     pathname.startsWith("/stock-metrics")
   ) {
@@ -226,7 +232,7 @@ const getPageTitle = (pathname) => {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
 
-export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240 }) => {
+export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240, onOpenShortcuts }) => {
   const effectiveWidth = sidebarWidth ?? (sidebarCollapsed ? 68 : 240);
   const location = useLocation();
   const { isSetupComplete, completedCount } = useSetupStatus();

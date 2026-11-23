@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   CreditCard,
   X,
+  Archive,
 } from "lucide-react";
 import {
   UIModal,
@@ -199,6 +200,7 @@ export const SalesReturnDetailsDrawer = ({ open, isOpen: propIsOpen, onClose, re
         isReturnItem: true,
         originalInvoiceNo: originalInv,
         originalSoldQty: maxQty,
+        motive: item.motive || (itemToDisplay?.returnMotive && itemToDisplay?.returnMotive !== "mixed" ? itemToDisplay?.returnMotive : "general"),
       };
     });
   }, [rawItems, itemToDisplay?.billingMode]);
@@ -375,6 +377,34 @@ export const SalesReturnDetailsDrawer = ({ open, isOpen: propIsOpen, onClose, re
             </div>
           </div>
 
+          {/* Automatic Scrap Store Transfer Order Card */}
+          {itemToDisplay?.transferOrderNo && (
+            <div className="p-3.5 rounded-xl bg-amber-500/[0.08] dark:bg-amber-500/[0.12] border border-amber-500/30 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Archive className="size-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider block">
+                    Automatic Scrap Store Transfer
+                  </span>
+                  <p className="font-bold text-text text-sm flex items-center gap-2">
+                    <span>Transfer Order #{itemToDisplay.transferOrderNo}</span>
+                  </p>
+                  <span className="text-[10.5px] text-text-muted">
+                    Expired/broken items isolated to Scrap Store branch
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-text-muted block">Destination</span>
+                <UIBadge variant="soft" color="warning" size="sm" className="font-semibold">
+                  Scrap Store
+                </UIBadge>
+              </div>
+            </div>
+          )}
+
           {/* Dedicated Payment & Denominations Breakdown Section (Matching L489-L570 of BillingInvoiceDetailsDrawer.jsx) */}
           <div className="rounded-xl border border-border bg-surface-alt/30 p-4 space-y-3">
             <div className="flex items-center justify-between pb-2 border-b border-border/60">
@@ -529,6 +559,7 @@ export const SalesReturnDetailsDrawer = ({ open, isOpen: propIsOpen, onClose, re
                     <th className="py-2.5 px-3">Item Name & Brand</th>
                     <th className="py-2.5 px-2 font-mono">Batch</th>
                     <th className="py-2.5 px-2 font-mono">Expiry</th>
+                    <th className="py-2.5 px-2 text-center">Condition</th>
                     <th className="py-2.5 px-2 font-mono text-center">GST %</th>
                     <th className="py-2.5 px-2 text-right">Qty</th>
                     <th className="py-2.5 px-3 text-right">Unit Rate</th>
@@ -549,6 +580,20 @@ export const SalesReturnDetailsDrawer = ({ open, isOpen: propIsOpen, onClose, re
                         </td>
                         <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted font-semibold">{item.batch || "—"}</td>
                         <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted">{item.expiry || "—"}</td>
+                        <td className="py-2.5 px-2 text-center">
+                          <span
+                            className={cn(
+                              "inline-block px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider",
+                              item.motive === "expired"
+                                ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                                : item.motive === "broken"
+                                ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30"
+                                : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                            )}
+                          >
+                            {item.motive === "expired" ? "Expired" : item.motive === "broken" ? "Broken" : "General"}
+                          </span>
+                        </td>
                         <td className="py-2.5 px-2 font-mono text-center font-bold text-purple-600 dark:text-purple-400">{item.gstRate}%</td>
                         <td className="py-2.5 px-2 font-mono text-right font-bold text-error tabular-nums">
                           <span className="inline-block px-1.5 py-0.5 rounded border bg-error-soft/40 border-error/30 text-error font-bold">
@@ -561,7 +606,7 @@ export const SalesReturnDetailsDrawer = ({ open, isOpen: propIsOpen, onClose, re
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={7} className="py-6 text-center text-text-muted">
+                      <td colSpan={8} className="py-6 text-center text-text-muted">
                         No line items recorded for this return memo.
                       </td>
                     </tr>
@@ -644,6 +689,12 @@ export const SalesReturnDetailsDrawer = ({ open, isOpen: propIsOpen, onClose, re
               <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1.5 rounded-lg border border-emerald-500/20">
                 <CheckCircle2 className="size-3.5 text-emerald-600" /> Restocked & Reconciled
               </span>
+
+              {itemToDisplay?.transferOrderNo && (
+                <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300 flex items-center gap-1.5 bg-amber-500/10 px-2.5 py-1.5 rounded-lg border border-amber-500/20">
+                  <Archive className="size-3.5 text-amber-600" /> Scrap Transfer #{itemToDisplay.transferOrderNo}
+                </span>
+              )}
             </div>
 
             {/* Right side actions */}

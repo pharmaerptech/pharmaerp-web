@@ -135,6 +135,22 @@ const workspaceProductService = {
   getProductFacilityBatchesByQueryV2(payload = {}) {
     return apiClient.post(ENDPOINTS.WORKSPACE_PRODUCTS.BATCHES_QUERY, payload);
   },
+
+  /**
+   * Move shelf-expired batches to branch scrap bin
+   * POST /catalog/products/workspace-product/batches/move-to-scrap-bin
+   */
+  moveToScrapBin(payload = {}) {
+    return apiClient.post(ENDPOINTS.WORKSPACE_PRODUCTS.MOVE_TO_SCRAP_BIN, payload);
+  },
+
+  /**
+   * Add expired or broken stock adjustment
+   * POST /catalog/products/workspace-product/stock-adjustments/expired-broken
+   */
+  addExpiredBrokenStock(payload = {}) {
+    return apiClient.post(ENDPOINTS.WORKSPACE_PRODUCTS.ADD_EXPIRED_BROKEN_STOCK, payload);
+  },
 };
 
 export default workspaceProductService;

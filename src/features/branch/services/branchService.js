@@ -11,8 +11,8 @@ const branchService = {
     return apiClient.get(ENDPOINTS.BRANCH.LIST, { headers });
   },
 
-  getWorkspaceBranches() {
-    return apiClient.get(ENDPOINTS.BRANCH.WORKSPACE_LIST);
+  getWorkspaceBranches(params = {}) {
+    return apiClient.get(ENDPOINTS.BRANCH.WORKSPACE_LIST, { params });
   },
 
   getBranchById(branchId) {

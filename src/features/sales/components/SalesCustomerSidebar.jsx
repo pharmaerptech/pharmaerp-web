@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
-import { History, ShoppingBag, Loader2, ArrowRight, RotateCcw, Users, UserCheck, User } from "lucide-react";
+import { History, ShoppingBag, Loader2, ArrowRight, Users, UserCheck, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import invoiceService from "@/features/sales/services/invoiceService";
 import { UIInfiniteScroll } from "@/components/ui/UIInfiniteScroll";
@@ -7,7 +7,7 @@ import { UIInfiniteScroll } from "@/components/ui/UIInfiniteScroll";
 const formatCurrency = (val) => `₹${Number(val || 0).toFixed(2)}`;
 const PAGE_SIZE = 5;
 
-export const SalesCustomerSidebar = ({ customer, onAddProduct, onSwitchCustomer, isReturnInvoice = false }) => {
+export const SalesCustomerSidebar = ({ customer, onAddProduct, onSwitchCustomer }) => {
   const [invoices, setInvoices] = useState([]);
   const [familyMembers, setFamilyMembers] = useState([]);
   const [selectedMemberFilter, setSelectedMemberFilter] = useState("all");
@@ -220,15 +220,9 @@ export const SalesCustomerSidebar = ({ customer, onAddProduct, onSwitchCustomer,
         className="flex-1 overflow-y-auto p-2 bg-surface-alt/10 min-h-0"
       >
         <div className="px-2 py-2 flex items-center justify-between text-xs font-bold text-text-muted uppercase tracking-wider">
-          <span className={cn("flex items-center gap-1.5", isReturnInvoice && "text-error font-extrabold")}>
-            {isReturnInvoice ? (
-              <RotateCcw className="size-3.5" />
-            ) : (
-              <History className="size-3.5" />
-            )}
-            {isReturnInvoice
-              ? "Select Items to Return"
-              : selectedMemberFilter === "all"
+          <span className="flex items-center gap-1.5">
+            <History className="size-3.5" />
+            {selectedMemberFilter === "all"
               ? "All Past Purchases"
               : `${selectedMemberObj?.name || "Member"}'s Purchases`}
           </span>
@@ -356,23 +350,10 @@ export const SalesCustomerSidebar = ({ customer, onAddProduct, onSwitchCustomer,
                         <button
                           type="button"
                           onClick={() => onAddProduct && onAddProduct(item.productId, item, inv)}
-                          className={cn(
-                            "opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all shrink-0 cursor-pointer",
-                            isReturnInvoice
-                              ? "bg-error/15 text-error hover:bg-error hover:text-white border border-error/30 shadow-2xs"
-                              : "bg-primary/10 text-primary hover:bg-primary hover:text-white"
-                          )}
-                          title={
-                            isReturnInvoice
-                              ? `Return ${item.name || "item"} (${item.batch || "batch"}) from #${inv.invoiceNo}`
-                              : "Reorder this product into current cart"
-                          }
+                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all shrink-0 cursor-pointer bg-primary/10 text-primary hover:bg-primary hover:text-white"
+                          title="Reorder this product into current cart"
                         >
-                          {isReturnInvoice ? (
-                            <RotateCcw className="size-3.5" />
-                          ) : (
-                            <ArrowRight className="size-3.5" />
-                          )}
+                          <ArrowRight className="size-3.5" />
                         </button>
                       </div>
                     ))}

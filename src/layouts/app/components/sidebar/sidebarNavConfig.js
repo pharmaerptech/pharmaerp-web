@@ -27,6 +27,8 @@ import {
   FileUp,
   RotateCcw,
   Store,
+  Trash2,
+  Undo2,
 } from "lucide-react";
 
 import { ROUTES } from "@/constants";
@@ -695,6 +697,17 @@ export const SIDEBAR_NAV_GROUPS = [
         keywords: ["purchases", "vendor bills", "purchase order", "receiving"],
       },
       {
+        id: "purchase-returns",
+        label: "Purchase Returns",
+        path: ROUTES.PURCHASE_RETURNS,
+        icon: Undo2,
+        level: "branch",
+        workMode: "operation",
+        collapsedRail: true,
+        permission: "purchase:view",
+        keywords: ["purchase returns", "debit notes", "supplier returns", "vendor returns", "claim memo"],
+      },
+      {
         id: "stock-metrics",
         label: "Stock Metrics",
         path: "/inventory/stock-metrics",
@@ -704,6 +717,14 @@ export const SIDEBAR_NAV_GROUPS = [
         workMode: "operation",
         permission: "product:view",
         keywords: ["stock metrics", "batch stock", "qoh", "expiry"],
+      },
+      {
+        id: "expired-scrap",
+        label: "Expired & Scrap",
+        path: ROUTES.EXPIRED_SCRAP_ITEMS,
+        icon: Trash2,
+        permission: "product:view",
+        keywords: ["expired items", "scrap bin", "broken returns", "expired returns", "quarantine", "disposal"],
       },
       {
         id: "transfer-orders",

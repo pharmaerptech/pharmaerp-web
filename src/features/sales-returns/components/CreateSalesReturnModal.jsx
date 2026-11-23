@@ -439,13 +439,19 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
       const branchId = currentBranch?._id || currentBranch?.id || originalInvoice?.branchId;
       const customerId = originalInvoice?.customerId?._id || originalInvoice?.customerId;
 
+      const customerGstin = (originalInvoice?.customerId?.gstNumber || originalInvoice?.customerId?.gstin || originalInvoice?.customerGstin || "").trim().toUpperCase();
+      const hasCustomerGst = customerGstin.length >= 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(customerGstin);
+      const originalBillingMode = originalInvoice?.billingMode || "B2C";
+      const effectiveBillingMode = (hasCustomerGst && String(originalBillingMode).toUpperCase() === "B2B") ? "B2B" : "B2C";
+
       const payload = {
         branchId,
         date: new Date().toISOString(),
         shiftId: activeShift?._id || null,
         originalInvoiceId: originalInvoice?._id,
         originalInvoiceNo: originalInvoice?.invoiceNo,
-        billingMode: originalInvoice?.billingMode || "B2C",
+        billingMode: effectiveBillingMode,
+        customerGstin: customerGstin || undefined,
         subtotal,
         tax: totalGst,
         grandTotal,
@@ -453,20 +459,24 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
         paymentMethod: refundMode === "Credit" ? "Credit Note" : "Cash",
         refundMethod: refundMode === "Credit" ? "Credit Note" : "Cash",
         notes: notes || `Returned from bill #${originalInvoice?.invoiceNo}`,
-        items: activeReturnItems.map((i) => ({
-          productId: i.productId,
-          batchId: i.batchId,
-          batchNo: i.batch,
-          name: i.name,
-          pack: i.pack,
-          expiry: i.expiry,
-          price: i.price,
-          rate: i.price,
-          mrp: i.mrp,
-          qty: i.returnQty,
-          gst: i.tax,
-          total: i.price * i.returnQty,
-        })),
+        items: activeReturnItems.map((i) => {
+          const rawPid = i.productId?._id || i.productId || i._id || i.id;
+          const cleanPid = typeof rawPid === "string" && rawPid.includes("-") ? rawPid.split("-")[0] : rawPid;
+          return {
+            productId: cleanPid,
+            batchId: i.batchId,
+            batchNo: i.batch,
+            name: i.name,
+            pack: i.pack,
+            expiry: i.expiry,
+            price: i.price,
+            rate: i.price,
+            mrp: i.mrp,
+            qty: i.returnQty,
+            gst: i.tax,
+            total: i.price * i.returnQty,
+          };
+        }),
         denominations: Object.entries(cashDenominations)
           .map(([val, qty]) => ({ denomination: Number(val), quantity: Number(qty) }))
           .filter((d) => d.quantity > 0),

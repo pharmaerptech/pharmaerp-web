@@ -505,19 +505,29 @@ export const SalesMobilePage = () => {
         routeInvoiceId;
 
       if (targetCustomerId) {
+        const custGst = (selectedCustomer?.gstNumber || selectedCustomer?.gstin || saleData.customerGstin || "").trim().toUpperCase();
+        const hasGst = custGst.length >= 15 && /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(custGst);
+        let resolvedSaleData = { ...saleData };
+        if (String(resolvedSaleData.billingMode).toUpperCase() === "B2B" && !hasGst) {
+          resolvedSaleData.billingMode = "B2C";
+        }
+        if (custGst) {
+          resolvedSaleData.customerGstin = custGst;
+        }
+
         if (isEditMode && targetInvoiceId) {
-          const res = await invoiceService.updateCustomerSale(targetCustomerId, targetInvoiceId, saleData);
+          const res = await invoiceService.updateCustomerSale(targetCustomerId, targetInvoiceId, resolvedSaleData);
           savedSale = res?.data?.data || res?.data || null;
         } else if (saleData.isReturn) {
           const res = await invoiceService.recordCustomerReturn(targetCustomerId, {
-            ...saleData,
+            ...resolvedSaleData,
             isReturn: true,
-            returnType: saleData.returnType,
-            originalInvoiceNo: saleData.originalInvoiceNo || saleData.invoiceNo,
+            returnType: resolvedSaleData.returnType,
+            originalInvoiceNo: resolvedSaleData.originalInvoiceNo || resolvedSaleData.invoiceNo,
           });
           savedSale = res?.data?.data || res?.data || null;
         } else {
-          const res = await invoiceService.recordCustomerSale(targetCustomerId, saleData);
+          const res = await invoiceService.recordCustomerSale(targetCustomerId, resolvedSaleData);
           savedSale = res?.data?.data || res?.data || null;
         }
       }

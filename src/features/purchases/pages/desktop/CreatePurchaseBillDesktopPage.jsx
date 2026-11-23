@@ -37,8 +37,9 @@ import workspaceProductService from "@/features/workspace-products/services/work
 import { PurchaseBillSchemeCheckModal } from "@/features/purchases/components/scheme-check/PurchaseBillSchemeCheckModal";
 import { PurchaseBillRateCheckModal } from "@/features/purchases/components/rate-check/PurchaseBillRateCheckModal";
 import { computeRateCheckRow } from "@/features/purchases/utils/rateCheckUtils";
+import useBranch from "@/features/branch/hooks/useBranch";
 
-const BatchInputWithDropdown = ({ item, updateItemField }) => {
+const BatchInputWithDropdown = ({ item, updateItemField, currentBranchId }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [batches, setBatches] = useState([]);
@@ -109,7 +110,7 @@ const BatchInputWithDropdown = ({ item, updateItemField }) => {
           }
         }}
       >
-        <div className="w-48 bg-surface border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto">
+        <div className="w-56 bg-surface border border-border rounded-lg shadow-xl max-h-48 overflow-y-auto">
           {isLoading ? (
             <div className="p-2 text-center text-[10px] text-text-muted flex items-center justify-center gap-2">
               <Loader2 className="size-3 animate-spin text-primary" /> Loading...
@@ -121,6 +122,9 @@ const BatchInputWithDropdown = ({ item, updateItemField }) => {
                 const bExp = b.expiry || b.expiryDate || b.expDate || "";
                 const bScheme = b.schemeDiscountPercent || 0;
                 const bStock = b.stock ?? b.batchQty ?? 0;
+                const bBranchId = b.branchId || b.branch_id?._id || b.branch_id;
+                const isCurrentBranch = !bBranchId || (currentBranchId && String(bBranchId) === String(currentBranchId));
+                const bBranchName = b.branchName || "";
 
                 return (
                   <div
@@ -133,9 +137,18 @@ const BatchInputWithDropdown = ({ item, updateItemField }) => {
                     }}
                     className="px-2 py-1.5 hover:bg-surface-hover cursor-pointer border-b border-border/50 last:border-0"
                   >
-                    <div className="flex justify-between items-center">
-                      <span className="font-mono font-bold text-xs text-text">{bNo}</span>
-                      <span className="text-[10px] text-text-muted bg-surface-alt px-1 rounded font-mono">Qty: {bStock}</span>
+                    <div className="flex justify-between items-center gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="font-mono font-bold text-xs text-text truncate">{bNo}</span>
+                        {!isCurrentBranch && bBranchName && (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium whitespace-nowrap">
+                            {bBranchName}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-text-muted bg-surface-alt px-1 rounded font-mono shrink-0">
+                        {isCurrentBranch ? `Qty: ${bStock}` : `${bStock} (other)`}
+                      </span>
                     </div>
                     <div className="flex gap-2 mt-0.5 text-[10px] text-text-muted">
                       <span>Exp: {bExp || "N/A"}</span>
@@ -325,6 +338,8 @@ const QuickCreateSupplierModal = ({ open, onClose, defaultName, onSuccess }) => 
 export const CreatePurchaseBillDesktopPage = () => {
   const navigate = useNavigate();
   const { billId } = useParams();
+  const { currentBranch } = useBranch();
+  const currentBranchId = currentBranch?._id || currentBranch?.id || null;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
@@ -818,6 +833,7 @@ export const CreatePurchaseBillDesktopPage = () => {
 
     try {
       const payload = {
+        branchId: currentBranchId || null,
         supplierId: selectedSupplier?._id || selectedSupplier?.id,
         purchaseBillNo,
         supplierInvoiceNo,
@@ -1151,6 +1167,7 @@ export const CreatePurchaseBillDesktopPage = () => {
                             <BatchInputWithDropdown
                               item={item}
                               updateItemField={updateItemField}
+                              currentBranchId={currentBranchId}
                             />
                           </td>
 

@@ -254,8 +254,11 @@ export const ROUTES = {
   WORKSPACE_PRODUCT_IMPORT: "/workspace-products/import",
   WORKSPACE_PRODUCT_SEARCH: "/workspace-products/search",
 
-  // Inventory - Stock Metrics
+  // Inventory - Stock Metrics & Expired Stock Register
   STOCK_METRICS: "/inventory/stock-metrics",
+  EXPIRED_SCRAP_ITEMS: "/inventory/expired-scrap",
+  TRANSFER_ORDERS: "/inventory/transfer-orders",
+  CREATE_TRANSFER_ORDER: "/inventory/transfer-orders/create",
 
   // Catalog - HSN Master (Read-Only Workspace View)
   HSN_MASTER: "/catalog/hsn-master",
@@ -320,11 +323,17 @@ export const ROUTES = {
   BILLING: "/billing",
   SALES_RETURNS: "/sales-returns",
   CREDIT_NOTES: "/sales/credit-notes",
+  CREATE_SALES_RETURN: "/sales-returns/create",
 
   // Purchases & Procurement
   PURCHASES: "/purchases",
   CREATE_PURCHASE_BILL: "/purchases/bills/create",
   EDIT_PURCHASE_BILL: (billId = ":billId") => `/purchases/bills/${billId}/edit`,
+
+  // Purchase Returns & Supplier Debit Notes
+  PURCHASE_RETURNS: "/purchase-returns",
+  CREATE_PURCHASE_RETURN: "/purchase-returns/create",
+  PURCHASE_RETURN_DETAILS: (returnId = ":returnId") => `/purchase-returns/${returnId}`,
 
   // Help & Support
   HELP_CENTER: "/help-center",

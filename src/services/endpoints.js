@@ -433,6 +433,8 @@ export const ENDPOINTS = {
     BY_CODE: (productCode) => `/catalog/products/code/${productCode}`,
     // New endpoint for product facility batches query with filters
     BATCHES_QUERY: "/catalog/products/workspace-product/batches/query",
+    MOVE_TO_SCRAP_BIN: "/catalog/products/workspace-product/batches/move-to-scrap-bin",
+    ADD_EXPIRED_BROKEN_STOCK: "/catalog/products/workspace-product/stock-adjustments/expired-broken",
   },
 
   GLOBAL_PRODUCTS: {
@@ -569,6 +571,17 @@ export const ENDPOINTS = {
     LIST: "/catalog/purchase-bills",
 
     BY_ID: (billId) => `/catalog/purchase-bills/${billId}`,
+  },
+
+  PURCHASE_RETURN: {
+    CREATE: "/catalog/purchase-returns",
+    LIST: "/catalog/purchase-returns",
+    ELIGIBLE_BATCHES: "/catalog/purchase-returns/eligible-batches",
+    BY_ID: (returnId) => `/catalog/purchase-returns/${returnId}`,
+    CANCEL: (returnId) => `/catalog/purchase-returns/${returnId}/cancel`,
+    DISPATCH: (returnId) => `/catalog/purchase-returns/${returnId}/dispatch`,
+    RECEIVE_BOX: (returnId) => `/catalog/purchase-returns/${returnId}/receive-box`,
+    INGEST_TO_STORE: (returnId) => `/catalog/purchase-returns/${returnId}/ingest-to-store`,
   },
 
   DASHBOARD: {

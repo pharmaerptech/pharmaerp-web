@@ -1,6 +1,7 @@
 // src/features/sales-returns/pages/desktop/SalesReturnDesktopPage.jsx
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   RotateCcw,
   Search,
@@ -36,8 +37,8 @@ import { useBranchFilter } from "@/hooks";
 import { cn } from "@/lib/utils";
 import salesReturnService from "../../services/salesReturnService";
 import SalesReturnDetailsDrawer from "../../components/SalesReturnDetailsDrawer";
-import CreateSalesReturnModal from "../../components/CreateSalesReturnModal";
 import { OrderInvoiceModal } from "@/features/sales/components";
+import { ROUTES } from "@/constants";
 
 const formatCurrency = (val) => {
   const num = Number(val) || 0;
@@ -87,6 +88,8 @@ const PAGE_LIMIT = 20;
 
 export const SalesReturnDesktopPage = () => {
   const tableContainerRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
   const { currentBranch } = useBranch();
   const { currentCompany } = useWorkspace();
   const { isCompanyLevel, selectedBranchId, setSelectedBranchId, queryBranchId } = useBranchFilter();
@@ -272,11 +275,19 @@ export const SalesReturnDesktopPage = () => {
     setIsDrawerOpen(true);
   };
 
-  const handleOpenPrint = (item, e) => {
+  const handleOpenPrint = useCallback((item, e) => {
     if (e) e.stopPropagation();
     setPrintReturn(item);
     setIsPrintOpen(true);
-  };
+  }, []);
+
+  // If navigated from create page with a new return memo to print
+  useEffect(() => {
+    if (location.state?.printReturn) {
+      handleOpenPrint(location.state.printReturn);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state, handleOpenPrint]);
 
   return (
     <div className="w-full h-full max-h-full flex-1 flex flex-col min-h-0 bg-bg px-2 sm:px-3 pt-0 pb-1 gap-2.5 text-text font-sans transition-colors overflow-hidden select-none">
@@ -459,7 +470,7 @@ export const SalesReturnDesktopPage = () => {
             variant="primary"
             size="md"
             startIcon={<Plus className="size-4" />}
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={() => navigate(ROUTES.CREATE_SALES_RETURN)}
             className="h-10 px-3.5 text-xs font-semibold shadow-xs"
           >
             New Sales Return
@@ -676,18 +687,6 @@ export const SalesReturnDesktopPage = () => {
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         returnItem={selectedReturn}
-      />
-
-      {/* Create Sales Return Modal */}
-      <CreateSalesReturnModal
-        open={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSuccess={(saved) => {
-          fetchReturns();
-          if (saved) {
-            handleOpenPrint(saved);
-          }
-        }}
       />
 
       {/* Printable Receipt Modal */}

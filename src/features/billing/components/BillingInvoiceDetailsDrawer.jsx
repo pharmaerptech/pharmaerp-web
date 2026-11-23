@@ -428,44 +428,6 @@ export const BillingInvoiceDetailsDrawer = ({
     return Object.entries(slabs);
   }, [items]);
 
-  // Normalize linked return bills
-  const returnList = useMemo(() => {
-    if (!invoice) return [];
-    if (Array.isArray(invoice.returnInvoices) && invoice.returnInvoices.length > 0) {
-      return invoice.returnInvoices;
-    }
-    if (Array.isArray(invoice.returns) && invoice.returns.length > 0) {
-      return invoice.returns;
-    }
-    if (Array.isArray(invoice.returnInvoiceIds) && invoice.returnInvoiceIds.length > 0) {
-      return invoice.returnInvoiceIds.map((item, idx) => {
-        if (typeof item === "object" && item !== null) {
-          return {
-            returnNo: item.returnNo || item.invoiceNo || `RET-${idx + 1}`,
-            date: item.date || item.createdAt,
-            returnAmount: Number(item.grandTotal || item.netRefundAmount || item.totalAmount || item.returnAmount || 0),
-            returnType: item.returnType || item.refundMethod || "cash_refund",
-          };
-        }
-        return {
-          returnNo: String(item),
-          date: null,
-          returnAmount: Number(invoice.totalReturnedAmount || 0),
-          returnType: "cash_refund",
-        };
-      });
-    }
-    return [];
-  }, [invoice]);
-
-  const totalReturnedAmount = useMemo(() => {
-    if (!invoice) return 0;
-    if (Number(invoice.totalReturnedAmount) > 0) {
-      return Number(invoice.totalReturnedAmount);
-    }
-    return returnList.reduce((sum, r) => sum + (Number(r.returnAmount || r.grandTotal || r.netRefundAmount || 0)), 0);
-  }, [invoice, returnList]);
-
   if (!isOpen || !invoice) return null;
 
   return (
@@ -518,11 +480,6 @@ export const BillingInvoiceDetailsDrawer = ({
 
             <div className="flex items-center gap-2 flex-wrap">
               {getStatusBadge(invoice.status)}
-              {invoice.isFullyReturned || invoice.returnStatus === "FULL" ? (
-                <UIBadge variant="soft" color="error">Returned (Full)</UIBadge>
-              ) : invoice.isReturned || invoice.returnStatus === "PARTIAL" ? (
-                <UIBadge variant="soft" color="warning">Partially Returned</UIBadge>
-              ) : null}
             </div>
           </div>
 
@@ -573,137 +530,6 @@ export const BillingInvoiceDetailsDrawer = ({
               </div>
             </div>
           </div>
-
-          {/* Returns Related Bills Section */}
-          {returnList.length > 0 && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-rose-500/20">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-surface border border-rose-500/20 text-rose-600 dark:text-rose-400">
-                    <RotateCcw className="size-4" />
-                  </span>
-                  <div>
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-text">
-                      Returns Related Bills ({returnList.length})
-                    </h3>
-                    <span className="text-[11px] text-text-muted font-medium">
-                      Return bills issued against this sale invoice
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span className="text-[10px] text-text-muted block">Total Refunded</span>
-                  <span className="text-base font-bold font-mono text-rose-600 dark:text-rose-400 tabular-nums">
-                    {formatCurrency(totalReturnedAmount)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {returnList.map((ret, rIdx) => {
-                  const retNo = ret.returnNo || ret.invoiceNo || (typeof ret === "string" ? ret : `Return-${rIdx + 1}`);
-                  const retDate = ret.date || ret.createdAt;
-                  const retFormattedDate = retDate
-                    ? new Date(retDate).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })
-                    : null;
-                  const method =
-                    ret.returnType === "advance_credit" || ret.refundMethod === "ADVANCE"
-                      ? "Advance Deposit"
-                      : ret.returnType === "credit_note" || ret.refundMethod === "CREDIT_NOTE"
-                      ? "Credit Note"
-                      : "Cash Refund";
-                  const retAmount = Number(ret.returnAmount || ret.grandTotal || ret.netRefundAmount || 0);
-
-                  return (
-                    <div
-                      key={rIdx}
-                      className="p-3 rounded-xl bg-surface border border-border/80 flex items-center justify-between gap-3 text-xs shadow-2xs hover:border-rose-500/30 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 flex-wrap min-w-0">
-                        <span className="text-text-muted text-[11px] font-medium">Return Bill:</span>
-                        <span className="font-mono font-bold text-rose-600 dark:text-rose-400 text-xs sm:text-[13px]">
-                          #{retNo}
-                        </span>
-                        <UIBadge variant="soft" color="error" className="text-[9.5px] font-bold">
-                          {method}
-                        </UIBadge>
-                        {retFormattedDate && (
-                          <span className="text-text-muted font-mono text-[11px]">
-                            • {retFormattedDate}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className="text-[10px] text-text-muted block">Refund Amount</span>
-                        <span className="font-mono font-bold text-sm text-rose-600 dark:text-rose-400 tabular-nums">
-                          {formatCurrency(retAmount)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Related Original Bill (When Viewing a Sales Return) */}
-          {(invoice.isReturn || invoice.originalInvoiceNo) && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4 space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-rose-500/20">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-surface border border-rose-500/20 text-rose-600 dark:text-rose-400">
-                    <RotateCcw className="size-4" />
-                  </span>
-                  <div>
-                    <h3 className="font-bold text-xs uppercase tracking-wider text-text">
-                      Original Sale Bill Reference
-                    </h3>
-                    <span className="text-[11px] text-text-muted font-medium">
-                      Sale invoice against which this return was processed
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span className="text-[10px] text-text-muted block">Refund Amount</span>
-                  <span className="text-base font-bold font-mono text-rose-600 dark:text-rose-400 tabular-nums">
-                    {formatCurrency(invoice.amount || invoice.grandTotal || 0)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-surface border border-border/80 flex items-center justify-between gap-3 text-xs shadow-2xs">
-                <div className="flex items-center gap-2.5 flex-wrap min-w-0">
-                  <span className="text-text-muted text-[11px] font-medium">Original Sale Bill:</span>
-                  <span className="font-mono font-bold text-primary text-xs sm:text-[13px]">
-                    #{invoice.originalInvoiceNo || "Original Bill"}
-                  </span>
-                  {invoice.originalInvoiceDate && (
-                    <span className="text-text-muted font-mono text-[11px]">
-                      {new Date(invoice.originalInvoiceDate).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                  )}
-                </div>
-
-                <div className="text-right shrink-0">
-                  <span className="text-[10px] text-text-muted block">Bill Total</span>
-                  <span className="font-mono font-bold text-sm text-text tabular-nums">
-                    {formatCurrency(invoice.originalInvoiceGrandTotal || invoice.originalGrandTotal || invoice.amount || 0)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Dedicated Payment & Denominations Breakdown Section */}
           <div className="rounded-xl border border-border bg-surface-alt/30 p-4 space-y-3">
@@ -1272,40 +1098,21 @@ export const BillingInvoiceDetailsDrawer = ({
                 <tbody className="divide-y divide-border/60">
                   {items.length > 0 ? (
                     items.map((item, idx) => {
-                      const returnedQty = Number(item.returnedQty || 0);
                       const soldQty = Number(item.qty || 1);
-                      const isFullRet = returnedQty >= soldQty;
-                      const isPartRet = returnedQty > 0 && returnedQty < soldQty;
 
                       return (
                         <tr key={idx} className="hover:bg-surface-hover/50">
                           <td className="py-2.5 px-3">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={cn("font-bold block", isFullRet ? "text-text-muted line-through" : "text-text")}>
-                                {item.name}
-                              </span>
-                              {isFullRet ? (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/10 text-rose-600 border border-rose-500/20 shrink-0">
-                                  <RotateCcw className="size-2.5" /> Returned ({returnedQty}/{soldQty})
-                                </span>
-                              ) : isPartRet ? (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/20 shrink-0">
-                                  <RotateCcw className="size-2.5" /> Partially Returned ({returnedQty}/{soldQty})
-                                </span>
-                              ) : null}
-                            </div>
+                            <span className="font-bold text-text block">
+                              {item.name}
+                            </span>
                             <span className="text-[10px] text-text-muted">{item.brand || "Pharma"} • {item.category || "Medicine"}</span>
                           </td>
                           <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted font-semibold">{item.batch || "—"}</td>
-                          <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted">{item.expiry || "—"}</td>
+                          <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted">{item.expiry || item.expiryDate || item.expDate || "—"}</td>
                           <td className="py-2.5 px-2 font-mono text-center font-bold text-purple-600 dark:text-purple-400">{item.gst || 5}%</td>
                           <td className="py-2.5 px-2 font-mono text-right font-bold text-text tabular-nums">
                             {soldQty}
-                            {returnedQty > 0 && (
-                              <span className="block text-[10px] font-normal text-rose-600 dark:text-rose-400">
-                                Ret: {returnedQty}
-                              </span>
-                            )}
                           </td>
                           <td className="py-2.5 px-3 font-mono text-right text-text-muted tabular-nums">₹{Number(item.price || 0).toFixed(2)}</td>
                           <td className="py-2.5 px-3 font-mono font-bold text-right text-primary tabular-nums">₹{(soldQty * Number(item.price || 0)).toFixed(2)}</td>

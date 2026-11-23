@@ -189,7 +189,11 @@ export const UITabs = forwardRef(
                       currentSize.iconSize
                     )}
                   >
-                    {tab.icon}
+                    {React.isValidElement(tab.icon)
+                      ? tab.icon
+                      : typeof tab.icon === "function" || typeof tab.icon === "object"
+                      ? React.createElement(tab.icon, { className: "size-full" })
+                      : tab.icon}
                   </span>
                 )}
 

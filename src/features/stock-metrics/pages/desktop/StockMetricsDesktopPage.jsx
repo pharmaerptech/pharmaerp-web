@@ -1,6 +1,7 @@
 // src/features/stock-metrics/pages/desktop/StockMetricsDesktopPage.jsx
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Layers,
@@ -12,8 +13,8 @@ import {
   XCircle,
   Boxes,
   Calendar,
-  Clock,
-  Check,
+  Trash2,
+  Plus,
 } from "lucide-react";
 
 import {
@@ -31,12 +32,14 @@ import {
   UITableScrollArea,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import { ROUTES } from "@/constants";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useCompany from "@/features/company/hooks/useCompany";
 import useUser from "@/features/user/hooks/useUser";
 import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 import { useBranchFilter } from "@/hooks";
 import workspaceProductService from "@/features/workspace-products/services/workspaceProductService";
+import AddExpiredBrokenStockModal from "../../components/AddExpiredBrokenStockModal";
 
 /**
  * Format currency in Indian locale
@@ -214,6 +217,7 @@ const HighlightedExpiryBadge = ({ expiryDate }) => {
 const PAGE_LIMIT = 25;
 
 export const StockMetricsDesktopPage = () => {
+  const navigate = useNavigate();
   const tableContainerRef = useRef(null);
   const { isCompanyLevel, selectedBranchId, setSelectedBranchId, queryBranchId } = useBranchFilter("all");
   const { activeBranchId: userBranchId, activeCompanyId } = useUser();
@@ -238,6 +242,7 @@ export const StockMetricsDesktopPage = () => {
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
+  const [isAddExpiredBrokenModalOpen, setIsAddExpiredBrokenModalOpen] = useState(false);
 
   // Search Debounce
   useEffect(() => {
@@ -404,6 +409,7 @@ export const StockMetricsDesktopPage = () => {
 
   // Initial and reactive fetch on filter changes
   useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
     fetchBatches(true);
   }, [fetchBatches]);
 
@@ -730,8 +736,39 @@ export const StockMetricsDesktopPage = () => {
           </UIButton>
         )}
 
-        {/* Right-Aligned Cluster: Low Stock Switch & Refresh Button */}
+        {/* Right-Aligned Cluster: Add Stock Button, Expired Items Button, Low Stock Switch & Refresh */}
         <div className="flex items-center gap-2 ml-auto">
+          {/* Add Expired / Broken Stock Button */}
+          <UIButton
+            type="button"
+            variant="default"
+            size="md"
+            onClick={() => setIsAddExpiredBrokenModalOpen(true)}
+            startIcon={<Plus className="size-4" />}
+            className="h-10 px-3.5 text-xs font-semibold rounded-xl shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer bg-primary text-white hover:bg-primary/90"
+            title="Mark stock as expired or broken and quarantine to scrap bin"
+          >
+            <span>Add Expired / Broken Stock</span>
+          </UIButton>
+
+          {/* Expired & Scrap Items Page Navigation Button */}
+          <UIButton
+            type="button"
+            variant="outline"
+            size="md"
+            onClick={() => navigate(ROUTES.EXPIRED_SCRAP_ITEMS)}
+            startIcon={<Trash2 className="size-4 text-rose-600 dark:text-rose-400" />}
+            className="h-10 px-3.5 text-xs font-semibold rounded-xl border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Open Expired & Scrap Items Register with filters and checkboxes"
+          >
+            <span>Expired & Scrap Items</span>
+            {stats.nearExpiryOrExpiredCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono bg-rose-600 text-white ml-0.5">
+                {stats.nearExpiryOrExpiredCount}
+              </span>
+            )}
+          </UIButton>
+
           {/* Low Stock Modern Toggle Switch */}
           <label
             className={cn(
@@ -943,6 +980,25 @@ export const StockMetricsDesktopPage = () => {
           )}
         </UITableScrollArea>
       </div>
+
+      {/* Add Expired / Broken Stock Modal */}
+      <AddExpiredBrokenStockModal
+        open={isAddExpiredBrokenModalOpen}
+        onClose={() => setIsAddExpiredBrokenModalOpen(false)}
+        onSuccess={({ product, quantity, reason, destination }) => {
+          const prodName =
+            typeof product?.name === "object"
+              ? product.name?.name
+              : product?.name || "Product";
+          const actionText =
+            destination === "SHELF"
+              ? `ingested ${quantity} unit(s) of ${prodName} directly into Stock Matrix inventory.`
+              : `marked ${quantity} unit(s) of ${prodName} as ${reason} stock in scrap bin.`;
+          setToastMessage(`Successfully ${actionText}`);
+          setTimeout(() => setToastMessage(null), 4000);
+          fetchBatches(true);
+        }}
+      />
     </div>
   );
 };
