@@ -532,12 +532,26 @@ export const PurchaseReturnsDesktopPage = () => {
                           shipping.transitStatus === "RECEIVED"
                             ? "success"
                             : shipping.transitStatus === "IN_TRANSIT"
-                            ? "warning"
+                            ? shipping.destinationType === "SUPPLIER"
+                              ? "primary"
+                              : "warning"
                             : "default"
+                        }
+                        title={
+                          shipping.courierName || shipping.trackingNo
+                            ? [
+                                shipping.courierName ? `Courier: ${shipping.courierName}` : "",
+                                shipping.trackingNo ? `LR/AWB: ${shipping.trackingNo}` : "",
+                              ]
+                                .filter(Boolean)
+                                .join(" • ")
+                            : undefined
                         }
                       >
                         {shipping.transitStatus === "IN_TRANSIT"
-                          ? "In Transit"
+                          ? shipping.destinationType === "SUPPLIER"
+                            ? "Dispatched to Supplier"
+                            : "In Transit"
                           : shipping.transitStatus === "RECEIVED"
                           ? "Received"
                           : "Not Dispatched"}

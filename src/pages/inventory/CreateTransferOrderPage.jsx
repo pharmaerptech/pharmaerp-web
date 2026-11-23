@@ -613,7 +613,11 @@ const CreateTransferOrderPage = () => {
                         </td>
                         {isScrapOrder && (
                           <td className="py-3.5 px-4">
-                            {item.scrapType === "BROKEN" || item.category === "broken" ? (
+                            {item.scrapType === "FRESH_RETURN" || item.category === "fresh_return" ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                                Fresh Return
+                              </span>
+                            ) : item.scrapType === "BROKEN" || item.category === "broken" ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
                                 Broken Return
                               </span>

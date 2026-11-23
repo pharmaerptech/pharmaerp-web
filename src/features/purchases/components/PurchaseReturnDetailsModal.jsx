@@ -1,6 +1,6 @@
 // src/features/purchases/components/PurchaseReturnDetailsModal.jsx
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   Printer,
   X,
@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Clock,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import {
   UIModal,
@@ -38,6 +39,7 @@ import {
   uiToast,
 } from "@/components/ui";
 import { ReturnBoxLabelModal } from "./ReturnBoxLabelModal";
+import { printPurchaseReturnDebitNote } from "../utils/printDebitNote";
 import purchaseReturnService from "../services/purchaseReturnService";
 import useBranch from "@/features/branch/hooks/useBranch";
 
@@ -60,6 +62,11 @@ const formatDate = (val) => {
   });
 };
 
+const cleanBatchNo = (val) =>
+  String(val || "")
+    .replace(/\s*\[(EXPIRED|BROKEN|SCRAP|FRESH_RETURN|IN|INCOMING)\]/gi, "")
+    .trim();
+
 export const PurchaseReturnDetailsModal = ({
   isOpen,
   onClose,
@@ -69,12 +76,39 @@ export const PurchaseReturnDetailsModal = ({
   const { currentBranch, activeBranchId } = useBranch();
   const [showBoxLabelModal, setShowBoxLabelModal] = useState(false);
   const [isReceivingBox, setIsReceivingBox] = useState(false);
+  const [isIngesting, setIsIngesting] = useState(false);
+  const [showIngestConfirm, setShowIngestConfirm] = useState(false);
+
+  // Local state for auto-enriching return record if items lack subSupplierName
+  const [detailedReturn, setDetailedReturn] = useState(purchaseReturn);
+
+  useEffect(() => {
+    setDetailedReturn(purchaseReturn);
+    if (!isOpen || !purchaseReturn?._id) return;
+
+    const hasMissingSub = (purchaseReturn.items || []).some((i) => !i.subSupplierName);
+    if (hasMissingSub) {
+      purchaseReturnService
+        .getPurchaseReturnById(purchaseReturn._id)
+        .then((res) => {
+          const fresh = res.data?.data || res.data;
+          if (fresh?._id) {
+            setDetailedReturn(fresh);
+            if (onUpdated) {
+              onUpdated(fresh);
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isOpen, purchaseReturn?._id]);
 
   if (!isOpen || !purchaseReturn) return null;
 
-  const supplier = purchaseReturn.supplierId || {};
-  const branch = purchaseReturn.branchId || {};
-  const shipping = purchaseReturn.shippingDetails || {};
+  const activeReturn = detailedReturn || purchaseReturn;
+  const supplier = activeReturn.supplierId || {};
+  const branch = activeReturn.branchId || {};
+  const shipping = activeReturn.shippingDetails || {};
 
   const destBranch = shipping.destinationBranchId || {};
   const destCompany = shipping.destinationCompanyId || {};
@@ -84,10 +118,17 @@ export const PurchaseReturnDetailsModal = ({
     (String(destBranch._id || destBranch) === String(activeBranchId) ||
       String(destBranch._id || destBranch) === String(currentBranch?._id));
 
+  const isCreationBranch =
+    Boolean(branch._id || branch) &&
+    (String(branch._id || branch) === String(activeBranchId) ||
+      String(branch._id || branch) === String(currentBranch?._id));
+
+  const isOtherBranch = !isCreationBranch;
+
   const handleReceiveBox = async () => {
     setIsReceivingBox(true);
     try {
-      const res = await purchaseReturnService.receiveReturnBox(purchaseReturn._id);
+      const res = await purchaseReturnService.receiveReturnBox(activeReturn._id);
       uiToast.success("Consignment box received successfully!");
       if (onUpdated) {
         onUpdated(res.data?.data || res.data);
@@ -102,135 +143,58 @@ export const PurchaseReturnDetailsModal = ({
     }
   };
 
+  const isAlreadyIngested = Boolean(activeReturn.ingestionDetails?.ingestedToStore);
+
+  const freshItems = (activeReturn.items || []).filter((item) => {
+    const isBroken =
+      item.sourceBin === "SCRAP_BROKEN" ||
+      activeReturn.returnMotive === "BROKEN" ||
+      (item.batchNo && item.batchNo.includes("[BROKEN]"));
+    const isExpired =
+      item.sourceBin === "SCRAP_EXPIRED" ||
+      activeReturn.returnMotive === "EXPIRED" ||
+      (item.batchNo && item.batchNo.includes("[EXPIRED]"));
+    return !isBroken && !isExpired;
+  });
+
+  const hasFreshItems = freshItems.length > 0;
+  const totalFreshQty = freshItems.reduce(
+    (acc, i) => acc + (Number(i.returnQty) || 0),
+    0
+  );
+
+  const handleIngestFreshStock = async () => {
+    setIsIngesting(true);
+    try {
+      const res = await purchaseReturnService.ingestFreshStockToStore(
+        activeReturn._id,
+        activeBranchId || currentBranch?._id
+      );
+      const updated = res.data?.data || res.data;
+      uiToast.success(
+        `Successfully ingested ${totalFreshQty} fresh unit(s) into store shelf inventory!`
+      );
+      setShowIngestConfirm(false);
+      if (updated?._id) {
+        setDetailedReturn(updated);
+        if (onUpdated) onUpdated(updated);
+      }
+    } catch (err) {
+      console.error("Failed to ingest fresh stock:", err);
+      uiToast.error(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to ingest fresh stock into store"
+      );
+    } finally {
+      setIsIngesting(false);
+    }
+  };
+
   const handlePrint = () => {
-    const printWin = window.open("", "_blank", "width=900,height=700");
-    if (!printWin) return;
-
-    const itemsRowsHtml = (purchaseReturn.items || [])
-      .map(
-        (item, idx) => `
-        <tr>
-          <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${idx + 1}</td>
-          <td style="padding: 6px; border: 1px solid #ddd; font-weight: bold;">
-            ${item.productName || "Product"}
-            ${item.pack ? `<span style="font-size: 11px; font-weight: normal; color: #555;"> (${item.pack})</span>` : ""}
-          </td>
-          <td style="padding: 6px; border: 1px solid #ddd; font-family: monospace;">${item.batchNo}</td>
-          <td style="padding: 6px; border: 1px solid #ddd; text-align: center;">${item.expiry || "-"}</td>
-          <td style="padding: 6px; border: 1px solid #ddd; text-align: center; font-weight: bold;">${item.returnQty}</td>
-          <td style="padding: 6px; border: 1px solid #ddd; text-align: right; font-family: monospace;">₹${Number(item.rate || 0).toFixed(2)}</td>
-          <td style="padding: 6px; border: 1px solid #ddd; text-align: right;">${item.gstPct || 0}%</td>
-          <td style="padding: 6px; border: 1px solid #ddd; text-align: right; font-weight: bold; font-family: monospace;">₹${Number(item.totalAmount || 0).toFixed(2)}</td>
-        </tr>
-      `
-      )
-      .join("");
-
-    printWin.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Debit Note #${purchaseReturn.debitNoteNo || purchaseReturn.returnNo}</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; font-size: 12px; color: #111; margin: 20px; }
-            .header { border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 16px; }
-            .title { font-size: 18px; font-weight: 800; text-transform: uppercase; margin-bottom: 4px; }
-            .subtitle { font-size: 11px; color: #555; }
-            .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-            .meta-box { border: 1px solid #ddd; border-radius: 4px; padding: 10px; }
-            .meta-box h4 { margin: 0 0 6px 0; font-size: 11px; text-transform: uppercase; color: #666; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
-            th { background: #f4f4f4; padding: 6px; border: 1px solid #ddd; text-align: left; }
-            .totals { margin-top: 16px; float: right; width: 280px; }
-            .total-row { display: flex; justify-content: space-between; padding: 4px 0; }
-            .grand-total { font-size: 14px; font-weight: bold; border-top: 2px solid #111; border-bottom: 2px solid #111; padding: 6px 0; margin-top: 6px; }
-            @media print {
-              body { margin: 0; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-              <div>
-                <div class="title">GST DEBIT NOTE / PURCHASE RETURN</div>
-                <div class="subtitle">(Issued under Section 34 of the CGST Act, 2017)</div>
-              </div>
-              <div style="text-align: right;">
-                <div style="font-size: 14px; font-weight: bold; font-family: monospace;">#${purchaseReturn.debitNoteNo || purchaseReturn.returnNo}</div>
-                <div style="color: #666;">Date: ${formatDate(purchaseReturn.returnDate)}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="meta-grid">
-            <div class="meta-box">
-              <h4>Issued To (Supplier / Vendor)</h4>
-              <div style="font-size: 13px; font-weight: bold;">${supplier.businessName || "Supplier"}</div>
-              ${supplier.gstNumber ? `<div>GSTIN: <strong>${supplier.gstNumber}</strong></div>` : ""}
-              ${supplier.drugLicenseNumber ? `<div>Drug License: ${supplier.drugLicenseNumber}</div>` : ""}
-              ${supplier.address?.addressLine1 ? `<div>${supplier.address.addressLine1}, ${supplier.address.city || ""}</div>` : ""}
-            </div>
-
-            <div class="meta-box">
-              <h4>Issued By (Buyer / Dispatch Facility)</h4>
-              <div style="font-size: 13px; font-weight: bold;">${branch.name || "Main Warehouse"}</div>
-              <div>Return Memo Ref: <strong>${purchaseReturn.returnNo}</strong></div>
-              <div>Motive: <strong>${purchaseReturn.returnMotive}</strong></div>
-              ${purchaseReturn.remarks ? `<div style="color: #666; font-size: 10px;">Remarks: ${purchaseReturn.remarks}</div>` : ""}
-            </div>
-          </div>
-
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 30px; text-align: center;">#</th>
-                <th>Medicine & Pack</th>
-                <th>Batch</th>
-                <th style="text-align: center;">Expiry</th>
-                <th style="width: 50px; text-align: center;">Qty</th>
-                <th style="width: 80px; text-align: right;">Purchase Rate</th>
-                <th style="width: 50px; text-align: right;">GST %</th>
-                <th style="width: 90px; text-align: right;">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${itemsRowsHtml}
-            </tbody>
-          </table>
-
-          <div class="totals">
-            <div class="total-row">
-              <span>Taxable Subtotal:</span>
-              <span style="font-family: monospace;">₹${Number(purchaseReturn.taxableSubtotal || 0).toFixed(2)}</span>
-            </div>
-            <div class="total-row">
-              <span>Total GST (ITC Reversal):</span>
-              <span style="font-family: monospace;">₹${Number(purchaseReturn.totalGst || 0).toFixed(2)}</span>
-            </div>
-            ${
-              purchaseReturn.roundOff
-                ? `<div class="total-row"><span>Round Off:</span><span style="font-family: monospace;">₹${Number(purchaseReturn.roundOff).toFixed(2)}</span></div>`
-                : ""
-            }
-            <div class="total-row grand-total">
-              <span>Total Debit Amount:</span>
-              <span style="font-family: monospace;">₹${Number(purchaseReturn.grandTotal || 0).toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div style="clear: both; margin-top: 40px; padding-top: 20px; display: flex; justify-content: space-between; font-size: 11px;">
-            <div>Prepared By: ___________________</div>
-            <div>Authorised Signatory: ___________________</div>
-          </div>
-
-          <script>
-            window.onload = function() { window.print(); };
-          </script>
-        </body>
-      </html>
-    `);
-    printWin.document.close();
+    printPurchaseReturnDebitNote(activeReturn, {
+      originBranch: branch,
+    });
   };
 
   return (
@@ -241,40 +205,40 @@ export const PurchaseReturnDetailsModal = ({
             <div className="space-y-1">
               <div className="flex items-center gap-2.5">
                 <UIModalTitle className="text-lg font-bold text-text">
-                  Debit Note #{purchaseReturn.debitNoteNo || purchaseReturn.returnNo}
+                  Debit Note #{activeReturn.debitNoteNo || activeReturn.returnNo}
                 </UIModalTitle>
                 <UIStatusIndicator
                   status={
-                    purchaseReturn.status === "CONFIRMED"
+                    activeReturn.status === "CONFIRMED"
                       ? "success"
-                      : purchaseReturn.status === "CANCELLED"
+                      : activeReturn.status === "CANCELLED"
                       ? "error"
                       : "draft"
                   }
-                  label={purchaseReturn.status}
+                  label={activeReturn.status}
                   variant="badge"
                   size="xs"
                 />
                 <UIBadge
                   variant="soft"
                   color={
-                    purchaseReturn.returnMotive === "SELLABLE"
+                    activeReturn.returnMotive === "SELLABLE"
                       ? "primary"
                       : "warning"
                   }
                 >
-                  {purchaseReturn.returnMotive}
+                  {activeReturn.returnMotive}
                 </UIBadge>
               </div>
               <UIModalDescription className="text-xs text-text-muted">
-                Issued on {formatDate(purchaseReturn.returnDate)} • Reference Memo: {purchaseReturn.returnNo}
+                Issued on {formatDate(activeReturn.returnDate)} • Reference Memo: {activeReturn.returnNo}
               </UIModalDescription>
             </div>
           </div>
         </UIModalHeader>
 
         <UIModalBody className="space-y-5 py-5 max-h-[75vh] overflow-y-auto">
-          {/* Inter-Company Box Transport Banner */}
+          {/* Box Transport Banner (Inter-Company or Direct to Supplier) */}
           {shipping?.transitStatus === "IN_TRANSIT" && (
             <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -282,23 +246,43 @@ export const PurchaseReturnDetailsModal = ({
                   <Truck className="size-5" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-bold text-xs text-text">
-                      Box Consignment In Transit ({shipping.boxCount || 1} {shipping.boxCount === 1 ? "box" : "boxes"})
+                      {shipping.destinationType === "SUPPLIER"
+                        ? `Dispatched to Supplier (${shipping.boxCount || 1} ${shipping.boxCount === 1 ? "box" : "boxes"})`
+                        : `Box Consignment In Transit (${shipping.boxCount || 1} ${shipping.boxCount === 1 ? "box" : "boxes"})`}
                     </span>
                     <UIBadge variant="soft" color="warning" size="xs">
-                      IN TRANSIT
+                      {shipping.destinationType === "SUPPLIER" ? "SUPPLIER DISPATCH" : "IN TRANSIT"}
                     </UIBadge>
                   </div>
                   <p className="text-[11px] text-text-muted mt-0.5">
-                    Dispatched to <strong className="text-text">{destBranch?.name || "Destination Branch"}</strong>
-                    {destCompany?.name ? ` (${destCompany.name})` : ""} on {formatDate(shipping.dispatchedAt)}
+                    {shipping.destinationType === "SUPPLIER" ? (
+                      <>
+                        Dispatched directly to{" "}
+                        <strong className="text-text">
+                          {shipping.destinationSupplierId?.businessName ||
+                            shipping.destinationSupplierId?.name ||
+                            supplier.businessName ||
+                            "Supplier"}
+                        </strong>{" "}
+                        on {formatDate(shipping.dispatchedAt)}
+                      </>
+                    ) : (
+                      <>
+                        Dispatched to{" "}
+                        <strong className="text-text">{destBranch?.name || "Destination Branch"}</strong>
+                        {destCompany?.name ? ` (${destCompany.name})` : ""} on {formatDate(shipping.dispatchedAt)}
+                      </>
+                    )}
+                    {shipping.courierName ? ` • Courier: ${shipping.courierName}` : ""}
+                    {shipping.trackingNo ? ` • LR/AWB: ${shipping.trackingNo}` : ""}
                     {shipping.packageNotes ? ` • Notes: ${shipping.packageNotes}` : ""}
                   </p>
                 </div>
               </div>
 
-              {(isDestinationFacility || true) && (
+              {shipping.destinationType !== "SUPPLIER" && (isDestinationFacility || true) && (
                 <UIButton
                   variant="primary"
                   size="sm"
@@ -341,6 +325,45 @@ export const PurchaseReturnDetailsModal = ({
             </div>
           )}
 
+          {/* Fresh Stock Ingested into Store Inventory Banner */}
+          {isAlreadyIngested && (
+            <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="size-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-text">
+                      Fresh Stock Ingested into Store Inventory
+                    </span>
+                    <UIBadge variant="soft" color="success" size="xs">
+                      INGESTED TO STORE
+                    </UIBadge>
+                  </div>
+                  <p className="text-[11px] text-text-muted mt-0.5">
+                    Restocked directly to{" "}
+                    <strong className="text-text">
+                      {activeReturn.ingestionDetails?.ingestedBranchId?.name ||
+                        currentBranch?.name ||
+                        branch?.name ||
+                        "Store"}
+                    </strong>
+                    {activeReturn.ingestionDetails?.ingestedAt
+                      ? ` on ${formatDate(activeReturn.ingestionDetails.ingestedAt)}`
+                      : ""}
+                    {activeReturn.ingestionDetails?.ingestedBy?.name
+                      ? ` by ${activeReturn.ingestionDetails.ingestedBy.name}`
+                      : ""}
+                  </p>
+                </div>
+              </div>
+              <UIBadge variant="soft" color="success" className="font-bold shrink-0">
+                Stock Matrix Active
+              </UIBadge>
+            </div>
+          )}
+
           {/* Info Cards Row */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <UIInfoCard
@@ -364,7 +387,7 @@ export const PurchaseReturnDetailsModal = ({
               variant="accent"
               items={[
                 { label: "Transit Status", value: shipping?.transitStatus || "NOT_DISPATCHED" },
-                { label: "Remarks", value: purchaseReturn.remarks || "No remarks" },
+                { label: "Remarks", value: activeReturn.remarks || "No remarks" },
               ]}
             />
           </div>
@@ -402,7 +425,7 @@ export const PurchaseReturnDetailsModal = ({
               </UITableHeader>
 
               <UITableBody>
-                {(purchaseReturn.items || []).map((item, idx) => (
+                {(activeReturn.items || []).map((item, idx) => (
                   <UITableRow key={idx} className="hover:bg-surface-hover transition-colors">
                     <td className="py-2.5 px-3 text-center text-text-muted font-medium text-xs">
                       {idx + 1}
@@ -414,9 +437,16 @@ export const PurchaseReturnDetailsModal = ({
                           {item.pack}
                         </span>
                       )}
+                      {item.subSupplierName &&
+                        item.subSupplierName.toLowerCase() !== String(branch?.companyId?.name || currentBranch?.companyId?.name || "").trim().toLowerCase() &&
+                        item.subSupplierName.toLowerCase() !== String(supplier?.businessName || supplier?.name || "").trim().toLowerCase() && (
+                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 mt-1">
+                            Sub: {item.subSupplierName}
+                          </span>
+                      )}
                     </td>
                     <td className="py-2.5 px-3 font-mono font-medium text-xs">
-                      {item.batchNo}
+                      {String(item.batchNo || "").replace(/\s*\[(EXPIRED|BROKEN|SCRAP|FRESH_RETURN|IN|INCOMING)\]/gi, "").trim() || item.batchNo}
                     </td>
                     <td className="py-2.5 px-3 text-center text-text-muted text-xs">
                       {item.expiry || "-"}
@@ -447,25 +477,25 @@ export const PurchaseReturnDetailsModal = ({
                 items={[
                   {
                     label: "Taxable Subtotal",
-                    value: formatCurrency(purchaseReturn.taxableSubtotal),
+                    value: formatCurrency(activeReturn.taxableSubtotal),
                   },
                   {
                     label: "Total GST (ITC Reversal)",
-                    value: formatCurrency(purchaseReturn.totalGst),
+                    value: formatCurrency(activeReturn.totalGst),
                     isDeduction: true,
                   },
-                  ...(purchaseReturn.roundOff
+                  ...(activeReturn.roundOff
                     ? [
                         {
                           label: "Round Off",
-                          value: formatCurrency(purchaseReturn.roundOff),
+                          value: formatCurrency(activeReturn.roundOff),
                         },
                       ]
                     : []),
                 ]}
                 total={{
                   label: "Grand Total Debit",
-                  value: formatCurrency(purchaseReturn.grandTotal),
+                  value: formatCurrency(activeReturn.grandTotal),
                 }}
                 variant="compact"
               />
@@ -475,7 +505,7 @@ export const PurchaseReturnDetailsModal = ({
 
         <UIModalFooter className="border-t border-border pt-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <UIButton
                 variant="outline"
                 size="sm"
@@ -485,6 +515,19 @@ export const PurchaseReturnDetailsModal = ({
               >
                 Print Return Transport Box Labels
               </UIButton>
+
+              {hasFreshItems && !isAlreadyIngested && isOtherBranch && (
+                <UIButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowIngestConfirm(true)}
+                  disabled={isIngesting}
+                  startIcon={<Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />}
+                  className="font-bold border-emerald-500/40 text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 shadow-xs"
+                >
+                  Ingest Fresh Stock into Store
+                </UIButton>
+              )}
             </div>
 
             <div className="flex items-center gap-2 justify-end">
@@ -505,12 +548,104 @@ export const PurchaseReturnDetailsModal = ({
         </UIModalFooter>
       </UIModal>
 
+      {/* Confirmation Modal for Ingesting Fresh General Stock */}
+      {showIngestConfirm && (
+        <UIModal isOpen={showIngestConfirm} onClose={() => setShowIngestConfirm(false)} size="md">
+          <UIModalHeader className="border-b border-border pb-3">
+            <div className="flex items-center gap-2">
+              <div className="size-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <Sparkles className="size-4.5" />
+              </div>
+              <div>
+                <UIModalTitle className="text-base font-bold text-text">
+                  Ingest Fresh Stock into Store
+                </UIModalTitle>
+                <UIModalDescription className="text-xs text-text-muted">
+                  Add fresh return items directly to shelf inventory (Stock Matrix)
+                </UIModalDescription>
+              </div>
+            </div>
+          </UIModalHeader>
+
+          <UIModalBody className="py-4 space-y-4">
+            <div className="p-3 bg-surface-alt/50 border border-border rounded-xl text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-text-muted">Target Facility:</span>
+                <span className="font-bold text-text">
+                  {currentBranch?.name || branch?.name || "Active Facility"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-muted">Eligible Fresh Items:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  {freshItems.length} {freshItems.length === 1 ? "item" : "items"} ({totalFreshQty} units)
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-text-muted">Debit Note:</span>
+                <span className="font-mono font-medium text-text">
+                  #{activeReturn.debitNoteNo || activeReturn.returnNo}
+                </span>
+              </div>
+            </div>
+
+            <div className="border border-border rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+              <UITable>
+                <UITableHeader>
+                  <UITableRow className="bg-surface-alt/60">
+                    <UITableHead className="py-2 px-2.5 text-[11px]">Product</UITableHead>
+                    <UITableHead className="py-2 px-2.5 text-[11px] font-mono">Batch</UITableHead>
+                    <UITableHead className="py-2 px-2.5 text-[11px] text-center">Exp</UITableHead>
+                    <UITableHead className="py-2 px-2.5 text-[11px] text-right">Qty</UITableHead>
+                  </UITableRow>
+                </UITableHeader>
+                <UITableBody>
+                  {freshItems.map((item, idx) => (
+                    <UITableRow key={idx}>
+                      <td className="py-1.5 px-2.5 text-xs font-medium text-text">
+                        {item.productName}
+                        {item.pack && <span className="text-[10px] text-text-muted block">({item.pack})</span>}
+                      </td>
+                      <td className="py-1.5 px-2.5 text-xs font-mono">{cleanBatchNo(item.batchNo)}</td>
+                      <td className="py-1.5 px-2.5 text-xs text-center text-text-muted">{item.expiry || "-"}</td>
+                      <td className="py-1.5 px-2.5 text-xs font-bold text-right">{item.returnQty}</td>
+                    </UITableRow>
+                  ))}
+                </UITableBody>
+              </UITable>
+            </div>
+
+            <p className="text-[11px] text-text-muted leading-relaxed">
+              These units will be credited immediately to the active store&apos;s active sellable shelf stock and can be billed or transferred right away.
+            </p>
+          </UIModalBody>
+
+          <UIModalFooter className="border-t border-border pt-3">
+            <div className="flex items-center justify-end gap-2 w-full">
+              <UIButton variant="outline" size="sm" onClick={() => setShowIngestConfirm(false)} disabled={isIngesting}>
+                Cancel
+              </UIButton>
+              <UIButton
+                variant="primary"
+                size="sm"
+                onClick={handleIngestFreshStock}
+                disabled={isIngesting}
+                startIcon={isIngesting ? <Loader2 className="size-3.5 animate-spin" /> : <Sparkles className="size-3.5" />}
+                className="font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+              >
+                {isIngesting ? "Ingesting..." : "Confirm & Ingest"}
+              </UIButton>
+            </div>
+          </UIModalFooter>
+        </UIModal>
+      )}
+
       {/* Transport Box Labels Generator Modal */}
       {showBoxLabelModal && (
         <ReturnBoxLabelModal
           isOpen={showBoxLabelModal}
           onClose={() => setShowBoxLabelModal(false)}
-          returnRecord={purchaseReturn}
+          returnRecord={activeReturn}
           onDispatched={(updated) => {
             if (onUpdated) {
               onUpdated(updated);

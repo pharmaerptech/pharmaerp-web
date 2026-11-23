@@ -567,6 +567,7 @@ export const ENDPOINTS = {
     CANCEL: (returnId) => `/catalog/purchase-returns/${returnId}/cancel`,
     DISPATCH: (returnId) => `/catalog/purchase-returns/${returnId}/dispatch`,
     RECEIVE_BOX: (returnId) => `/catalog/purchase-returns/${returnId}/receive-box`,
+    INGEST_TO_STORE: (returnId) => `/catalog/purchase-returns/${returnId}/ingest-to-store`,
   },
 
   DASHBOARD: {

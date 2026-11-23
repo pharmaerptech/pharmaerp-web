@@ -28,6 +28,10 @@ const purchaseReturnService = {
   receiveReturnBox(returnId) {
     return apiClient.post(ENDPOINTS.PURCHASE_RETURN.RECEIVE_BOX(returnId));
   },
+
+  ingestFreshStockToStore(returnId, branchId) {
+    return apiClient.post(ENDPOINTS.PURCHASE_RETURN.INGEST_TO_STORE(returnId), { branchId });
+  },
 };
 
 export default purchaseReturnService;

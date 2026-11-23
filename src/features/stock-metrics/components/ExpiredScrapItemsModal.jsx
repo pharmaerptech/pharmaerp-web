@@ -1,6 +1,6 @@
 // src/features/stock-metrics/components/ExpiredScrapItemsModal.jsx
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, Fragment } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,6 +22,12 @@ import {
   Truck,
   Archive,
   Undo2,
+  Package,
+  PackagePlus,
+  Sparkles,
+  FileText,
+  ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 
 import {
@@ -34,6 +40,7 @@ import {
   UIButton,
   UIInput,
   UISelect,
+  UISwitch,
   UIDatePicker,
   UICheckbox,
   UITable,
@@ -47,6 +54,7 @@ import {
   UIConfirmDialog,
   UIInfiniteScroll,
 } from "@/components/ui";
+import { IncomingItemBadge, GroupByDropdown, groupInventoryItems } from "@/components/common";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/constants";
 import useBranch from "@/features/branch/hooks/useBranch";
@@ -155,6 +163,21 @@ const formatExpDate = (expiryDate) => {
   return `${m}/${y}`;
 };
 
+/**
+ * Check if expiry date is actually expired (strictly in past or current month)
+ */
+const isExpiredDate = (rawExp) => {
+  if (!rawExp) return false;
+  const dateObj = parseDateSafely(rawExp);
+  if (!dateObj) return false;
+  const expMonth = dateObj.getMonth() + 1;
+  const expYear = dateObj.getFullYear();
+  const now = new Date();
+  const currMonth = now.getMonth() + 1;
+  const currYear = now.getFullYear();
+  return expYear < currYear || (expYear === currYear && expMonth <= currMonth);
+};
+
 const EXPIRY_PRESET_OPTIONS = [
   { label: "All Expiry Dates", value: "all" },
   { label: "Expired This Month", value: "this_month" },
@@ -229,6 +252,7 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
   const [hasMore, setHasMore] = useState(false);
   const [tabCounts, setTabCounts] = useState({
     all: 0,
+    freshReturn: 0,
     shelfExpired: 0,
     scrapExpired: 0,
     broken: 0,
@@ -254,6 +278,11 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
   const [customFromDate, setCustomFromDate] = useState("");
   const [customToDate, setCustomToDate] = useState("");
 
+  // Incoming stock visibility & Group By states
+  const [showIncomingItems, setShowIncomingItems] = useState(true);
+  const [groupBy, setGroupBy] = useState("none");
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+
   // Move to scrap bin modal and operation state
   const [isMoveConfirmOpen, setIsMoveConfirmOpen] = useState(false);
   const [isMovingToScrap, setIsMovingToScrap] = useState(false);
@@ -276,15 +305,41 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
     const affectedQty = hasScrap ? (scrapStock || (brokenStock + expReturnStock)) : shelfStock;
     const lossValue = affectedQty * mrp;
 
+    const isScrapFresh =
+      b.scrapType === "FRESH_RETURN" ||
+      b.scrapType === "SCRAP" ||
+      (b.batchNo && (b.batchNo.includes("[FRESH_RETURN]") || b.batchNo.includes("[SCRAP]")));
+
+    const isScrapBroken =
+      brokenStock > 0 ||
+      b.scrapType === "BROKEN" ||
+      (b.batchNo && b.batchNo.includes("[BROKEN]"));
+
+    const isScrapExpired =
+      expReturnStock > 0 ||
+      b.scrapType === "EXPIRED" ||
+      (b.batchNo && b.batchNo.includes("[EXPIRED]"));
+
     let category = "shelf_expired";
-    if (brokenStock > 0 || b.scrapType === "BROKEN" || (b.batchNo && b.batchNo.includes("[BROKEN]"))) {
+    if (isScrapFresh) {
+      category = "fresh_return";
+    } else if (isScrapBroken) {
       category = "broken";
-    } else if (expReturnStock > 0 || b.scrapType === "EXPIRED" || (b.batchNo && b.batchNo.includes("[EXPIRED]")) || hasScrap) {
+    } else if (isScrapExpired) {
       category = "scrap_expired";
+    } else if (hasScrap) {
+      category = "fresh_return";
+    } else {
+      // Retail shelf batch
+      const isExpired = isExpiredDate(b.expiryDate);
+      category = isExpired ? "shelf_expired" : "fresh_return";
     }
 
     const displayBatchNo =
-      b.originalBatchNo || (b.batchNo ? b.batchNo.replace(/\s*\[(EXPIRED|BROKEN|SCRAP)\]/gi, "").trim() : "N/A");
+      b.originalBatchNo ||
+      (b.batchNo
+        ? b.batchNo.replace(/\s*\[(EXPIRED|BROKEN|SCRAP|FRESH_RETURN)\]/gi, "").trim()
+        : "N/A");
 
     const rowBranchName =
       b.branchName ||
@@ -312,6 +367,12 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
       lossValue,
       category,
       branchName: rowBranchName,
+      isIncoming: Boolean(b.isIncoming),
+      sourceBranchId: b.sourceBranchId || null,
+      sourceBranchName: b.sourceBranchName || "",
+      sourceBranchCode: b.sourceBranchCode || "",
+      sourceTransferOrderNo: b.sourceTransferOrderNo || "",
+      sourceTransferOrderId: b.sourceTransferOrderId || null,
     };
   }, [branches, currentBranch]);
 
@@ -346,6 +407,7 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
         if (resData.counts) {
           setTabCounts({
             all: Number(resData.counts.all || 0),
+            freshReturn: Number(resData.counts.freshReturn || 0),
             shelfExpired: Number(resData.counts.shelfExpired || 0),
             scrapExpired: Number(resData.counts.scrapExpired || 0),
             broken: Number(resData.counts.broken || 0),
@@ -413,8 +475,14 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
           i.productCode.toLowerCase().includes(q) ||
           i.manufacturer.toLowerCase().includes(q) ||
           i.batchNo.toLowerCase().includes(q) ||
-          (i.branchName && i.branchName.toLowerCase().includes(q))
+          (i.branchName && i.branchName.toLowerCase().includes(q)) ||
+          (i.sourceBranchName && i.sourceBranchName.toLowerCase().includes(q))
       );
+    }
+
+    // Incoming Items Visibility Switch (Default: ON)
+    if (!showIncomingItems) {
+      result = result.filter((i) => !i.isIncoming);
     }
 
     if (filterMotive === "shelf_expired") {
@@ -423,6 +491,8 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
       result = result.filter((i) => i.category === "scrap_expired");
     } else if (filterMotive === "broken") {
       result = result.filter((i) => i.category === "broken");
+    } else if (filterMotive === "fresh_return") {
+      result = result.filter((i) => i.category === "fresh_return");
     } else {
       // filterMotive === "all": exclude shelf-expired items
       result = result.filter((i) => i.category !== "shelf_expired");
@@ -482,7 +552,15 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
     }
 
     return result;
-  }, [items, searchQuery, filterMotive, expiryPreset, customFromDate, customToDate]);
+  }, [
+    items,
+    searchQuery,
+    showIncomingItems,
+    filterMotive,
+    expiryPreset,
+    customFromDate,
+    customToDate,
+  ]);
 
   // Checkbox Selection
   const isAllSelected =
@@ -527,6 +605,16 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
   const selectedScrapItems = useMemo(
     () => selectedItems.filter((i) => i.category !== "shelf_expired"),
     [selectedItems]
+  );
+  // Group A: Current Branch Items (Debit Note)
+  const selectedCurrentBranchItems = useMemo(
+    () => selectedScrapItems.filter((i) => !i.isIncoming),
+    [selectedScrapItems]
+  );
+  // Group B: Incoming Items (Credit Note)
+  const selectedIncomingItems = useMemo(
+    () => selectedScrapItems.filter((i) => i.isIncoming),
+    [selectedScrapItems]
   );
   const hasShelfSelected = selectedShelfItems.length > 0;
   const hasScrapSelected = selectedScrapItems.length > 0;
@@ -613,7 +701,9 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
       `"${i.batchNo || ""}"`,
       `"${formatExpDate(i.expiryDate)}"`,
       `"${
-        i.category === "broken"
+        i.category === "fresh_return"
+          ? (i.scrapStock > 0 ? "Scrap Bin: Fresh Return" : "Stock Matrix: Fresh Return")
+          : i.category === "broken"
           ? "Scrap Bin: Broken / Damaged Return"
           : i.category === "scrap_expired"
           ? "Scrap Bin: Expired Return"
@@ -814,8 +904,8 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
       scrapType:
         item.category === "broken"
           ? "BROKEN"
-          : item.category === "scrap_expired"
-          ? "EXPIRED"
+          : item.category === "fresh_return"
+          ? "FRESH_RETURN"
           : "EXPIRED",
       category: item.category,
       mrp: item.mrp,
@@ -834,86 +924,160 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
     });
   };
 
-  // Jump to Purchase Return creation with selected quarantined items prefilled
-  const handleReturnToSupplier = () => {
+  // Create Debit Note for Selected Scrap Items (both current branch and incoming 📦)
+  const handleCreateDebitNote = () => {
     if (!isCurrentBranchSelected) {
       setToastMessage(
-        `Purchase returns can only be created when your current branch (${currentBranch?.name || "Active Facility"}) is selected. Please switch branch filter to your current branch.`
+        `Debit notes can only be created when your current branch (${currentBranch?.name || "Active Facility"}) is selected. Please switch branch filter.`
       );
       setTimeout(() => setToastMessage(null), 4000);
       return;
     }
 
-    const listToReturn = selectedScrapItems.length > 0 ? selectedScrapItems : selectedItems.filter((i) => i.category !== "shelf_expired");
-    if (listToReturn.length === 0) {
+    if (selectedScrapItems.length === 0) {
       if (selectedShelfItems.length > 0) {
-        setToastMessage("Shelf-expired items are currently on retail shelves and must first be moved to the scrap bin before returning to supplier.");
+        setToastMessage("Shelf-expired items are currently on retail shelves and must first be moved to the scrap bin before creating a Debit Note.");
       } else {
-        setToastMessage("Please select at least one scrap bin batch to return.");
+        setToastMessage("Please select at least one scrap batch to create a Debit Note.");
       }
       setTimeout(() => setToastMessage(null), 3500);
       return;
     }
 
-    const foreignBranchItem = listToReturn.find((i) => {
-      const itemBranchId = i.branch_id?._id || i.branch_id || i.branchId;
-      return itemBranchId && String(itemBranchId) !== String(activeBranchId);
-    });
-    if (foreignBranchItem) {
-      setToastMessage(
-        `Cannot return stock from "${foreignBranchItem.branchName || "another branch"}". You can only return stock belonging to your current branch.`
-      );
-      setTimeout(() => setToastMessage(null), 4500);
-      return;
-    }
-
     const sourceBranch = activeBranchId;
-
-    const prefilledItems = listToReturn.map((item) => ({
-      productId:
-        item.productId ||
-        item.product_id ||
-        item.product?._id ||
-        item.product ||
-        item._id,
-      productName: item.productName || item.name || "Product",
-      pack: item.pack || "",
-      batchId: item._id || item.batchId || item.batch,
-      batchNo: item.rawBatchNo || item.batchNo,
-      expiry: item.expiryDate || "",
-      availableQty: Number(
-        item.affectedQty || item.scrapStock || item.shelfStock || 1
-      ),
-      returnQty: Number(
-        item.affectedQty || item.scrapStock || item.shelfStock || 1
-      ),
-      sourceBin:
-        item.category === "broken"
-          ? "SCRAP_BROKEN"
-          : "SCRAP_EXPIRED",
-      rate: Number(item.pts || item.rate || 0),
-      mrp: item.mrp || 0,
-      gstPct: item.hsnTaxpercent || 12,
-      supplier: item.supplier || null,
-      supplierId: item.supplierId || item.supplier?._id || null,
-      supplierName: item.supplierName || item.supplier?.businessName || item.supplier?.name || "",
-      supplierGst: item.supplierGst || item.supplier?.gstNumber || "",
-      supplierMobile: item.supplierMobile || item.supplier?.mobile || item.supplier?.phone || "",
-      purchaseBillId: item.purchaseBillId || null,
-      purchaseBillNo: item.purchaseBillNo || "",
-    }));
+    const prefilledItems = selectedScrapItems.map((item) => {
+      const cleanBatch =
+        item.originalBatchNo ||
+        (item.batchNo
+          ? item.batchNo.replace(/\s*\[(EXPIRED|BROKEN|SCRAP|FRESH_RETURN)\]/gi, "").trim()
+          : "N/A");
+      return {
+        productId: item.productId || item.product_id || item.product?._id || item.product || item._id,
+        productName: item.productName || item.name || "Product",
+        pack: item.pack || "",
+        batchId: item._id || item.batchId || item.batch,
+        batchNo: cleanBatch,
+        rawBatchNo: item.rawBatchNo || item.batchNo,
+        originalBatchNo: cleanBatch,
+        expiry: item.expiryDate || "",
+        availableQty: Number(item.affectedQty || item.scrapStock || item.shelfStock || 1),
+        returnQty: Number(item.affectedQty || item.scrapStock || item.shelfStock || 1),
+        sourceBin:
+          item.category === "broken"
+            ? "SCRAP_BROKEN"
+            : item.category === "fresh_return"
+            ? (item.scrapStock > 0 || !item.shelfStock ? "SCRAP_FRESH" : "SELLABLE")
+            : "SCRAP_EXPIRED",
+        category: item.category,
+        rate: Number(item.pts || item.rate || 0),
+        mrp: item.mrp || 0,
+        gstPct: item.hsnTaxpercent || 12,
+        supplier: item.supplier || null,
+        supplierId: item.supplierId || item.supplier?._id || null,
+        supplierName: item.supplierName || item.supplier?.businessName || item.supplier?.name || "",
+        supplierGst: item.supplierGst || item.supplier?.gstNumber || "",
+        supplierMobile: item.supplierMobile || item.supplier?.mobile || item.supplier?.phone || "",
+        subSupplier: item.subSupplier || null,
+        subSupplierId: item.subSupplierId || item.subSupplier?._id || null,
+        subSupplierName: item.subSupplierName || item.subSupplier?.businessName || item.subSupplier?.name || "",
+        subSupplierGst: item.subSupplierGst || item.subSupplier?.gstNumber || "",
+        purchaseBillId: item.purchaseBillId || null,
+        purchaseBillNo: item.purchaseBillNo || "",
+        isIncoming: Boolean(item.isIncoming),
+        sourceBranchId: item.sourceBranchId || null,
+        sourceBranchName: item.sourceBranchName || "",
+        sourceBranchCode: item.sourceBranchCode || "",
+        sourceTransferOrderId: item.sourceTransferOrderId || null,
+        sourceTransferOrderNo: item.sourceTransferOrderNo || "",
+      };
+    });
 
     if (onClose) onClose();
 
     navigate(ROUTES.CREATE_PURCHASE_RETURN, {
       state: {
-        returnMotive: listToReturn.some((i) => i.category === "broken") ? "BROKEN" : "EXPIRED",
+        returnMode: "DEBIT_NOTE",
+        returnMotive: selectedScrapItems.some((i) => i.category === "fresh_return")
+          ? "SELLABLE"
+          : selectedScrapItems.some((i) => i.category === "broken")
+          ? "BROKEN"
+          : "EXPIRED",
         sourceBranchId: sourceBranch,
         prefilledItems,
-        remarks: `Return to supplier from scrap bin (${listToReturn.length} batches)`,
+        remarks: `Return to supplier from scrap bin (${selectedScrapItems.length} batches)`,
       },
     });
   };
+
+  // Create Credit Note for Incoming Items only (Group B - 📦)
+  const handleCreateCreditNote = () => {
+    if (selectedIncomingItems.length === 0) {
+      setToastMessage("Please select at least one incoming (📦) scrap batch to create a Credit Note.");
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
+    }
+
+    const prefilledItems = selectedIncomingItems.map((item) => {
+      const cleanBatch =
+        item.originalBatchNo ||
+        (item.batchNo
+          ? item.batchNo.replace(/\s*\[(EXPIRED|BROKEN|SCRAP|FRESH_RETURN)\]/gi, "").trim()
+          : "N/A");
+      return {
+        productId: item.productId || item.product_id || item.product?._id || item.product || item._id,
+        productName: item.productName || item.name || "Product",
+        pack: item.pack || "",
+        batchId: item._id || item.batchId || item.batch,
+        batchNo: cleanBatch,
+        rawBatchNo: item.rawBatchNo || item.batchNo,
+        originalBatchNo: cleanBatch,
+        expiry: item.expiryDate || "",
+        availableQty: Number(item.affectedQty || item.scrapStock || item.shelfStock || 1),
+        returnQty: Number(item.affectedQty || item.scrapStock || item.shelfStock || 1),
+        sourceBin:
+          item.category === "broken"
+            ? "SCRAP_BROKEN"
+            : item.category === "fresh_return"
+            ? (item.scrapStock > 0 || !item.shelfStock ? "SCRAP_FRESH" : "SELLABLE")
+            : "SCRAP_EXPIRED",
+        category: item.category,
+        rate: Number(item.pts || item.rate || 0),
+        mrp: item.mrp || 0,
+        gstPct: item.hsnTaxpercent || 12,
+        isIncoming: true,
+        sourceBranchId: item.sourceBranchId || null,
+        sourceBranchName: item.sourceBranchName || "",
+        sourceTransferOrderId: item.sourceTransferOrderId || null,
+        sourceTransferOrderNo: item.sourceTransferOrderNo || "",
+        supplier: item.supplier || null,
+        supplierId: item.supplierId || item.supplier?._id || null,
+        supplierName: item.sourceBranchName ? `Inter-Branch: ${item.sourceBranchName}` : (item.supplierName || "Inter-Branch Source"),
+        purchaseBillId: item.purchaseBillId || null,
+        purchaseBillNo: item.purchaseBillNo || "",
+      };
+    });
+
+    if (onClose) onClose();
+
+    navigate(ROUTES.CREATE_PURCHASE_RETURN, {
+      state: {
+        returnMode: "CREDIT_NOTE",
+        returnMotive: selectedIncomingItems.some((i) => i.category === "fresh_return")
+          ? "SELLABLE"
+          : selectedIncomingItems.some((i) => i.category === "broken")
+          ? "BROKEN"
+          : "EXPIRED",
+        sourceBranchId: selectedIncomingItems[0]?.sourceBranchId || null,
+        sourceBranchName: selectedIncomingItems[0]?.sourceBranchName || "",
+        sourceTransferOrderId: selectedIncomingItems[0]?.sourceTransferOrderId || null,
+        sourceTransferOrderNo: selectedIncomingItems[0]?.sourceTransferOrderNo || "",
+        prefilledItems,
+        remarks: `Inter-branch credit note for incoming stock (${selectedIncomingItems.length} batches)`,
+      },
+    });
+  };
+
+  const handleReturnToSupplier = handleCreateDebitNote;
 
   // Handle moving selected shelf-expired items to branch scrap bin
   const handleConfirmMoveToScrapBin = async () => {
@@ -974,6 +1138,11 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
 
   const MOTIVE_TABS = [
     { id: "all", label: "All Expired & Scrap", count: tabCounts.all },
+    {
+      id: "fresh_return",
+      label: "Fresh Returns",
+      count: tabCounts.freshReturn,
+    },
     {
       id: "shelf_expired",
       label: "Shelf Expired",
@@ -1037,117 +1206,6 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
           </div>
 
           <div className="flex items-center gap-2">
-            {filterMotive === "shelf_expired" || (hasShelfSelected && !hasScrapSelected) ? (
-              <UIButton
-                variant={isCurrentBranchSelected && hasShelfSelected ? "warning" : "secondary"}
-                size="sm"
-                onClick={() => {
-                  if (!hasShelfSelected) {
-                    setToastMessage("Please select at least one shelf-expired item to move to scrap bin.");
-                    setTimeout(() => setToastMessage(null), 3000);
-                    return;
-                  }
-                  setIsMoveConfirmOpen(true);
-                }}
-                disabled={!isCurrentBranchSelected || selectedShelfItems.length === 0}
-                startIcon={<Archive className="size-3.5" />}
-                className={cn(
-                  "h-8 text-xs font-semibold",
-                  (!isCurrentBranchSelected || selectedShelfItems.length === 0) && "opacity-60 cursor-not-allowed"
-                )}
-                title={
-                  !isCurrentBranchSelected
-                    ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to move to scrap bin`
-                    : hasShelfSelected
-                    ? `Move ${selectedShelfItems.length} selected shelf item(s) to scrap bin`
-                    : "Select shelf-expired items below to move to scrap bin"
-                }
-              >
-                Move to Scrap Bin {hasShelfSelected && isCurrentBranchSelected ? `(${selectedShelfItems.length})` : ""}
-              </UIButton>
-            ) : hasShelfSelected && hasScrapSelected ? (
-              <>
-                <UIButton
-                  variant="warning"
-                  size="sm"
-                  onClick={() => setIsMoveConfirmOpen(true)}
-                  disabled={!isCurrentBranchSelected}
-                  startIcon={<Archive className="size-3.5" />}
-                  className={cn(
-                    "h-8 text-xs font-semibold",
-                    !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
-                  )}
-                  title="Move selected shelf-expired items to scrap bin"
-                >
-                  Move to Bin ({selectedShelfItems.length})
-                </UIButton>
-                <UIButton
-                  variant={isCurrentBranchSelected ? "primary" : "secondary"}
-                  size="sm"
-                  onClick={handleCreateTransferOrder}
-                  disabled={!isCurrentBranchSelected}
-                  startIcon={<Truck className="size-3.5" />}
-                  className={cn(
-                    "h-8 text-xs font-semibold",
-                    !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
-                  )}
-                  title="Transfer selected scrap items to store"
-                >
-                  Transfer to Store ({selectedScrapItems.length})
-                </UIButton>
-                <UIButton
-                  variant={isCurrentBranchSelected ? "outline" : "secondary"}
-                  size="sm"
-                  onClick={handleReturnToSupplier}
-                  disabled={!isCurrentBranchSelected}
-                  startIcon={<Undo2 className="size-3.5" />}
-                  className={cn(
-                    "h-8 text-xs font-semibold",
-                    !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
-                  )}
-                  title="Return selected scrap items to supplier (Debit Note)"
-                >
-                  Return to Supplier ({selectedScrapItems.length})
-                </UIButton>
-              </>
-            ) : (
-              <>
-                <UIButton
-                  variant={isCurrentBranchSelected ? "primary" : "secondary"}
-                  size="sm"
-                  onClick={handleCreateTransferOrder}
-                  disabled={!isCurrentBranchSelected}
-                  startIcon={<Truck className="size-3.5" />}
-                  className={cn(
-                    "h-8 text-xs font-semibold",
-                    !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
-                  )}
-                  title={
-                    !isCurrentBranchSelected
-                      ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to create transfer order`
-                      : selectedIds.length > 0
-                      ? `Create transfer order for ${selectedIds.length} selected batches`
-                      : "Select items below and create transfer order"
-                  }
-                >
-                  Create Transfer Order {selectedIds.length > 0 && isCurrentBranchSelected ? `(${selectedIds.length})` : ""}
-                </UIButton>
-                <UIButton
-                  variant={isCurrentBranchSelected ? "outline" : "secondary"}
-                  size="sm"
-                  onClick={handleReturnToSupplier}
-                  disabled={!isCurrentBranchSelected}
-                  startIcon={<Undo2 className="size-3.5" />}
-                  className={cn(
-                    "h-8 text-xs font-semibold",
-                    !isCurrentBranchSelected && "opacity-60 cursor-not-allowed"
-                  )}
-                  title="Return selected scrap items to supplier (Debit Note)"
-                >
-                  Return to Supplier {selectedIds.length > 0 && isCurrentBranchSelected ? `(${selectedIds.length})` : ""}
-                </UIButton>
-              </>
-            )}
             <UIButton
               variant="outline"
               size="sm"
@@ -1336,6 +1394,29 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
               Reset
             </UIButton>
           )}
+
+          {/* Incoming Items Visibility Switch (Default: ON) */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border/70 bg-surface text-xs font-semibold select-none h-8.5 shadow-2xs">
+            <span className="text-sm" role="img" aria-label="Incoming Box">📦</span>
+            <span className="text-xs font-medium text-text">Incoming</span>
+            <UISwitch
+              size="sm"
+              checked={showIncomingItems}
+              onChange={(e) => setShowIncomingItems(typeof e === "boolean" ? e : e?.target?.checked)}
+              color="primary"
+              aria-label="Toggle incoming stock visibility"
+            />
+          </div>
+
+          {/* Group By Dropdown */}
+          <div className="w-[170px] sm:w-[190px]">
+            <GroupByDropdown
+              value={groupBy}
+              onChange={setGroupBy}
+              size="sm"
+              className="w-full"
+            />
+          </div>
         </div>
 
         {/* Motive Filter Tabs */}
@@ -1449,26 +1530,41 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
                 Transfer Selected to Store {hasScrapSelected ? `(${selectedScrapItems.length})` : ""}
               </UIButton>
             )}
+            {/* Create Debit Note for Selected Scrap Items */}
             {(!hasShelfSelected || hasScrapSelected) && (
               <UIButton
                 variant="outline"
                 size="xs"
-                onClick={handleReturnToSupplier}
-                disabled={!isCurrentBranchSelected || !hasScrapSelected}
-                startIcon={<Undo2 className="size-3" />}
+                onClick={handleCreateDebitNote}
+                disabled={!isCurrentBranchSelected || selectedScrapItems.length === 0}
+                startIcon={<FileText className="size-3 text-primary" />}
                 className={cn(
                   "h-7 text-[11px] font-bold shadow-xs",
-                  (!isCurrentBranchSelected || !hasScrapSelected) && "opacity-50 cursor-not-allowed"
+                  (!isCurrentBranchSelected || selectedScrapItems.length === 0) && "opacity-50 cursor-not-allowed"
                 )}
-                title={
-                  !isCurrentBranchSelected
-                    ? `Select current branch (${currentBranch?.name || "Active Facility"}) only to return`
-                    : !hasScrapSelected
-                    ? "Shelf-expired items must first be moved to scrap bin before returning"
-                    : "Return selected scrap items to supplier (Debit Note)"
-                }
+                title="Create Debit Note for selected scrap items"
               >
-                Return to Supplier {hasScrapSelected ? `(${selectedScrapItems.length})` : ""}
+                Create Debit Note ({selectedScrapItems.length})
+              </UIButton>
+            )}
+
+            {/* Create Credit Note for Incoming Items (📦) */}
+            {(!hasShelfSelected || hasScrapSelected) && (
+              <UIButton
+                variant="default"
+                size="xs"
+                onClick={handleCreateCreditNote}
+                disabled={selectedIncomingItems.length === 0}
+                startIcon={<span className="text-[10px]">📦</span>}
+                className={cn(
+                  "h-7 text-[11px] font-bold shadow-xs",
+                  selectedIncomingItems.length > 0
+                    ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600"
+                    : "opacity-50 cursor-not-allowed"
+                )}
+                title="Create Inter-Branch Credit Note for incoming items"
+              >
+                Create Credit Note ({selectedIncomingItems.length})
               </UIButton>
             )}
             <UIButton
@@ -1558,116 +1654,218 @@ export const ExpiredScrapItemsModal = ({ isOpen, onClose }) => {
                 }
               />
             ) : (
-              filteredItems.map((row) => {
-                const isSelected = selectedIds.includes(row.uniqueRowId);
+              (() => {
+                const renderRow = (row) => {
+                  const isSelected = selectedIds.includes(row.uniqueRowId);
 
-                return (
-                  <UITableRow
-                    key={row.uniqueRowId}
-                    onClick={() => handleToggleRow(row.uniqueRowId)}
-                    className={cn(
-                      "h-11 transition-colors cursor-pointer border-b border-border/60 hover:bg-surface-hover/70 last:border-b-0",
-                      isSelected && "bg-rose-500/5 dark:bg-rose-500/10"
-                    )}
-                  >
-                    {/* Checkbox */}
-                    <UITableCell
-                      className="p-2 text-center"
-                      onClick={(e) => e.stopPropagation()}
+                  return (
+                    <UITableRow
+                      key={row.uniqueRowId}
+                      onClick={() => handleToggleRow(row.uniqueRowId)}
+                      className={cn(
+                        "h-11 transition-colors cursor-pointer border-b border-border/60 hover:bg-surface-hover/70 last:border-b-0",
+                        isSelected && "bg-rose-500/5 dark:bg-rose-500/10"
+                      )}
                     >
-                      <div className="flex items-center justify-center">
-                        <UICheckbox
-                          checked={isSelected}
-                          onChange={() => handleToggleRow(row.uniqueRowId)}
-                          size="sm"
-                          color="primary"
-                        />
-                      </div>
-                    </UITableCell>
+                      {/* Checkbox */}
+                      <UITableCell
+                        className="p-2 text-center"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-center">
+                          <UICheckbox
+                            checked={isSelected}
+                            onChange={() => handleToggleRow(row.uniqueRowId)}
+                            size="sm"
+                            color="primary"
+                          />
+                        </div>
+                      </UITableCell>
 
-                    {/* Product Name & Code */}
-                    <UITableCell className="py-1.5">
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-semibold text-text truncate text-xs">
-                          {row.productName}
-                        </span>
-                        <span className="text-[10.5px] font-mono text-text-muted truncate">
-                          {row.productCode}
-                        </span>
-                      </div>
-                    </UITableCell>
-
-                    {/* Branch when viewing All Branches */}
-                    {selectedBranch === "all" && (
+                      {/* Product Name & Code */}
                       <UITableCell className="py-1.5">
-                        <span className="px-1.5 py-0.2 rounded text-[10.5px] font-semibold bg-surface-alt border border-border text-text-muted truncate inline-block max-w-[120px]">
-                          {row.branchName}
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-semibold text-text truncate text-xs">
+                            {row.productName}
+                          </span>
+                          <span className="text-[10.5px] font-mono text-text-muted truncate">
+                            {row.productCode}
+                          </span>
+                        </div>
+                      </UITableCell>
+
+                      {/* Branch when viewing All Branches */}
+                      {selectedBranch === "all" && (
+                        <UITableCell className="py-1.5">
+                          <span className="px-1.5 py-0.2 rounded text-[10.5px] font-semibold bg-surface-alt border border-border text-text-muted truncate inline-block max-w-[120px]">
+                            {row.branchName}
+                          </span>
+                        </UITableCell>
+                      )}
+
+                      {/* Brand */}
+                      <UITableCell className="text-xs text-text-muted truncate">
+                        {row.manufacturer}
+                      </UITableCell>
+
+                      {/* Pack */}
+                      <UITableCell className="text-xs text-text-muted">
+                        {row.pack}
+                      </UITableCell>
+
+                      {/* Batch No */}
+                      <UITableCell className="font-mono text-xs text-text font-medium">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{row.batchNo}</span>
+                          {row.isIncoming && (
+                            <IncomingItemBadge
+                              sourceBranchName={row.sourceBranchName}
+                              sourceBranchCode={row.sourceBranchCode}
+                              sourceTransferOrderNo={row.sourceTransferOrderNo}
+                            />
+                          )}
+                        </div>
+                      </UITableCell>
+
+                      {/* Expiry */}
+                      <UITableCell align="center">
+                        {isExpiredDate(row.expiryDate) ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[10.5px] font-bold text-rose-600 dark:text-rose-400 font-mono">
+                            <XCircle className="size-3 shrink-0" />
+                            {formatExpDate(row.expiryDate)}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 text-[10.5px] font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+                            <CheckCircle2 className="size-3 shrink-0" />
+                            {formatExpDate(row.expiryDate)}
+                          </span>
+                        )}
+                      </UITableCell>
+
+                      {/* Type Badge */}
+                      <UITableCell>
+                        {row.category === "fresh_return" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                            <Sparkles className="size-3" />
+                            {row.scrapStock > 0 ? "Scrap: Fresh Return" : "Stock Matrix: Fresh Return"}
+                          </span>
+                        ) : row.category === "broken" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+                            <AlertTriangle className="size-3" />
+                            Scrap: Broken
+                          </span>
+                        ) : row.category === "scrap_expired" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                            <Trash2 className="size-3" />
+                            Scrap: Expired
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
+                            <Calendar className="size-3" />
+                            Shelf Expired
+                          </span>
+                        )}
+                      </UITableCell>
+
+                      {/* Affected Qty */}
+                      <UITableCell align="right" className="font-bold text-xs font-mono">
+                        <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold">
+                          {row.affectedQty}
                         </span>
                       </UITableCell>
-                    )}
 
-                    {/* Brand */}
-                    <UITableCell className="text-xs text-text-muted truncate">
-                      {row.manufacturer}
-                    </UITableCell>
+                      {/* MRP */}
+                      <UITableCell align="right" className="text-xs text-text font-medium font-mono tabular-nums">
+                        ₹{formatCurrency(row.mrp)}
+                      </UITableCell>
 
-                    {/* Pack */}
-                    <UITableCell className="text-xs text-text-muted">
-                      {row.pack}
-                    </UITableCell>
+                      {/* Loss Value */}
+                      <UITableCell align="right" className="text-xs font-bold text-rose-600 dark:text-rose-400 font-mono tabular-nums">
+                        ₹{formatCurrency(row.lossValue)}
+                      </UITableCell>
+                    </UITableRow>
+                  );
+                };
 
-                    {/* Batch No */}
-                    <UITableCell className="font-mono text-xs text-text font-medium">
-                      {row.batchNo}
-                    </UITableCell>
+                if (groupBy === "none") {
+                  return filteredItems.map((row) => renderRow(row));
+                }
 
-                    {/* Expiry */}
-                    <UITableCell align="center">
-                      <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/10 border border-rose-500/20 px-1.5 py-0.5 text-[10.5px] font-bold text-rose-600 dark:text-rose-400 font-mono">
-                        <XCircle className="size-3 shrink-0" />
-                        {formatExpDate(row.expiryDate)}
-                      </span>
-                    </UITableCell>
+                const groupedSections = groupInventoryItems(filteredItems, groupBy);
+                return groupedSections.map((group) => {
+                  const isCollapsed = collapsedGroups.has(group.key);
+                  const groupRowIds = group.items.map((i) => i.uniqueRowId);
+                  const isAllGroupSelected =
+                    groupRowIds.length > 0 && groupRowIds.every((id) => selectedIds.includes(id));
+                  const isSomeGroupSelected =
+                    groupRowIds.some((id) => selectedIds.includes(id)) && !isAllGroupSelected;
 
-                    {/* Type Badge */}
-                    <UITableCell>
-                      {row.category === "broken" ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
-                          <AlertTriangle className="size-3" />
-                          Scrap: Broken
-                        </span>
-                      ) : row.category === "scrap_expired" ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-                          <Trash2 className="size-3" />
-                          Scrap: Expired
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
-                          <Calendar className="size-3" />
-                          Shelf Expired
-                        </span>
-                      )}
-                    </UITableCell>
-
-                    {/* Affected Qty */}
-                    <UITableCell align="right" className="font-bold text-xs font-mono">
-                      <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-700 dark:text-rose-400 font-bold">
-                        {row.affectedQty}
-                      </span>
-                    </UITableCell>
-
-                    {/* MRP */}
-                    <UITableCell align="right" className="text-xs text-text font-medium font-mono tabular-nums">
-                      ₹{formatCurrency(row.mrp)}
-                    </UITableCell>
-
-                    {/* Loss Value */}
-                    <UITableCell align="right" className="text-xs font-bold text-rose-600 dark:text-rose-400 font-mono tabular-nums">
-                      ₹{formatCurrency(row.lossValue)}
-                    </UITableCell>
-                  </UITableRow>
-                );
-              })
+                  return (
+                    <Fragment key={group.key}>
+                      {/* Group Header Row */}
+                      <UITableRow className="bg-surface-alt/75 hover:bg-surface-alt border-y border-border/80 sticky top-10 z-10 transition-colors">
+                        <UITableCell className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-center">
+                            <UICheckbox
+                              checked={isAllGroupSelected}
+                              indeterminate={isSomeGroupSelected}
+                              onChange={() => {
+                                if (isAllGroupSelected) {
+                                  setSelectedIds((prev) =>
+                                    prev.filter((id) => !groupRowIds.includes(id))
+                                  );
+                                } else {
+                                  setSelectedIds((prev) =>
+                                    Array.from(new Set([...prev, ...groupRowIds]))
+                                  );
+                                }
+                              }}
+                              size="sm"
+                              color="primary"
+                              aria-label={`Select group ${group.title}`}
+                            />
+                          </div>
+                        </UITableCell>
+                        <UITableCell colSpan={selectedBranch === "all" ? 10 : 9} className="py-2 px-3">
+                          <div className="flex items-center justify-between">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCollapsedGroups((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(group.key)) next.delete(group.key);
+                                  else next.add(group.key);
+                                  return next;
+                                });
+                              }}
+                              className="flex items-center gap-2 font-bold text-xs text-text hover:text-primary transition-colors select-none text-left"
+                            >
+                              <ChevronRight
+                                className={cn(
+                                  "size-3.5 transition-transform duration-200 shrink-0",
+                                  !isCollapsed && "rotate-90"
+                                )}
+                              />
+                              <span>{group.title}</span>
+                              {group.subtitle && (
+                                <span className="text-[10.5px] font-normal text-text-muted">
+                                  ({group.subtitle})
+                                </span>
+                              )}
+                            </button>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-mono font-medium text-text-muted bg-surface px-2 py-0.5 rounded-full border border-border">
+                                {group.itemCount} items • Total Qty: {group.totalQty}
+                              </span>
+                            </div>
+                          </div>
+                        </UITableCell>
+                      </UITableRow>
+                      {!isCollapsed && group.items.map((row) => renderRow(row))}
+                    </Fragment>
+                  );
+                });
+              })()
             )}
           </UITableBody>
         </UITable>

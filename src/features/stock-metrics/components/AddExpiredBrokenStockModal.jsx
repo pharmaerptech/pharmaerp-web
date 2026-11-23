@@ -11,6 +11,7 @@ import {
   Loader2,
   Building2,
   PackageMinus,
+  Sparkles,
   RefreshCw,
 } from "lucide-react";
 import {
@@ -105,7 +106,7 @@ export const AddExpiredBrokenStockModal = ({
   const [batches, setBatches] = useState([]);
   const [isLoadingBatches, setIsLoadingBatches] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState(null);
-  const [reason, setReason] = useState("EXPIRED"); // "EXPIRED" | "BROKEN"
+  const [reason, setReason] = useState("EXPIRED"); // "EXPIRED" | "BROKEN" | "FRESH_RETURN"
   const [quantity, setQuantity] = useState("");
   const [remarks, setRemarks] = useState("");
 
@@ -144,7 +145,7 @@ export const AddExpiredBrokenStockModal = ({
           filters: {
             product: prodId,
             ...(branchFilter ? { facility: branchFilter } : {}),
-            inStockOnly: true,
+            inStockOnly: false, // Include all active batches so fresh returns can restock empty batches
           },
           companyId: activeCompanyId,
           limit: 50,
@@ -156,11 +157,17 @@ export const AddExpiredBrokenStockModal = ({
           res.data?.data ||
           [];
 
-        // Only keep batches that have sellable shelf stock and are not scrap batches
+        // Only keep batches that are regular shelf batches (not scrap batches)
         const validShelfBatches = rawList.filter((b) => {
-          const qty = Number(b.batchQty ?? b.stock ?? b.qoh ?? 0);
           const isScrap = b.scrapType && b.scrapType !== "NONE";
-          return qty > 0 && !isScrap;
+          return !isScrap;
+        });
+
+        // Sort with positive shelf stock first
+        validShelfBatches.sort((a, b) => {
+          const qtyA = Number(a.batchQty ?? a.stock ?? a.qoh ?? 0);
+          const qtyB = Number(b.batchQty ?? b.stock ?? b.qoh ?? 0);
+          return qtyB - qtyA;
         });
 
         setBatches(validShelfBatches);
@@ -203,9 +210,15 @@ export const AddExpiredBrokenStockModal = ({
     setError(null);
   };
 
+  const isFreshReturn = reason === "FRESH_RETURN";
+
   const numQuantity = Number(quantity) || 0;
-  const availableBatchQty = selectedBatch ? Number(selectedBatch.batchQty ?? selectedBatch.stock ?? selectedBatch.qoh ?? 0) : 0;
+  const availableBatchQty = selectedBatch
+    ? Number(selectedBatch.batchQty ?? selectedBatch.stock ?? selectedBatch.qoh ?? 0)
+    : 0;
+
   const isQtyExceeded = numQuantity > availableBatchQty;
+
   const isValidForm =
     Boolean(selectedProduct) &&
     Boolean(selectedBatch) &&
@@ -247,6 +260,8 @@ export const AddExpiredBrokenStockModal = ({
         batchId: batchId,
         quantity: numQuantity,
         reason: reason,
+        destination: "SCRAP",
+        deductFromShelf: true,
         remarks: remarks.trim(),
       });
 
@@ -257,6 +272,7 @@ export const AddExpiredBrokenStockModal = ({
         batch: selectedBatch,
         quantity: numQuantity,
         reason,
+        destination: "SCRAP",
         response: responseData,
       });
 
@@ -282,21 +298,34 @@ export const AddExpiredBrokenStockModal = ({
     >
       <UIModalHeader>
         <div className="flex items-center gap-3">
-          <div className="size-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 border border-amber-500/20">
+          <div
+            className={cn(
+              "size-10 rounded-xl flex items-center justify-center shrink-0 border transition-colors",
+              reason === "BROKEN"
+                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                : reason === "FRESH_RETURN"
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+            )}
+          >
             <PackageMinus className="size-5" />
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <UIModalTitle className="text-base sm:text-lg font-bold text-text">
-                Add Expired / Broken Stock
+                Add Expired / Broken / Return Stock
               </UIModalTitle>
-              <UIBadge variant="outline" size="sm" className="hidden sm:inline-flex items-center gap-1 border-border/70 text-[10.5px]">
+              <UIBadge
+                variant="outline"
+                size="sm"
+                className="hidden sm:inline-flex items-center gap-1 border-border/70 text-[10.5px]"
+              >
                 <Building2 className="size-3 text-text-muted" />
                 {currentBranchName}
               </UIBadge>
             </div>
             <UIModalDescription className="text-xs text-text-muted mt-0.5">
-              Quarantine shelf stock into the branch scrap bin as expired or physically damaged items.
+              Record stock adjustments: quarantine damaged or expired stock, or ingest fresh returned medicine directly into inventory.
             </UIModalDescription>
           </div>
         </div>
@@ -349,7 +378,7 @@ export const AddExpiredBrokenStockModal = ({
               />
               <p className="text-[11px] text-text-muted mt-1.5 flex items-center gap-1">
                 <Package className="size-3 text-text-muted/70" />
-                Type product name to search across the catalog with available branch stock.
+                Type product name to search across the catalog with branch batches.
               </p>
             </div>
           ) : (
@@ -405,7 +434,7 @@ export const AddExpiredBrokenStockModal = ({
               </label>
               {batches.length > 0 && (
                 <span className="text-[11px] text-text-muted font-mono">
-                  {batches.length} available {batches.length === 1 ? "batch" : "batches"}
+                  {batches.length} registered {batches.length === 1 ? "batch" : "batches"}
                 </span>
               )}
             </div>
@@ -413,13 +442,13 @@ export const AddExpiredBrokenStockModal = ({
             {isLoadingBatches ? (
               <div className="py-6 flex flex-col items-center justify-center gap-2 text-text-muted">
                 <Loader2 className="size-5 animate-spin text-primary" />
-                <span className="text-xs">Fetching active branch batches...</span>
+                <span className="text-xs">Fetching facility batches...</span>
               </div>
             ) : batches.length === 0 ? (
               <div className="p-4 rounded-xl border border-dashed border-border bg-surface-alt/30 text-center text-xs text-text-muted space-y-1">
                 <AlertTriangle className="size-5 text-amber-500 mx-auto" />
-                <div className="font-medium text-text">No sellable shelf stock found</div>
-                <div>There are currently no active batches with available stock for this product in {currentBranchName}.</div>
+                <div className="font-medium text-text">No registered shelf batch found</div>
+                <div>There are currently no active batches registered for this product in {currentBranchName}.</div>
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[180px] overflow-y-auto pr-1">
@@ -466,7 +495,12 @@ export const AddExpiredBrokenStockModal = ({
                       </div>
                       <div className="text-right shrink-0">
                         <span className="text-[10px] text-text-muted block">Available</span>
-                        <span className="text-xs font-mono font-bold text-primary">
+                        <span
+                          className={cn(
+                            "text-xs font-mono font-bold",
+                            qty > 0 ? "text-primary" : "text-text-muted"
+                          )}
+                        >
                           {qty} units
                         </span>
                       </div>
@@ -478,20 +512,21 @@ export const AddExpiredBrokenStockModal = ({
           </div>
         )}
 
-        {/* ── STEP 3: STOCK CLASSIFICATION & QUANTITY ─────────────────── */}
+        {/* ── STEP 3: STOCK CLASSIFICATION & ROUTING ────────────────────── */}
         {selectedBatch && (
           <div className="space-y-4 pt-2 border-t border-border">
-            {/* Classification Toggle */}
+            {/* Classification Selector */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-text">
                 3. Stock Classification <span className="text-rose-500">*</span>
               </label>
-              <div className="grid grid-cols-2 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* 1. Expired Stock */}
                 <button
                   type="button"
                   onClick={() => setReason("EXPIRED")}
                   className={cn(
-                    "p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1",
+                    "p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5",
                     reason === "EXPIRED"
                       ? "border-amber-500/80 bg-amber-500/10 text-amber-900 dark:text-amber-100 ring-2 ring-amber-500/20 shadow-2xs"
                       : "border-border bg-surface hover:bg-surface-alt text-text opacity-80"
@@ -506,16 +541,17 @@ export const AddExpiredBrokenStockModal = ({
                       <CheckCircle2 className="size-4 text-amber-600 dark:text-amber-400" />
                     )}
                   </div>
-                  <p className="text-[10.5px] text-text-muted">
-                    Stock past expiration date to quarantine.
+                  <p className="text-[10.5px] text-text-muted leading-tight">
+                    Stock past expiry date to quarantine in scrap depot.
                   </p>
                 </button>
 
+                {/* 2. Broken / Damaged */}
                 <button
                   type="button"
                   onClick={() => setReason("BROKEN")}
                   className={cn(
-                    "p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1",
+                    "p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5",
                     reason === "BROKEN"
                       ? "border-rose-500/80 bg-rose-500/10 text-rose-900 dark:text-rose-100 ring-2 ring-rose-500/20 shadow-2xs"
                       : "border-border bg-surface hover:bg-surface-alt text-text opacity-80"
@@ -530,8 +566,33 @@ export const AddExpiredBrokenStockModal = ({
                       <CheckCircle2 className="size-4 text-rose-600 dark:text-rose-400" />
                     )}
                   </div>
-                  <p className="text-[10.5px] text-text-muted">
-                    Physically broken, leaking or ruined items.
+                  <p className="text-[10.5px] text-text-muted leading-tight">
+                    Physically broken, leaking or ruined containers.
+                  </p>
+                </button>
+
+                {/* 3. General Fresh Return */}
+                <button
+                  type="button"
+                  onClick={() => setReason("FRESH_RETURN")}
+                  className={cn(
+                    "p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-1.5",
+                    reason === "FRESH_RETURN"
+                      ? "border-emerald-500/80 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100 ring-2 ring-emerald-500/20 shadow-2xs"
+                      : "border-border bg-surface hover:bg-surface-alt text-text opacity-80"
+                  )}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-1.5 font-bold text-xs">
+                      <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>General Fresh Return</span>
+                    </div>
+                    {reason === "FRESH_RETURN" && (
+                      <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                    )}
+                  </div>
+                  <p className="text-[10.5px] text-text-muted leading-tight">
+                    Intact, fresh returned medicine to quarantine in scrap depot.
                   </p>
                 </button>
               </div>
@@ -541,7 +602,7 @@ export const AddExpiredBrokenStockModal = ({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-semibold text-text">
-                  4. Quantity to Mark <span className="text-rose-500">*</span>
+                  4. Quantity to Quarantine into Scrap Bin <span className="text-rose-500">*</span>
                 </label>
                 <span className="text-[11px] text-text-muted">
                   Batch available:{" "}
@@ -558,21 +619,23 @@ export const AddExpiredBrokenStockModal = ({
                   max={availableBatchQty}
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
-                  placeholder="Enter quantity"
+                  placeholder="Enter quantity to scrap"
                   className={cn(
                     "font-mono text-sm",
                     isQtyExceeded && "border-rose-500 focus:ring-rose-500"
                   )}
                 />
-                <UIButton
-                  type="button"
-                  variant="outline"
-                  size="md"
-                  onClick={() => setQuantity(String(availableBatchQty))}
-                  className="h-10 text-xs px-3 font-medium whitespace-nowrap shrink-0"
-                >
-                  Max ({availableBatchQty})
-                </UIButton>
+                {availableBatchQty > 0 && (
+                  <UIButton
+                    type="button"
+                    variant="outline"
+                    size="md"
+                    onClick={() => setQuantity(String(availableBatchQty))}
+                    className="h-10 text-xs px-3 font-medium whitespace-nowrap shrink-0"
+                  >
+                    Max ({availableBatchQty})
+                  </UIButton>
+                )}
               </div>
               {isQtyExceeded && (
                 <p className="text-[11px] text-rose-600 dark:text-rose-400 font-medium flex items-center gap-1 mt-1">
@@ -585,13 +648,17 @@ export const AddExpiredBrokenStockModal = ({
             {/* Optional Remarks */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-text-muted">
-                Audit Remarks / Reason Note (Optional)
+                Audit Remarks / Note (Optional)
               </label>
               <UIInput
                 type="text"
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
-                placeholder="e.g. Found damaged during shelf stocktaking"
+                placeholder={
+                  reason === "FRESH_RETURN"
+                    ? "e.g. Customer returned sealed medicine for return"
+                    : "e.g. Found damaged during shelf stocktaking"
+                }
                 size="sm"
                 className="text-xs"
               />
@@ -600,13 +667,19 @@ export const AddExpiredBrokenStockModal = ({
             {/* Summary Review Card */}
             {numQuantity > 0 && !isQtyExceeded && (
               <div className="p-3.5 rounded-xl border border-border bg-surface-alt/40 space-y-2.5 transition-all">
-                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-text-muted">
-                  <span>Adjustment Summary</span>
+                <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider">
+                  <span className="text-text-muted">Adjustment Summary</span>
                   <UIBadge
-                    variant={reason === "BROKEN" ? "error" : "warning"}
+                    variant={
+                      reason === "BROKEN"
+                        ? "error"
+                        : reason === "FRESH_RETURN"
+                        ? "success"
+                        : "warning"
+                    }
                     size="sm"
                   >
-                    {reason}
+                    {reason === "FRESH_RETURN" ? "FRESH RETURN" : reason}
                   </UIBadge>
                 </div>
 
@@ -624,7 +697,7 @@ export const AddExpiredBrokenStockModal = ({
                     </div>
                   </div>
                   <div>
-                    <div className="text-[10.5px] text-text-muted">Quantity</div>
+                    <div className="text-[10.5px] text-text-muted">Units to Scrap</div>
                     <div className="font-bold font-mono text-primary">
                       {numQuantity} units
                     </div>
@@ -632,17 +705,19 @@ export const AddExpiredBrokenStockModal = ({
                   <div>
                     <div className="text-[10.5px] text-text-muted">Estimated Loss</div>
                     <div className="font-bold font-mono text-text">
-                      ₹{formatCurrency(
-                        (Number(selectedBatch.mrp || selectedBatch.rate || 0)) * numQuantity
+                      ₹
+                      {formatCurrency(
+                        Number(selectedBatch.mrp || selectedBatch.rate || 0) *
+                          numQuantity
                       )}
                     </div>
                   </div>
                 </div>
 
                 <div className="pt-2 border-t border-border/60 flex items-center justify-between text-xs text-text-muted">
-                  <span>Target Quarantine Batch:</span>
+                  <span>Target Scrap Batch:</span>
                   <span className="font-mono font-semibold text-text">
-                    {selectedBatch.batchNo} [{reason}]
+                    {selectedBatch.batchNo} [{reason === "FRESH_RETURN" ? "FRESH_RETURN" : reason}]
                   </span>
                 </div>
               </div>
@@ -661,9 +736,10 @@ export const AddExpiredBrokenStockModal = ({
         >
           Cancel
         </UIButton>
+
         <UIButton
           type="button"
-          variant="primary"
+          variant={reason === "BROKEN" ? "error" : "primary"}
           size="md"
           onClick={handleSubmit}
           disabled={!isValidForm}

@@ -971,14 +971,16 @@ export const StockMetricsDesktopPage = () => {
       <AddExpiredBrokenStockModal
         open={isAddExpiredBrokenModalOpen}
         onClose={() => setIsAddExpiredBrokenModalOpen(false)}
-        onSuccess={({ product, quantity, reason }) => {
+        onSuccess={({ product, quantity, reason, destination }) => {
           const prodName =
             typeof product?.name === "object"
               ? product.name?.name
               : product?.name || "Product";
-          setToastMessage(
-            `Successfully marked ${quantity} unit(s) of ${prodName} as ${reason} stock.`
-          );
+          const actionText =
+            destination === "SHELF"
+              ? `ingested ${quantity} unit(s) of ${prodName} directly into Stock Matrix inventory.`
+              : `marked ${quantity} unit(s) of ${prodName} as ${reason} stock in scrap bin.`;
+          setToastMessage(`Successfully ${actionText}`);
           setTimeout(() => setToastMessage(null), 4000);
           fetchBatches(true);
         }}
