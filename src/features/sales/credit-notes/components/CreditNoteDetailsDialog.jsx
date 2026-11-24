@@ -1,6 +1,7 @@
 // src/features/sales/credit-notes/components/CreditNoteDetailsDialog.jsx
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Receipt,
   RotateCcw,
@@ -16,6 +17,7 @@ import {
   AlertCircle,
   X,
   ArrowRight,
+  ArrowUpRight,
   ShieldCheck,
   Copy,
   Check,
@@ -108,6 +110,7 @@ export const CreditNoteDetailsDialog = ({
   onCancelSuccess,
 }) => {
   const isVisible = Boolean(isOpen ?? open);
+  const navigate = useNavigate();
   const resolvedId = creditNoteId || creditNote?._id || creditNote?.id;
 
   const [activeItem, setActiveItem] = useState(creditNote || null);
@@ -212,11 +215,20 @@ export const CreditNoteDetailsDialog = ({
   const isCancelled = status === "CANCELLED";
   const canCancel = (status === "ACTIVE" || status === "PARTIALLY_REDEEMED") && redeemedAmount === 0 && !isCancelled;
 
+  const isSupplier = item.partyType === "SUPPLIER" || Boolean(item.supplierId) || item.source === "PURCHASE_RETURN";
   const customer = item.customerId;
-  const customerName = typeof customer === "object" ? customer?.name : (item.customerName || "Walk-in Retail Customer");
-  const customerPhone = typeof customer === "object" ? (customer?.mobile || customer?.phone) : (item.customerPhone || "—");
-  const customerCode = typeof customer === "object" ? (customer?.customerCode || customer?.code) : "—";
-  const customerGst = typeof customer === "object" ? (customer?.gstNumber || customer?.gst) : (item.customerGst || "—");
+  const customerName = isSupplier
+    ? (item.supplierId?.businessName || item.supplierName || "Supplier")
+    : (typeof customer === "object" ? customer?.name : (item.customerName || "Walk-in Retail Customer"));
+  const customerPhone = isSupplier
+    ? (item.supplierId?.mobile || item.supplierPhone || item.supplierId?.phone || "—")
+    : (typeof customer === "object" ? (customer?.mobile || customer?.phone) : (item.customerPhone || "—"));
+  const customerCode = isSupplier
+    ? (item.supplierId?.supplierCode || item.supplierId?.code || "—")
+    : (typeof customer === "object" ? (customer?.customerCode || customer?.code) : "—");
+  const customerGst = isSupplier
+    ? (item.supplierId?.gstNumber || item.supplierGst || "—")
+    : (typeof customer === "object" ? (customer?.gstNumber || customer?.gst) : (item.customerGst || "—"));
 
   const branch = item.branchId;
   const branchName = typeof branch === "object" ? branch?.name : "Main Branch";
@@ -387,13 +399,29 @@ export const CreditNoteDetailsDialog = ({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
           {/* Customer Card */}
           <div className="p-4 rounded-xl border border-border bg-surface shadow-2xs space-y-2.5">
-            <div className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1.5 pb-1.5 border-b border-border/60">
-              <User className="size-3.5 text-primary" />
-              <span>Customer Details</span>
+            <div className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center justify-between pb-1.5 border-b border-border/60">
+              <div className="flex items-center gap-1.5">
+                <User className="size-3.5 text-primary" />
+                <span>{isSupplier ? "Supplier Information" : "Customer Details"}</span>
+              </div>
+              {isSupplier && (item.supplierId?._id || item.supplierId) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const suppId = item.supplierId?._id || item.supplierId;
+                    onClose?.();
+                    navigate(`/finance/reports/supplier-ledger?supplierId=${suppId}`);
+                  }}
+                  className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                  title="Open this supplier's ledger statement"
+                >
+                  View Ledger <ArrowUpRight className="size-3" />
+                </button>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span className="text-[11px] text-text-muted block">Name:</span>
+                <span className="text-[11px] text-text-muted block">{isSupplier ? "Supplier:" : "Name:"}</span>
                 <span className="font-semibold text-text">{customerName}</span>
               </div>
               <div>
@@ -402,7 +430,7 @@ export const CreditNoteDetailsDialog = ({
               </div>
               {customerCode !== "—" && (
                 <div>
-                  <span className="text-[11px] text-text-muted block">Customer Code:</span>
+                  <span className="text-[11px] text-text-muted block">{isSupplier ? "Supplier Code:" : "Customer Code:"}</span>
                   <span className="font-mono text-text">{customerCode}</span>
                 </div>
               )}
@@ -425,7 +453,9 @@ export const CreditNoteDetailsDialog = ({
               <div>
                 <span className="text-[11px] text-text-muted block">Origin:</span>
                 <span className="font-semibold text-text">
-                  {item.source === "MANUAL_ADJUSTMENT" || item.source === "MANUAL"
+                  {item.source === "PURCHASE_RETURN"
+                    ? "Purchase Return"
+                    : item.source === "MANUAL_ADJUSTMENT" || item.source === "MANUAL"
                     ? "Manual Adjustment"
                     : "Sales Return"}
                 </span>
@@ -476,19 +506,45 @@ export const CreditNoteDetailsDialog = ({
                     <tr key={it._id || idx} className="hover:bg-surface-alt/30 transition-colors">
                       <td className="py-2.5 px-3 font-medium text-text">
                         {it.productName || it.name || "Product Item"}
+                        {it.pack && (
+                          <span className="block text-[10px] text-text-muted font-normal">
+                            ({it.pack})
+                          </span>
+                        )}
                       </td>
                       <td className="py-2.5 px-3 text-text-muted font-mono text-[11px]">
-                        {it.batchNumber || it.batch || "—"}
-                        {it.expiryDate ? ` (${formatDate(it.expiryDate)})` : ""}
+                        {(() => {
+                          const rawBatch = it.batchNo || it.batchNumber || it.batch || "";
+                          const cleanBatch = String(rawBatch)
+                            .replace(/\s*\[(EXPIRED|BROKEN|SCRAP|FRESH_RETURN|IN|INCOMING)\]/gi, "")
+                            .trim() || rawBatch;
+                          const rawExp = it.expiry || it.expiryDate || "";
+                          const expDisplay =
+                            typeof rawExp === "string" && (rawExp.includes("/") || rawExp.includes("-"))
+                              ? rawExp
+                              : rawExp
+                              ? formatDate(rawExp)
+                              : "";
+                          return (
+                            <div>
+                              <span className="font-semibold text-text">{cleanBatch || "—"}</span>
+                              {expDisplay && expDisplay !== "—" && (
+                                <span className="block text-[10.5px] text-text-muted/80 font-sans">
+                                  Exp: {expDisplay}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="py-2.5 px-3 text-center font-mono font-bold text-text">
-                        {it.quantity || it.qty || 1}
+                        {it.quantity || it.qty || it.returnQty || 1}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono text-text">
                         ₹{formatCurrency(it.unitPrice || it.rate || 0)}
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono text-text-muted">
-                        {it.gstRate || it.taxRate || 0}%
+                        {it.gstRate || it.taxRate || it.gstPct || 0}%
                       </td>
                       <td className="py-2.5 px-3 text-right font-mono font-bold text-text">
                         ₹{formatCurrency(it.totalAmount || it.total || 0)}

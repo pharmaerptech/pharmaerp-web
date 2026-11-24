@@ -283,8 +283,11 @@ export const CreditNotesMobilePage = () => {
       ) : (
         <div className="space-y-2.5">
           {creditNotes.map((cnItem) => {
+            const isSupplier = cnItem.partyType === "SUPPLIER" || Boolean(cnItem.supplierId) || cnItem.source === "PURCHASE_RETURN";
             const cust = cnItem.customerId;
-            const custName = typeof cust === "object" ? cust?.name : (cnItem.customerName || "Customer");
+            const partyName = isSupplier
+              ? (cnItem.supplierId?.businessName || cnItem.supplierName || "Supplier")
+              : (typeof cust === "object" ? cust?.name : (cnItem.customerName || "Customer"));
             const issueTimestamp = cnItem.issueDate || cnItem.date || cnItem.createdAt;
 
             return (
@@ -303,7 +306,11 @@ export const CreditNotesMobilePage = () => {
                     </span>
                     {(cnItem.sourceReturnNo || cnItem.originalInvoiceNo) && (
                       <span className="text-[10px] font-mono text-primary truncate">
-                        {cnItem.sourceReturnNo ? `Ret: ${cnItem.sourceReturnNo}` : `Inv: ${cnItem.originalInvoiceNo}`}
+                        {cnItem.source === "PURCHASE_RETURN"
+                          ? `PR: ${cnItem.sourceReturnNo}`
+                          : cnItem.sourceReturnNo
+                          ? `Ret: ${cnItem.sourceReturnNo}`
+                          : `Inv: ${cnItem.originalInvoiceNo}`}
                       </span>
                     )}
                   </div>
@@ -311,7 +318,14 @@ export const CreditNotesMobilePage = () => {
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-text truncate max-w-[180px]">{custName}</span>
+                  <div className="flex items-center gap-1.5 truncate max-w-[200px]">
+                    <span className="font-medium text-text truncate">{partyName}</span>
+                    {isSupplier && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        Supplier
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1.5">
                     {isCompanyLevel && cnItem.branchId && (
                       <BranchBadge branch={cnItem.branchId} />

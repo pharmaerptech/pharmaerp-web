@@ -1,6 +1,7 @@
 // src/features/finance/ledger/pages/desktop/LedgerDesktopPage.jsx
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -92,6 +93,7 @@ export const LedgerDesktopPage = () => {
   const { currentBranch } = useBranch();
   const { accounts = [], getAccounts } = useAccount();
   const companyFilter = useCompanyFilter();
+  const navigate = useNavigate();
 
   const tableContainerRef = useRef(null);
   const hasFetchedAccountsRef = useRef(false);
@@ -686,6 +688,29 @@ export const LedgerDesktopPage = () => {
             <span className="hidden sm:inline">Reset</span>
           </UIButton>
         )}
+
+        {/* Quick Party Sub-Ledger Jump Links */}
+        <div className="hidden xl:flex items-center gap-1.5 border-l border-border pl-2.5 my-auto text-xs text-text-muted">
+          <span className="text-[11px] font-semibold">Sub-Ledgers:</span>
+          <button
+            type="button"
+            onClick={() => navigate("/finance/reports/supplier-ledger")}
+            className="px-2 py-1 rounded-md bg-surface-alt hover:bg-surface-hover border border-border text-text font-semibold text-[11px] flex items-center gap-1 transition cursor-pointer"
+            title="View party statements for vendors and distributors"
+          >
+            <span>Suppliers</span>
+            <ExternalLink className="size-3 text-text-muted" />
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/finance/reports/customer-ledger")}
+            className="px-2 py-1 rounded-md bg-surface-alt hover:bg-surface-hover border border-border text-text font-semibold text-[11px] flex items-center gap-1 transition cursor-pointer"
+            title="View party statements for credit customers"
+          >
+            <span>Customers</span>
+            <ExternalLink className="size-3 text-text-muted" />
+          </button>
+        </div>
 
         {/* Right-aligned Actions Group: Recalculate + Refresh */}
         <div className="ml-auto flex items-center gap-2">

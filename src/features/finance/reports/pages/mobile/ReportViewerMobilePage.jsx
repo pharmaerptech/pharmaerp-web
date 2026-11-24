@@ -100,6 +100,7 @@ const ReportViewerMobilePage = ({
   customerOptions = [],
   supplierOptions = [],
   handleFilterChange,
+  handleFilterPreset,
   runReport,
   handleBackToDashboard,
   clearFeedback,
@@ -233,6 +234,26 @@ const ReportViewerMobilePage = ({
                   fullWidth
                   labelSx={filterLabelSx}
                 />
+                <div className="flex items-center gap-2 col-span-2 mt-0.5">
+                  <button
+                    type="button"
+                    onClick={() => handleFilterPreset && handleFilterPreset("this-month")}
+                    className="flex-1 py-1 text-[11px] font-semibold rounded bg-surface border border-border/80 hover:bg-surface-hover text-text text-center transition"
+                  >
+                    Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleFilterPreset && handleFilterPreset("all-time")}
+                    className={`flex-1 py-1 text-[11px] font-semibold rounded text-center transition ${
+                      !filters.startDate && !filters.endDate
+                        ? "bg-primary text-white"
+                        : "bg-surface border border-border/80 hover:bg-surface-hover text-text"
+                    }`}
+                  >
+                    All Time
+                  </button>
+                </div>
               </div>
             )}
 

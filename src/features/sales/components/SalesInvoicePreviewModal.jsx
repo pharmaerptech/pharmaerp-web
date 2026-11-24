@@ -39,10 +39,12 @@ export const SalesInvoicePreviewModal = ({
   branch: branchProp,
   company: companyProp,
   cartGrandTotal = 0,
+  isReturn: isReturnProp = false,
   isReturnInvoice = false,
   activeShift: activeShiftProp,
   openBusinessDay: openBusinessDayProp,
 }) => {
+  const isReturn = Boolean(isReturnInvoice || isReturnProp);
   const { currentBranch } = useBranch();
   const { currentCompany } = useCompany();
 

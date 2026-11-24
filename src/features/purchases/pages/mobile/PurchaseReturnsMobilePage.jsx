@@ -243,6 +243,11 @@ export const PurchaseReturnsMobilePage = () => {
                     <div className="font-mono font-bold text-sm text-text">
                       {ret.debitNoteNo || ret.returnNo}
                     </div>
+                    {ret.creditNoteNo && (
+                      <div className="font-mono text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                        CN: {ret.creditNoteNo}
+                      </div>
+                    )}
                     <div className="font-medium text-xs text-text mt-0.5">
                       {direction === "outgoing"
                         ? supplier.businessName || "Supplier"

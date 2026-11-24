@@ -67,13 +67,19 @@ export const printPurchaseReturnDebitNote = (
       ? purchaseReturn.companyId
       : options.originCompany) || {};
 
-  const isCreditNote = purchaseReturn.settlementType === "CREDIT_NOTE";
+  const isInterBranch = Boolean(purchaseReturn.isInterBranch || purchaseReturn.sourceBranchId);
+  const isCreditNote =
+    options.mode === "CREDIT_NOTE" ||
+    (!options.mode && purchaseReturn.settlementType === "CREDIT_NOTE");
   const docTitle = isCreditNote
-    ? "INTER-BRANCH CREDIT NOTE / RETURN"
+    ? isInterBranch
+      ? "INTER-BRANCH CREDIT NOTE / RETURN"
+      : "SUPPLIER CREDIT NOTE / PURCHASE RETURN"
     : "GST DEBIT NOTE / PURCHASE RETURN";
   const docNo =
-    (isCreditNote ? purchaseReturn.creditNoteNo : purchaseReturn.debitNoteNo) ||
-    purchaseReturn.debitNoteNo ||
+    (isCreditNote
+      ? (purchaseReturn.creditNoteNo || purchaseReturn.debitNoteNo)
+      : (purchaseReturn.debitNoteNo || purchaseReturn.creditNoteNo)) ||
     purchaseReturn.returnNo ||
     "DN-DRAFT";
 

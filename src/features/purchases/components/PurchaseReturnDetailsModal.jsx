@@ -1,6 +1,7 @@
 // src/features/purchases/components/PurchaseReturnDetailsModal.jsx
 
 import React, { useRef, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Printer,
   X,
@@ -16,6 +17,7 @@ import {
   Clock,
   Loader2,
   Sparkles,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   UIModal,
@@ -73,6 +75,7 @@ export const PurchaseReturnDetailsModal = ({
   purchaseReturn,
   onUpdated,
 }) => {
+  const navigate = useNavigate();
   const { currentBranch, activeBranchId } = useBranch();
   const [showBoxLabelModal, setShowBoxLabelModal] = useState(false);
   const [isReceivingBox, setIsReceivingBox] = useState(false);
@@ -191,10 +194,22 @@ export const PurchaseReturnDetailsModal = ({
     }
   };
 
-  const handlePrint = () => {
+  const handlePrintDebitNote = () => {
     printPurchaseReturnDebitNote(activeReturn, {
       originBranch: branch,
+      mode: "DEBIT_NOTE",
     });
+  };
+
+  const handlePrintCreditNote = () => {
+    printPurchaseReturnDebitNote(activeReturn, {
+      originBranch: branch,
+      mode: "CREDIT_NOTE",
+    });
+  };
+
+  const handlePrint = () => {
+    handlePrintDebitNote();
   };
 
   return (
@@ -207,6 +222,11 @@ export const PurchaseReturnDetailsModal = ({
                 <UIModalTitle className="text-lg font-bold text-text">
                   Debit Note #{activeReturn.debitNoteNo || activeReturn.returnNo}
                 </UIModalTitle>
+                {activeReturn.creditNoteNo && (
+                  <UIBadge variant="soft" color="success" className="font-mono font-bold text-xs">
+                    Credit Note #{activeReturn.creditNoteNo}
+                  </UIBadge>
+                )}
                 <UIStatusIndicator
                   status={
                     activeReturn.status === "CONFIRMED"
@@ -232,6 +252,9 @@ export const PurchaseReturnDetailsModal = ({
               </div>
               <UIModalDescription className="text-xs text-text-muted">
                 Issued on {formatDate(activeReturn.returnDate)} • Reference Memo: {activeReturn.returnNo}
+                {activeReturn.creditNoteNo && (
+                  <span> • Supplier Credit Note: <strong className="text-success font-mono font-bold">{activeReturn.creditNoteNo}</strong></span>
+                )}
               </UIModalDescription>
             </div>
           </div>
@@ -372,6 +395,22 @@ export const PurchaseReturnDetailsModal = ({
               icon={<Truck className="size-4.5" />}
               color="primary"
               variant="accent"
+              actions={
+                (supplier._id || activeReturn.supplierId) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const suppId = supplier._id || activeReturn.supplierId?._id || activeReturn.supplierId;
+                      onClose?.();
+                      navigate(`/finance/reports/supplier-ledger?supplierId=${suppId}`);
+                    }}
+                    className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                    title="Open this supplier's ledger statement"
+                  >
+                    View Ledger <ArrowUpRight className="size-3" />
+                  </button>
+                )
+              }
               items={[
                 { label: "GSTIN", value: supplier.gstNumber || "Unregistered" },
                 { label: "Phone", value: supplier.mobile || "—" },
@@ -535,14 +574,25 @@ export const PurchaseReturnDetailsModal = ({
                 Close
               </UIButton>
               <UIButton
-                variant="primary"
+                variant={activeReturn.creditNoteNo ? "outline" : "primary"}
                 size="sm"
-                onClick={handlePrint}
+                onClick={handlePrintDebitNote}
                 startIcon={<Printer className="size-4" />}
-                className="font-bold shadow-xs"
+                className="font-medium shadow-xs"
               >
-                Print Debit Note Voucher
+                Print Debit Note
               </UIButton>
+              {activeReturn.creditNoteNo && (
+                <UIButton
+                  variant="primary"
+                  size="sm"
+                  onClick={handlePrintCreditNote}
+                  startIcon={<Printer className="size-4" />}
+                  className="font-bold shadow-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  Print Credit Note
+                </UIButton>
+              )}
             </div>
           </div>
         </UIModalFooter>

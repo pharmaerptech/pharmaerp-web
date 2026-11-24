@@ -207,6 +207,9 @@ export const ReturnBoxLabelModal = ({
   const [packageNotes, setPackageNotes] = useState(
     currentRecord?.shippingDetails?.packageNotes || ""
   );
+  const [creditNoteNo, setCreditNoteNo] = useState(
+    currentRecord?.creditNoteNo || ""
+  );
   const [printFormat, setPrintFormat] = useState("THERMAL_4X6");
   const [previewTab, setPreviewTab] = useState("MASTER");
   const [packingMode, setPackingMode] = useState("SUB_SUPPLIER");
@@ -223,8 +226,9 @@ export const ReturnBoxLabelModal = ({
     setTrackingNo(sd.trackingNo || "");
     setBoxCount(sd.boxCount || 1);
     setPackageNotes(sd.packageNotes || "");
+    setCreditNoteNo(currentRecord?.creditNoteNo || "");
     setPreviewTab("MASTER");
-  }, [isOpen, currentRecord?._id]);
+  }, [isOpen, currentRecord?._id, currentRecord?.creditNoteNo]);
 
   const isSupplierDispatch = destinationType === "SUPPLIER";
 
@@ -451,6 +455,18 @@ export const ReturnBoxLabelModal = ({
       courierName: courierName?.trim() || "",
       trackingNo: trackingNo?.trim() || "",
       boxCount: effectiveBoxCount,
+      mode: "DEBIT_NOTE",
+    });
+  };
+
+  const handlePrintCreditNote = () => {
+    printPurchaseReturnDebitNote(currentRecord, {
+      originBranch,
+      originCompany,
+      courierName: courierName?.trim() || "",
+      trackingNo: trackingNo?.trim() || "",
+      boxCount: effectiveBoxCount,
+      mode: "CREDIT_NOTE",
     });
   };
 
@@ -1132,6 +1148,7 @@ export const ReturnBoxLabelModal = ({
             trackingNo: trackingNo?.trim() || "",
             boxCount: effectiveBoxCount,
             packageNotes: packageNotes?.trim() || undefined,
+            creditNoteNo: creditNoteNo?.trim() || undefined,
           }
         : {
             destinationType: "COMPANY_BRANCH",
@@ -1142,13 +1159,17 @@ export const ReturnBoxLabelModal = ({
             trackingNo: trackingNo?.trim() || "",
             boxCount: effectiveBoxCount,
             packageNotes: packageNotes?.trim() || undefined,
+            creditNoteNo: creditNoteNo?.trim() || undefined,
           };
 
       const res = await purchaseReturnService.dispatchReturnBox(currentRecord._id, payload);
       const updatedData = res.data?.data || res.data;
+      const cnNo = updatedData?.creditNoteNo || creditNoteNo?.trim();
 
       uiToast.success(
-        isSupplierDispatch
+        cnNo
+          ? `Consignment dispatched & Credit Note #${cnNo} created for ${supplierName}!`
+          : isSupplierDispatch
           ? `Consignment dispatched directly to supplier ${supplierName}!`
           : `Consignment dispatched to ${selectedDestinationBranch?.name || "destination hub"}!`
       );
@@ -1349,6 +1370,24 @@ export const ReturnBoxLabelModal = ({
                   className="w-full h-8 px-2.5 border border-border rounded-lg bg-surface text-xs font-mono font-medium text-text placeholder:text-text-muted focus:ring-1 focus:ring-primary focus:border-primary outline-hidden"
                 />
               </div>
+            </div>
+
+            {/* Optional Supplier Credit Note # */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-semibold text-text-muted flex items-center gap-1">
+                  <Receipt className="size-3 text-primary" />
+                  Supplier Credit Note # (Optional)
+                </label>
+                <span className="text-[10px] text-primary font-medium">Auto-generated on dispatch if blank</span>
+              </div>
+              <input
+                type="text"
+                value={creditNoteNo}
+                onChange={(e) => setCreditNoteNo(e.target.value)}
+                placeholder="Leave blank to auto-generate (e.g. CN-BR01-2026-0001)"
+                className="w-full h-8 px-2.5 border border-border rounded-lg bg-surface text-xs font-mono font-medium text-text placeholder:text-text-muted focus:ring-1 focus:ring-primary focus:border-primary outline-hidden"
+              />
             </div>
 
             {/* 3. Packaging & Box Partitioning */}
@@ -2008,6 +2047,18 @@ export const ReturnBoxLabelModal = ({
             >
               Print Debit Note
             </UIButton>
+
+            {(currentRecord?.creditNoteNo || creditNoteNo) && (
+              <UIButton
+                variant="outline"
+                size="sm"
+                onClick={handlePrintCreditNote}
+                startIcon={<Receipt className="size-4 text-success" />}
+                title="Print Supplier Credit Note voucher"
+              >
+                Print Credit Note
+              </UIButton>
+            )}
 
             {currentRecord?._id ? (
               <>

@@ -348,7 +348,7 @@ export const PurchaseReturnsDesktopPage = () => {
               <UISearchInput
                 value={search}
                 onChange={(val) => setSearch(val)}
-                placeholder="Search debit note, supplier, memo..."
+                placeholder="Search debit note, credit note, supplier..."
                 size="sm"
               />
             </div>
@@ -449,7 +449,12 @@ export const PurchaseReturnsDesktopPage = () => {
                       <div className="flex items-center gap-1.5">
                         <span>{ret.debitNoteNo || ret.returnNo}</span>
                       </div>
-                      {ret.debitNoteNo && ret.returnNo !== ret.debitNoteNo && (
+                      {ret.creditNoteNo && (
+                        <span className="block font-mono text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                          CN: {ret.creditNoteNo}
+                        </span>
+                      )}
+                      {ret.debitNoteNo && ret.returnNo !== ret.debitNoteNo && !ret.creditNoteNo && (
                         <span className="block font-sans text-[11px] font-normal text-text-muted">
                           Memo: {ret.returnNo}
                         </span>

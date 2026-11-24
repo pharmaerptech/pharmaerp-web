@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import supplierService from "../services/supplierService";
 import {
   UIModal,
   UIModalHeader,
@@ -31,6 +33,8 @@ import {
   Clock,
   Wallet,
   Hash,
+  ArrowUpRight,
+  RefreshCw,
 } from "lucide-react";
 
 const supplierTypeOptions = [
@@ -156,12 +160,40 @@ export function SupplierDialog({
   onSubmitUpdate,
   onSuccess,
 }) {
+  const navigate = useNavigate();
   const [currentMode, setCurrentMode] = useState(mode);
   const [formData, setFormData] = useState(INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [serverError, setServerError] = useState(null);
   const [copiedKey, setCopiedKey] = useState(null);
+  const [liveBalance, setLiveBalance] = useState(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (isOpen && supplierData?._id) {
+      setIsLoadingBalance(true);
+      supplierService
+        .getSupplierOutstanding(supplierData._id)
+        .then((res) => {
+          if (isMounted && res?.data?.data) {
+            setLiveBalance(res.data.data);
+          }
+        })
+        .catch(() => {
+          // fallback to passed data
+        })
+        .finally(() => {
+          if (isMounted) setIsLoadingBalance(false);
+        });
+    } else {
+      setLiveBalance(null);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, supplierData?._id]);
 
   useEffect(() => {
     setCurrentMode(mode);
@@ -443,18 +475,75 @@ export function SupplierDialog({
 
             {/* 3 Metric Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="rounded-xl border border-border bg-surface p-4 shadow-2xs">
+              {/* Card 1: Payable Debt & Opening Balance */}
+              <div className="rounded-xl border border-border bg-surface p-4 shadow-2xs relative group">
                 <div className="flex items-center justify-between text-xs font-semibold text-text-muted uppercase tracking-wider">
-                  <span>Payable Debt / Opening</span>
-                  <Wallet className="size-4 text-amber-500" />
-                </div>
-                <div className="mt-2 text-lg font-bold text-text font-mono">
-                  ₹{Number(supplierData.openingBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  <span className="text-xs font-semibold ml-1.5 px-1.5 py-0.5 rounded-sm bg-surface-alt border border-border">
-                    {(supplierData.openingBalanceType || "cr").toUpperCase()}
+                  <span className="flex items-center gap-1.5">
+                    <span>Payable Debt / Opening</span>
+                    {isLoadingBalance && <RefreshCw className="size-3 animate-spin text-primary" />}
                   </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      title="View Supplier Statement / Ledger"
+                      onClick={() => {
+                        onClose();
+                        navigate(`/finance/reports/supplier-ledger?supplierId=${supplierData._id || ""}&accountId=${supplierData.ledgerAccountId || ""}`);
+                      }}
+                      className="p-1 rounded-md text-text-muted hover:text-primary hover:bg-surface-alt transition cursor-pointer"
+                    >
+                      <ArrowUpRight className="size-3.5" />
+                    </button>
+                    <Wallet className="size-4 text-amber-500" />
+                  </div>
                 </div>
-                <div className="mt-1 text-[11px] text-text-muted">Net starting balance with vendor</div>
+
+                {/* Hero Number: Live Net Outstanding Debt */}
+                <div className="mt-2 flex items-baseline gap-2 flex-wrap">
+                  <div className="text-lg font-bold text-text font-mono">
+                    ₹{Number(
+                      liveBalance?.outstandingAmount ??
+                      supplierData.outstandingAmount ??
+                      supplierData.openingBalance ??
+                      0
+                    ).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </div>
+                  {Number(
+                    liveBalance?.outstandingAmount ??
+                    supplierData.outstandingAmount ??
+                    supplierData.openingBalance ??
+                    0
+                  ) === 0 ? (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-surface-alt text-text-muted border border-border">
+                      SETTLED
+                    </span>
+                  ) : (liveBalance?.balanceType ?? supplierData.balanceType ?? supplierData.openingBalanceType ?? "cr").toLowerCase() === "dr" ? (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                      DR (ADVANCE)
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-sm bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+                      CR (PAYABLE)
+                    </span>
+                  )}
+                </div>
+
+                {/* Sub-label: Opening Balance & Ledger Link */}
+                <div className="mt-2 flex items-center justify-between text-[11px] text-text-muted border-t border-border/50 pt-1.5">
+                  <span>
+                    Opening: <strong className="font-mono text-text">₹{Number(supplierData.openingBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })} {(supplierData.openingBalanceType || "cr").toUpperCase()}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      navigate(`/finance/reports/supplier-ledger?supplierId=${supplierData._id || ""}&accountId=${supplierData.ledgerAccountId || ""}`);
+                    }}
+                    className="text-primary hover:underline font-semibold flex items-center gap-0.5 cursor-pointer ml-1"
+                  >
+                    Ledger <ArrowUpRight className="size-3" />
+                  </button>
+                </div>
               </div>
 
               <div className="rounded-xl border border-border bg-surface p-4 shadow-2xs">

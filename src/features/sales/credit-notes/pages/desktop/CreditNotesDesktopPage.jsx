@@ -533,7 +533,7 @@ export const CreditNotesDesktopPage = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search CN#, customer name, phone, return#..."
+            placeholder="Search CN#, party, supplier, phone, return#..."
             startIcon={<Search className="size-4 text-text-muted" />}
             size="md"
             variant="outline"
@@ -637,7 +637,7 @@ export const CreditNotesDesktopPage = () => {
                   <UITableHead sticky className="min-w-[140px]">Branch</UITableHead>
                 )}
                 <UITableHead sticky className="min-w-[130px]">Issue Date</UITableHead>
-                <UITableHead sticky className="min-w-[220px]">Customer</UITableHead>
+                <UITableHead sticky className="min-w-[220px]">Party (Customer / Supplier)</UITableHead>
                 <UITableHead sticky align="right" className="min-w-[140px]">Total Amount</UITableHead>
                 <UITableHead sticky align="right" className="min-w-[140px]">Redeemed</UITableHead>
                 <UITableHead sticky align="right" className="min-w-[160px]">Balance Available</UITableHead>
@@ -671,9 +671,14 @@ export const CreditNotesDesktopPage = () => {
                 />
               ) : (
                 creditNotes.map((cnItem) => {
+                  const isSupplier = cnItem.partyType === "SUPPLIER" || Boolean(cnItem.supplierId) || cnItem.source === "PURCHASE_RETURN";
                   const cust = cnItem.customerId;
-                  const custName = typeof cust === "object" ? cust?.name : (cnItem.customerName || "Walk-in Retail Customer");
-                  const custPhone = typeof cust === "object" ? (cust?.mobile || cust?.phone) : cnItem.customerPhone;
+                  const partyName = isSupplier
+                    ? (cnItem.supplierId?.businessName || cnItem.supplierName || "Supplier")
+                    : (typeof cust === "object" ? cust?.name : (cnItem.customerName || "Walk-in Retail Customer"));
+                  const partyPhone = isSupplier
+                    ? (cnItem.supplierId?.mobile || cnItem.supplierPhone || cnItem.supplierId?.phone)
+                    : (typeof cust === "object" ? (cust?.mobile || cust?.phone) : cnItem.customerPhone);
                   const issueTimestamp = cnItem.issueDate || cnItem.date || cnItem.createdAt;
 
                   return (
@@ -690,7 +695,14 @@ export const CreditNotesDesktopPage = () => {
                             {cnItem.creditNoteNo}
                           </span>
                           <div className="flex items-center gap-1.5 text-[10.5px] mt-0.5 truncate">
-                            {cnItem.sourceReturnNo ? (
+                            {cnItem.source === "PURCHASE_RETURN" ? (
+                              <span
+                                className="font-mono text-emerald-600 dark:text-emerald-400 font-semibold truncate"
+                                title={`Purchase Return: ${cnItem.sourceReturnNo || "PR"}`}
+                              >
+                                PR: {cnItem.sourceReturnNo || "Return"}
+                              </span>
+                            ) : cnItem.sourceReturnNo ? (
                               <span
                                 className="font-mono text-primary font-medium truncate"
                                 title={`Sales Return: ${cnItem.sourceReturnNo}`}
@@ -736,15 +748,25 @@ export const CreditNotesDesktopPage = () => {
                         </div>
                       </UITableCell>
 
-                      {/* 3. Customer */}
+                      {/* 3. Customer / Supplier Party */}
                       <UITableCell>
                         <div className="flex flex-col min-w-0">
-                          <span className="font-semibold text-text truncate hover:text-primary transition-colors">
-                            {custName}
-                          </span>
-                          {custPhone && custPhone !== "—" && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-semibold text-text truncate hover:text-primary transition-colors">
+                              {partyName}
+                            </span>
+                            <UIBadge
+                              size="xs"
+                              color={isSupplier ? "warning" : "primary"}
+                              variant="soft"
+                              className="shrink-0 text-[10px]"
+                            >
+                              {isSupplier ? "Supplier" : "Customer"}
+                            </UIBadge>
+                          </div>
+                          {partyPhone && partyPhone !== "—" && (
                             <span className="text-[10.5px] font-mono text-text-muted mt-0.5">
-                              {custPhone}
+                              {partyPhone}
                             </span>
                           )}
                         </div>

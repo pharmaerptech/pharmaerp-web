@@ -104,6 +104,7 @@ const ReportViewerDesktopPage = ({
   customerOptions = [],
   supplierOptions = [],
   handleFilterChange,
+  handleFilterPreset,
   runReport,
   handleBackToDashboard,
   clearFeedback,
@@ -304,7 +305,7 @@ const ReportViewerDesktopPage = ({
                   {/* Date Ranges */}
                   {reportType !== "trial-balance" &&
                     reportType !== "balance-sheet" && (
-                      <>
+                      <div className="flex items-center gap-1.5">
                         <AppInput
                           type="date"
                           label="From Date"
@@ -314,7 +315,7 @@ const ReportViewerDesktopPage = ({
                             handleFilterChange("startDate", e.target.value)
                           }
                           size="small"
-                          formControlSx={{ width: 160 }}
+                          formControlSx={{ width: 145 }}
                           inputSx={compactFilterInputSx}
                           labelSx={filterLabelSx}
                         />
@@ -327,11 +328,33 @@ const ReportViewerDesktopPage = ({
                             handleFilterChange("endDate", e.target.value)
                           }
                           size="small"
-                          formControlSx={{ width: 160 }}
+                          formControlSx={{ width: 145 }}
                           inputSx={compactFilterInputSx}
                           labelSx={filterLabelSx}
                         />
-                      </>
+                        <div className="flex items-center gap-1 self-end pb-0.5">
+                          <button
+                            type="button"
+                            onClick={() => handleFilterPreset && handleFilterPreset("this-month")}
+                            className="px-2 py-1 text-[11px] font-semibold rounded bg-surface border border-border/80 hover:bg-surface-hover text-text transition"
+                            title="Current Month"
+                          >
+                            Month
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleFilterPreset && handleFilterPreset("all-time")}
+                            className={`px-2 py-1 text-[11px] font-semibold rounded transition ${
+                              !filters.startDate && !filters.endDate
+                                ? "bg-primary text-white"
+                                : "bg-surface border border-border/80 hover:bg-surface-hover text-text"
+                            }`}
+                            title="Show all transactions (No date cutoff)"
+                          >
+                            All Time
+                          </button>
+                        </div>
+                      </div>
                     )}
 
                   {/* Account Selector */}
