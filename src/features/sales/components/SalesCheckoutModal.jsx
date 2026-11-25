@@ -31,31 +31,7 @@ import { getBranchInitials } from "@/utils";
 import invoiceService from "../services/invoiceService";
 import customerService from "@/features/parties/customers/services/customerService";
 import creditNoteService from "@/features/sales/credit-notes/services/creditNoteService";
-
-/** Safe number parser */
-const safeNum = (v) => {
-  const n = Number(v);
-  return isNaN(n) ? 0 : n;
-};
-
-/** Compute scheme discount threshold check. */
-const computeSchemeDiscount = (qty, schemePercent) => {
-  const normalizedQty = safeNum(qty);
-  const normalizedScheme = safeNum(schemePercent);
-  if (normalizedQty <= 0 || normalizedScheme <= 0) {
-    return { schemeApply: false, finalDiscountPercent: 0 };
-  }
-  if (normalizedScheme === 50) {
-    if (normalizedQty < 2) return { schemeApply: false, finalDiscountPercent: 0 };
-    return { schemeApply: true, finalDiscountPercent: normalizedScheme };
-  }
-  const fullFreeQty = (normalizedQty * normalizedScheme) / (100 - normalizedScheme);
-  const quarterThreshold = (normalizedScheme / (100 - normalizedScheme)) / 0.4;
-  if (fullFreeQty >= quarterThreshold) {
-    return { schemeApply: true, finalDiscountPercent: normalizedScheme };
-  }
-  return { schemeApply: false, finalDiscountPercent: 0 };
-};
+import { safeNum, computeSchemeDiscount } from "../utils/schemeCalculator";
 
 /**
  * Intelligently balances payments so that total equals grandTotal.
@@ -261,7 +237,7 @@ export const SalesCheckoutModal = ({
     }));
   }, [branchQrs]);
 
-  const [discountPercent, setDiscountPercent] = useState(customer?.defaultDiscount || 0);
+  const [discountPercent, setDiscountPercent] = useState(0);
   const [notes, setNotes] = useState("");
 
   // Real-time Customer Credit & Advance profile
@@ -345,10 +321,12 @@ export const SalesCheckoutModal = ({
     if (!item?.schemeDiscountPercent) return sum;
     const rate = Number(item.price) || 0;
     const qty = Math.max(1, Number(item.qty) || 1);
-    const schemePct = Number(item.schemeDiscountPercent) || 0;
-    const schemeCheck = computeSchemeDiscount(qty, schemePct);
-    if (!schemeCheck.schemeApply) return sum;
-    return sum + (rate * qty * schemePct) / 100;
+    const rawSchemePct = Number(item.schemeDiscountPercent) || 0;
+    const schemeCheck = computeSchemeDiscount(qty, rawSchemePct);
+    if (!schemeCheck.schemeApply || schemeCheck.finalDiscountPercent <= 0) return sum;
+    const itemDiscPct = Number(item.disc) || 0;
+    const baseForScheme = Math.max(0, rate * qty * (1 - itemDiscPct / 100));
+    return sum + (baseForScheme * schemeCheck.finalDiscountPercent) / 100;
   }, 0) : 0;
 
   const subtotalAfterDiscounts = subtotal - itemDiscount - schemeDiscount;
@@ -361,7 +339,7 @@ export const SalesCheckoutModal = ({
     const discPct = Number(item.disc) || 0;
     const rawSchemePct = isB2B ? (Number(item.schemeDiscountPercent) || 0) : 0;
     const schemeCheck = computeSchemeDiscount(qty, rawSchemePct);
-    const schemePct = schemeCheck.schemeApply ? rawSchemePct : 0;
+    const schemePct = (isB2B && schemeCheck.schemeApply) ? schemeCheck.finalDiscountPercent : 0;
     const lineSubtotal = rate * qty * (1 - discPct / 100) * (1 - schemePct / 100);
     const lineFinal = lineSubtotal * (1 - (Number(discountPercent) || 0) / 100);
     const gstPct = Number(item.gst !== undefined && item.gst !== null ? item.gst : 5);
@@ -413,7 +391,7 @@ export const SalesCheckoutModal = ({
         cashDetails: null,
       },
     ]);
-    setDiscountPercent(customer?.defaultDiscount || 0);
+    setDiscountPercent(0);
     setNotes("");
     setErrorMessage(null);
     setCashBreakdownTarget(null);

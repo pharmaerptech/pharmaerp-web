@@ -103,32 +103,45 @@ export const CreatePurchaseBillMobilePage = () => {
       }
     }
 
-    const itemsToLoad = (bill.cartItems && bill.cartItems.length > 0)
+    const rawItems = (bill.cartItems && bill.cartItems.length > 0)
       ? bill.cartItems
-      : (bill.items || []).map((it) => {
-          const qty = Number(it.qty || it.quantity || 0);
-          const freeQty = Number(it.freeQty || 0);
-          const rate = Number(it.rate || it.unitPrice || it.price || 0);
-          const mrp = Number(it.mrp || rate);
-          const gst = Number(it.gst || it.gstRate || it.hsnTaxpercent || 0);
-          const disc = Number(it.disc || it.discount || it.itemDiscount || 0);
-          return {
-            id: `${it.productId || it._id || Date.now()}-${Math.random()}`,
-            productId: it.productId || it.product_id || it.workspaceProductId || null,
-            name: it.name || it.productName || it.displayName || "Medicine",
-            pack: it.pack || it.packSize || "",
-            batch: it.batch || it.batchNo || "",
-            expiry: it.expiry || it.expDate || it.expiryDate || "",
-            qty,
-            freeQty,
-            schPct: Number(it.schPct || 0),
-            disc,
-            mrp,
-            hsn: it.hsn || it.hsnCode || "3004",
-            gst,
-            rate,
-          };
-        });
+      : (bill.items || []);
+
+    const itemsToLoad = rawItems.map((it) => {
+      const qty = Number(it.qty || it.quantity || 0);
+      const freeQty = Number(it.freeQty || 0);
+      const rate = Number(it.rate || it.unitPrice || it.price || 0);
+      const mrp = Number(it.mrp || rate);
+      const gst = Number(it.gst !== undefined && it.gst !== null ? it.gst : (it.gstRate || it.hsnTaxpercent || 0));
+      const disc = Number(it.disc || it.discount || it.itemDiscount || 0);
+      const calculatedSch = (qty > 0 && freeQty > 0)
+        ? Number(((freeQty / (qty + freeQty)) * 100).toFixed(2))
+        : 0;
+      const resolvedScheme = Number(
+        it.schPct !== undefined && it.schPct !== null && it.schPct !== "" && Number(it.schPct) > 0
+          ? it.schPct
+          : (it.saleScheme || it.schemeDiscountPercent || it.schemePercent || it.schemeDisc || it.scheme || calculatedSch || 0)
+      );
+
+      return {
+        id: it.id || `${it.productId || it._id || Date.now()}-${Math.random()}`,
+        productId: it.productId || it.product_id || it.workspaceProductId || null,
+        name: it.name || it.productName || it.displayName || "Medicine",
+        pack: it.pack || it.packSize || "",
+        batch: it.batch || it.batchNo || "",
+        expiry: it.expiry || it.expDate || it.expiryDate || "",
+        qty,
+        freeQty,
+        schPct: resolvedScheme,
+        saleScheme: resolvedScheme,
+        schemeDiscountPercent: resolvedScheme,
+        disc,
+        mrp,
+        hsn: it.hsn ? String(it.hsn).trim() : (it.hsnCode ? String(it.hsnCode).trim() : "3004"),
+        gst,
+        rate,
+      };
+    });
 
     setCart(itemsToLoad);
     setOriginSaleInvoiceId(bill._id);
@@ -410,15 +423,43 @@ export const CreatePurchaseBillMobilePage = () => {
 
   const handleRemoveItem = (id) => setCart((prev) => prev.filter((item) => item.id !== id));
 
-  const getItemAmount = (item) => {
+  const getItemBaseAmount = (item) => {
     const rate = Number(item.rate) || 0;
     const qty = Number(item.qty) || 0;
     return rate * qty;
   };
 
-  const cartSubtotal = cart.reduce((acc, item) => acc + getItemAmount(item), 0);
-  const estTax = cart.reduce((acc, item) => acc + (getItemAmount(item) * (item.gst !== undefined && item.gst !== null && item.gst !== "" ? Number(item.gst) : 0)) / 100, 0);
-  const cartGrandTotal = Math.round(cartSubtotal + estTax);
+  const getItemSchemeDiscount = (item) => {
+    const base = getItemBaseAmount(item);
+    const schPct = Number(item.schPct) || 0;
+    return (base * schPct) / 100;
+  };
+
+  const getItemTradeDiscount = (item) => {
+    const base = getItemBaseAmount(item);
+    const schAmt = getItemSchemeDiscount(item);
+    const afterScheme = base - schAmt;
+    const discPct = Number(item.disc) || 0;
+    return (afterScheme * discPct) / 100;
+  };
+
+  const getItemTaxableAmount = (item) => {
+    const base = getItemBaseAmount(item);
+    const schAmt = getItemSchemeDiscount(item);
+    const discAmt = getItemTradeDiscount(item);
+    return Math.max(0, base - schAmt - discAmt);
+  };
+
+  // Line amount for table line display: Gross Amount (Rate * Qty), discounts applied in summary
+  const getItemAmount = (item) => getItemBaseAmount(item);
+
+  const cartGrossTotal = cart.reduce((acc, item) => acc + getItemBaseAmount(item), 0);
+  const cartSchemeDiscount = cart.reduce((acc, item) => acc + getItemSchemeDiscount(item), 0);
+  const cartTradeDiscount = cart.reduce((acc, item) => acc + getItemTradeDiscount(item), 0);
+  const cartTaxableSubtotal = cart.reduce((acc, item) => acc + getItemTaxableAmount(item), 0);
+  const cartSubtotal = cartTaxableSubtotal;
+  const estTax = cart.reduce((acc, item) => acc + (getItemTaxableAmount(item) * (item.gst !== undefined && item.gst !== null && item.gst !== "" ? Number(item.gst) : 0)) / 100, 0);
+  const cartGrandTotal = Math.round(cartTaxableSubtotal + estTax);
   const cartItemCount = cart.reduce((acc, item) => acc + (Number(item.qty) || 1), 0);
 
   const handleSubmit = () => {
@@ -482,22 +523,42 @@ export const CreatePurchaseBillMobilePage = () => {
         isInterCompany: Boolean(originSaleInvoiceId),
         originSaleInvoiceId: originSaleInvoiceId || null,
         originCompanyId: originCompanyId || null,
-        items: cart.map((item) => ({
-          productId: item.productId || null,
-          name: item.name,
-          pack: item.pack,
-          batch: item.batch,
-          expiry: item.expiry,
-          qty: Number(item.qty) || 0,
-          freeQty: Number(item.freeQty) || 0,
-          schPct: Number(item.schPct) || 0,
-          disc: Number(item.disc) || 0,
-          mrp: Number(item.mrp) || 0,
-          hsn: item.hsn || "3004",
-          gst: Number(item.gst) || 0,
-          rate: Number(item.rate) || 0,
-          amount: getItemAmount(item),
-        })),
+        items: cart.map((item) => {
+          const qty = Number(item.qty) || 0;
+          const freeQty = Number(item.freeQty) || 0;
+          const calculatedFreeScheme = (qty > 0 && freeQty > 0)
+            ? Number(((freeQty / (qty + freeQty)) * 100).toFixed(2))
+            : 0;
+          const resolvedScheme = Number(
+            item.saleScheme !== undefined && item.saleScheme !== null && item.saleScheme !== "" && Number(item.saleScheme) > 0
+              ? item.saleScheme
+              : (item.schPct || calculatedFreeScheme || 0)
+          );
+
+          return {
+            productId: item.productId || null,
+            name: item.name,
+            pack: item.pack,
+            batch: item.batch,
+            expiry: item.expiry,
+            qty,
+            freeQty,
+            schPct: Number(item.schPct) || resolvedScheme,
+            saleScheme: resolvedScheme,
+            schemeDiscountPercent: resolvedScheme,
+            disc: Number(item.disc) || 0,
+            mrp: Number(item.mrp) || 0,
+            hsn: item.hsn ? String(item.hsn).trim() : "3004",
+            gst: Number(item.gst) || 0,
+            rate: Number(item.rate) || 0,
+            amount: getItemAmount(item),
+          };
+        }),
+        grossTotal: cartGrossTotal,
+        schemeDiscount: cartSchemeDiscount,
+        tradeDiscount: cartTradeDiscount,
+        taxableSubtotal: cartSubtotal,
+        totalGst: estTax,
         grandTotal: cartGrandTotal,
       };
 
@@ -753,8 +814,11 @@ export const CreatePurchaseBillMobilePage = () => {
               ))}
               
               <div className="bg-surface p-4 rounded-xl border border-border space-y-2 mt-4">
-                <div className="flex justify-between text-xs text-text-muted"><p>Subtotal</p><p>₹{cartSubtotal.toFixed(2)}</p></div>
-                <div className="flex justify-between text-xs text-text-muted"><p>Tax</p><p>₹{estTax.toFixed(2)}</p></div>
+                <div className="flex justify-between text-xs text-text-muted"><p>Gross Amount (Qty × Rate)</p><p>₹{cartGrossTotal.toFixed(2)}</p></div>
+                {cartSchemeDiscount > 0 && <div className="flex justify-between text-xs text-amber-600"><p>Scheme Discount</p><p>-₹{cartSchemeDiscount.toFixed(2)}</p></div>}
+                {cartTradeDiscount > 0 && <div className="flex justify-between text-xs text-amber-600"><p>Trade Discount</p><p>-₹{cartTradeDiscount.toFixed(2)}</p></div>}
+                <div className="flex justify-between text-xs text-text"><p className="font-semibold">Taxable Subtotal</p><p className="font-semibold">₹{cartTaxableSubtotal.toFixed(2)}</p></div>
+                <div className="flex justify-between text-xs text-purple-600"><p>GST Tax</p><p>+₹{estTax.toFixed(2)}</p></div>
                 <div className="flex justify-between text-sm font-bold text-text pt-2 border-t border-border/70"><p>Grand Total</p><p className="text-emerald-600">₹{cartGrandTotal.toFixed(2)}</p></div>
               </div>
               

@@ -1,4 +1,4 @@
-﻿// src/features/sales/components/OrderInvoiceDocument.jsx
+// src/features/sales/components/OrderInvoiceDocument.jsx
 
 import React, { useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
@@ -158,27 +158,31 @@ export const OrderInvoiceDocument = ({
       const qty = safeNum(item.qty || item.quantity, 1);
       const mrp = safeNum(item.mrp || item.price || item.unitPrice, 0);
       const unitRate = safeNum(item.price || item.rate || item.unitPrice, mrp);
-      const grossTotal = mrp * qty;
+      const grossTotal = isB2B ? unitRate * qty : mrp * qty;
 
       // Discount calculation
       let itemDisc = safeNum(item.disc || item.discount || item.itemDiscount, 0);
       let discAmount = 0;
-      if (itemDisc > 0 && itemDisc <= 100 && !item.discAmount) {
+      if (isB2B) {
         discAmount = (grossTotal * itemDisc) / 100;
-      } else if (item.discAmount) {
-        discAmount = safeNum(item.discAmount);
-      } else if (mrp > unitRate) {
-        discAmount = (mrp - unitRate) * qty;
+      } else {
+        if (itemDisc > 0 && itemDisc <= 100 && !item.discAmount) {
+          discAmount = (grossTotal * itemDisc) / 100;
+        } else if (item.discAmount) {
+          discAmount = safeNum(item.discAmount);
+        }
       }
 
-      // Add scheme discount if present
-      const schemePct = safeNum(item.schemeDiscountPercent || item.schemePercent, 0);
+      // Add scheme discount if present (B2B)
+      const schemePct = isB2B ? safeNum(item.schemeDiscountPercent || item.schemePercent || item.saleScheme, 0) : 0;
+      let schemeDiscAmount = 0;
       if (schemePct > 0) {
-        discAmount += (grossTotal * schemePct) / 100;
+        schemeDiscAmount = safeNum(item.schemeDiscountAmount, (Math.max(0, grossTotal - discAmount) * schemePct) / 100);
+        discAmount += schemeDiscAmount;
       }
 
       const netTaxable = Math.max(0, grossTotal - discAmount);
-      const gstPct = safeNum(item.gst || item.gstRate || item.taxRate, 12);
+      const gstPct = safeNum(item.gst || item.gstRate || item.taxRate, 5);
       const gstAmt = (netTaxable * gstPct) / 100;
       const finalAmt = isB2B ? netTaxable + gstAmt : grossTotal - discAmount;
 
@@ -192,6 +196,8 @@ export const OrderInvoiceDocument = ({
         qty,
         totalAmt: grossTotal,
         discount: discAmount,
+        schemePct,
+        schemeDiscAmount,
         taxableAmt: netTaxable,
         gstPct,
         gstAmt,
@@ -210,6 +216,13 @@ export const OrderInvoiceDocument = ({
     const extraDisc = safeNum(saleData.extraDiscount || saleData.discount, 0);
     return Math.max(linesDisc, linesDisc + extraDisc);
   }, [items, saleData]);
+
+  const totalSchemeDiscount = useMemo(() => {
+    if (safeNum(saleData.schemeDiscount) > 0) {
+      return safeNum(saleData.schemeDiscount);
+    }
+    return items.reduce((sum, it) => sum + (it.schemeDiscAmount || 0), 0);
+  }, [saleData, items]);
 
   const totalTaxable = useMemo(() => {
     if (saleData.taxableAmount !== undefined && saleData.taxableAmount !== null) {
@@ -416,7 +429,14 @@ export const OrderInvoiceDocument = ({
                     {it.sr}
                   </td>
                   <td className="py-1.5 px-3 border-r border-slate-200 font-semibold text-slate-900">
-                    {it.name}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span>{it.name}</span>
+                      {it.schemePct > 0 && (
+                        <span className="text-[7.5px] font-bold text-emerald-700 bg-emerald-50 px-1 py-0.2 rounded border border-emerald-300 print:border-slate-300">
+                          Scheme {it.schemePct}%
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="py-1.5 px-2 border-r border-slate-200 text-center font-mono text-slate-600">
                     {it.hsn}
@@ -545,6 +565,13 @@ export const OrderInvoiceDocument = ({
               <span className="font-sans">Discount Amount:</span>
               <span className="font-bold">-₹{totalDiscount.toFixed(2)}</span>
             </div>
+
+            {totalSchemeDiscount > 0 && (
+              <div className="flex justify-between text-emerald-700 font-semibold text-[9.5px]">
+                <span className="font-sans">Scheme Discount:</span>
+                <span className="font-bold">-₹{totalSchemeDiscount.toFixed(2)}</span>
+              </div>
+            )}
 
             <div className="flex justify-between pt-1 border-t border-slate-200">
               <span className="font-sans text-slate-500">Taxable Amount:</span>

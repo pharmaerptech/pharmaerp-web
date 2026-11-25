@@ -22,6 +22,7 @@ import workspaceProductService from "../services/workspaceProductService";
 import useUser from "@/features/user/hooks/useUser";
 import branchService from "@/features/branch/services/branchService";
 import useBranch from "@/features/branch/hooks/useBranch";
+import { safeNum, computeSchemeDiscount } from "@/features/sales/utils/schemeCalculator";
 
 /**
  * Helper to parse expiry string into comparable Date object
@@ -86,73 +87,6 @@ const formatExpDisplay = (raw) => {
     return `${m}/${y}`;
   }
   return str;
-};
-
-/** Safe number parser */
-const safeNum = (v) => {
-  const n = Number(v);
-  return isNaN(n) ? 0 : n;
-};
-
-/**
- * Compute scheme discount for a given qty and scheme %.
- * Applies schemePercent as a direct discount on the full available qty.
- * No free qty is given — pure percentage discount.
- * Uses quarter/half/full threshold tiers to determine how much of the scheme applies.
- * Returns { freeQty, schemeDiscountPercent, finalDiscountPercent, schemeApply }
- */
-const computeSchemeDiscount = (qty, schemePercent, stock, calculatedFreeQty) => {
-  const normalizedQty = safeNum(qty);
-  const normalizedScheme = safeNum(schemePercent);
-  if (normalizedQty <= 0 || normalizedScheme <= 0) {
-    return { freeQty: 0, schemeDiscountPercent: 0, finalDiscountPercent: 0, schemeApply: false };
-  }
-
-  // Special case: 50% scheme — apply full discount directly when qty >= 2
-  if (normalizedScheme === 50) {
-    if (normalizedQty < 2) {
-      return { freeQty: 0, schemeDiscountPercent: 0, finalDiscountPercent: 0, schemeApply: false };
-    }
-    return { freeQty: 0, schemeDiscountPercent: normalizedScheme, finalDiscountPercent: normalizedScheme, schemeApply: true };
-  }
-
-  // STEP 1 — CALCULATE FULL FREE QTY & SCHEME THRESHOLDS (same as original)
-  const fullFreeQty = (normalizedQty * normalizedScheme) / (100 - normalizedScheme);
-
-  const actualCalculatedFreeQty =
-    calculatedFreeQty !== undefined && calculatedFreeQty !== null
-      ? safeNum(calculatedFreeQty)
-      : fullFreeQty;
-
-  // SCHEME THRESHOLDS
-  const quarterThreshold = (normalizedScheme / (100 - normalizedScheme)) / 0.4;
-  const halfThreshold = quarterThreshold * 2;
-  const fullThreshold = quarterThreshold * 4;
-
-  // STEP 2 — DETERMINE TIER BASED ON CALCULATED FREE QTY vs THRESHOLDS
-  let discountFraction = 0;
-  let schemeApply = false;
-
-  if (actualCalculatedFreeQty >= fullThreshold) {
-    discountFraction = 1;       // Full scheme discount (100%)
-    schemeApply = true;
-  } else if (actualCalculatedFreeQty >= halfThreshold) {
-    discountFraction = 0.5;     // Half scheme discount (50%)
-    schemeApply = true;
-  } else if (actualCalculatedFreeQty >= quarterThreshold) {
-    discountFraction = 0.25;    // Quarter scheme discount (25%)
-    schemeApply = true;
-  }
-
-  // STEP 3 — APPLY FRACTION OF SCHEME AS DIRECT DISCOUNT (no free qty)
-  const finalDiscountPercent = schemeApply ? normalizedScheme * discountFraction : 0;
-
-  return {
-    freeQty: 0,
-    schemeDiscountPercent: finalDiscountPercent,
-    finalDiscountPercent,
-    schemeApply,
-  };
 };
 
 /**

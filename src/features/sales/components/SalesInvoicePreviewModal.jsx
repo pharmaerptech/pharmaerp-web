@@ -13,6 +13,7 @@ import {
   Percent,
   RotateCcw,
   Lock,
+  Tag,
 } from "lucide-react";
 import {
   UIModal,
@@ -24,6 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import useBranch from "@/features/branch/hooks/useBranch";
 import useCompany from "@/features/company/hooks/useCompany";
+import { safeNum, computeSchemeDiscount } from "../utils/schemeCalculator";
 
 export const SalesInvoicePreviewModal = ({
   isOpen,
@@ -114,27 +116,38 @@ export const SalesInvoicePreviewModal = ({
       const qty = Math.max(1, Number(item.qty) || 1);
       const mrp = Number(item.mrp || item.price || 0);
       const rate = Number(item.price || item.unitPrice || mrp);
-      const grossTotal = mrp * qty;
+      const grossAmt = rate * qty;
 
-      let itemDisc = Number(item.disc || item.discount || item.itemDiscount || 0);
-      let discAmount = 0;
-      if (itemDisc > 0 && itemDisc <= 100 && !item.discAmount) {
-        discAmount = (grossTotal * itemDisc) / 100;
-      } else if (item.discAmount) {
-        discAmount = Number(item.discAmount);
-      } else if (mrp > rate) {
-        discAmount = (mrp - rate) * qty;
+      const itemDisc = Number(item.disc || item.discount || item.itemDiscount || 0);
+      const itemDiscAmount = (grossAmt * itemDisc) / 100;
+
+      const rawSchemePct = billingMode === "B2B"
+        ? Number(item.schemeDiscountPercent || item.schemePercent || item.saleScheme || 0)
+        : 0;
+      const schemeCheck = computeSchemeDiscount(qty, rawSchemePct);
+
+      let schemeDiscAmount = 0;
+      if (billingMode === "B2B" && schemeCheck.schemeApply && schemeCheck.finalDiscountPercent > 0) {
+        const baseForScheme = Math.max(0, grossAmt - itemDiscAmount);
+        schemeDiscAmount = (baseForScheme * schemeCheck.finalDiscountPercent) / 100;
       }
 
-      const schemePct = Number(item.schemeDiscountPercent || item.schemePercent || 0);
-      if (schemePct > 0) {
-        discAmount += (grossTotal * schemePct) / 100;
-      }
+      const totalLineDisc = itemDiscAmount + schemeDiscAmount;
+      const gstRate = Number(item.gst !== undefined && item.gst !== null ? item.gst : (item.gstRate || 5));
 
-      const taxable = Math.max(0, grossTotal - discAmount);
-      const gstRate = Number(item.gst || item.gstRate || 12);
-      const gstAmt = (taxable * gstRate) / 100;
-      const finalAmt = billingMode === "B2B" ? taxable + gstAmt : grossTotal - discAmount;
+      let taxable = 0;
+      let gstAmt = 0;
+      let finalAmt = 0;
+
+      if (billingMode === "B2B") {
+        taxable = Math.max(0, grossAmt - totalLineDisc);
+        gstAmt = (taxable * gstRate) / 100;
+        finalAmt = taxable + gstAmt;
+      } else {
+        finalAmt = Math.max(0, grossAmt - totalLineDisc);
+        taxable = finalAmt / (1 + gstRate / 100);
+        gstAmt = finalAmt - taxable;
+      }
 
       return {
         sr: idx + 1,
@@ -150,12 +163,18 @@ export const SalesInvoicePreviewModal = ({
         mrp,
         rate,
         discPct: itemDisc,
-        discAmount,
+        discAmount: totalLineDisc,
+        itemDiscAmount,
+        schemeDiscAmount,
+        rawSchemePct,
+        appliedSchemePct: schemeCheck.finalDiscountPercent,
+        schemeApply: schemeCheck.schemeApply,
         qty,
         taxable,
         gstRate,
         gstAmt,
         finalAmt,
+        grossAmt,
       };
     });
   }, [cart, billingMode]);
@@ -165,8 +184,24 @@ export const SalesInvoicePreviewModal = ({
     return calculatedItems.reduce((acc, it) => acc + (it.mrp * it.qty), 0);
   }, [calculatedItems]);
 
+  const totalGrossSubtotal = useMemo(() => {
+    return calculatedItems.reduce((acc, it) => acc + (it.rate * it.qty), 0);
+  }, [calculatedItems]);
+
+  const totalItemDiscount = useMemo(() => {
+    return calculatedItems.reduce((acc, it) => acc + it.itemDiscAmount, 0);
+  }, [calculatedItems]);
+
+  const totalSchemeDiscount = useMemo(() => {
+    return calculatedItems.reduce((acc, it) => acc + it.schemeDiscAmount, 0);
+  }, [calculatedItems]);
+
   const totalDiscount = useMemo(() => {
-    return calculatedItems.reduce((acc, it) => acc + it.discAmount, 0);
+    return totalItemDiscount + totalSchemeDiscount;
+  }, [totalItemDiscount, totalSchemeDiscount]);
+
+  const hasAnyScheme = useMemo(() => {
+    return calculatedItems.some((it) => it.rawSchemePct > 0 || it.schemeDiscAmount > 0);
   }, [calculatedItems]);
 
   const totalTaxable = useMemo(() => {
@@ -284,6 +319,12 @@ export const SalesInvoicePreviewModal = ({
 
             {/* Item & Unit Count Pill */}
             <div className="flex items-center gap-2 shrink-0">
+              {totalSchemeDiscount > 0 && (
+                <span className="text-xs font-mono px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/25 text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1.5 shadow-2xs">
+                  <Tag className="size-3.5" />
+                  Scheme: -₹{totalSchemeDiscount.toFixed(2)}
+                </span>
+              )}
               <span className="text-xs font-mono px-3 py-1 rounded-lg bg-surface border border-border text-text font-bold">
                 {calculatedItems.length} {calculatedItems.length === 1 ? "Item" : "Items"} · {totalUnits} Units
               </span>
@@ -326,6 +367,11 @@ export const SalesInvoicePreviewModal = ({
                       <th className="py-2.5 px-2.5 w-[72px] font-mono text-right">MRP</th>
                       <th className="py-2.5 px-2.5 w-[75px] font-mono text-right">Rate</th>
                       <th className="py-2.5 px-2 w-[58px] font-mono text-center">Disc%</th>
+                      {(billingMode === "B2B" || hasAnyScheme) && (
+                        <th className="py-2.5 px-2 w-[72px] font-mono text-center text-emerald-600 dark:text-emerald-400">
+                          Scheme
+                        </th>
+                      )}
                       <th className="py-2.5 px-2 w-[58px] font-mono text-center">GST%</th>
                       <th className="py-2.5 px-3 min-w-[95px] w-[105px] font-mono text-right">
                         Amount
@@ -348,11 +394,19 @@ export const SalesInvoicePreviewModal = ({
                           <span className="font-bold text-text block leading-snug truncate max-w-[240px] text-xs sm:text-[12px]">
                             {item.name}
                           </span>
-                          <span className="text-[10px] text-text-muted block truncate mt-0.5">
-                            {[item.brand || item.category, item.pack ? `Pk:${item.pack}` : null, item.rack ? `Rk:${item.rack}` : null]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </span>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="text-[10px] text-text-muted truncate">
+                              {[item.brand || item.category, item.pack ? `Pk:${item.pack}` : null, item.rack ? `Rk:${item.rack}` : null]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                            {item.schemeApply && item.appliedSchemePct > 0 && (
+                              <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                                <Tag className="size-2.5" />
+                                Scheme {item.appliedSchemePct}% (-₹{item.schemeDiscAmount.toFixed(2)})
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         {/* Batch */}
@@ -395,14 +449,47 @@ export const SalesInvoicePreviewModal = ({
                           )}
                         </td>
 
+                        {/* Scheme % */}
+                        {(billingMode === "B2B" || hasAnyScheme) && (
+                          <td className="py-2 px-2 font-mono text-center text-[10.5px]">
+                            {item.schemeApply && item.appliedSchemePct > 0 ? (
+                              <div className="inline-flex flex-col items-center">
+                                <span
+                                  className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
+                                  title={`Scheme discount of ${item.appliedSchemePct}% applied (-₹${item.schemeDiscAmount.toFixed(2)})`}
+                                >
+                                  {item.appliedSchemePct}%
+                                </span>
+                                {item.schemeDiscAmount > 0 && (
+                                  <span className="text-[9px] text-emerald-600/80 dark:text-emerald-400/80 tabular-nums font-semibold mt-0.5">
+                                    -₹{item.schemeDiscAmount.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : item.rawSchemePct > 0 ? (
+                              <span
+                                className="text-amber-600 dark:text-amber-400 text-[10px] font-semibold bg-amber-500/10 px-1 py-0.5 rounded border border-amber-500/20"
+                                title={`Min qty threshold not met for ${item.rawSchemePct}% scheme`}
+                              >
+                                {item.rawSchemePct}%
+                              </span>
+                            ) : (
+                              <span className="text-text-muted/50">—</span>
+                            )}
+                          </td>
+                        )}
+
                         {/* GST % */}
                         <td className="py-2 px-2 font-mono text-center text-[10.5px] font-bold text-purple-600 dark:text-purple-400">
                           {item.gstRate}%
                         </td>
 
-                        {/* Amount */}
-                        <td className="py-2 px-3 font-mono text-right text-[13px] sm:text-[14px] font-black tabular-nums text-primary">
-                          ₹{item.finalAmt.toFixed(2)}
+                        {/* Amount (Rate * Qty) */}
+                        <td
+                          className="py-2 px-3 font-mono text-right text-[13px] sm:text-[14px] font-black tabular-nums text-primary"
+                          title={`Rate ₹${item.rate.toFixed(2)} × ${item.qty} = ₹${item.grossAmt.toFixed(2)}`}
+                        >
+                          ₹{item.grossAmt.toFixed(2)}
                         </td>
                       </tr>
                     ))}
@@ -412,9 +499,17 @@ export const SalesInvoicePreviewModal = ({
 
               {/* Table Footer Bar */}
               <div className="px-3.5 py-2 border-t border-border bg-surface-alt/40 flex items-center justify-between text-xs text-text-muted font-mono shrink-0">
-                <span>
-                  {calculatedItems.length} Products Listed
-                </span>
+                <div className="flex items-center gap-3">
+                  <span>
+                    {calculatedItems.length} Products Listed
+                  </span>
+                  {totalSchemeDiscount > 0 && (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                      <Tag className="size-3" />
+                      Total Scheme Disc: -₹{totalSchemeDiscount.toFixed(2)}
+                    </span>
+                  )}
+                </div>
                 <span className="text-text font-bold">
                   Total Units: <span className="text-primary">{totalUnits}</span>
                 </span>
@@ -440,14 +535,35 @@ export const SalesInvoicePreviewModal = ({
               {/* Price / Cost Totals Breakdown (Shown Once) */}
               <div className="p-3.5 rounded-xl border border-border/80 bg-surface space-y-2 font-mono text-xs">
                 <div className="flex justify-between text-text-muted">
-                  <span className="font-sans">Total MRP Value:</span>
-                  <span className="text-text">₹{totalMrp.toFixed(2)}</span>
+                  <span className="font-sans">
+                    {billingMode === "B2B" ? "Gross Subtotal:" : "Total MRP Value:"}
+                  </span>
+                  <span className="text-text font-bold">
+                    ₹{(billingMode === "B2B" ? totalGrossSubtotal : totalMrp).toFixed(2)}
+                  </span>
                 </div>
 
-                {totalDiscount > 0 && (
+                {totalItemDiscount > 0 && (
                   <div className="flex justify-between text-success font-semibold">
+                    <span className="font-sans">Item Discount:</span>
+                    <span>-₹{totalItemDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {totalSchemeDiscount > 0 && (
+                  <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1.5 rounded-lg border border-emerald-500/20 shadow-2xs">
+                    <span className="font-sans flex items-center gap-1.5">
+                      <Tag className="size-3.5" />
+                      Scheme Discount:
+                    </span>
+                    <span className="tabular-nums">-₹{totalSchemeDiscount.toFixed(2)}</span>
+                  </div>
+                )}
+
+                {totalItemDiscount > 0 && totalSchemeDiscount > 0 && (
+                  <div className="flex justify-between text-text-muted text-[11px] font-semibold">
                     <span className="font-sans">Total Discount:</span>
-                    <span>-₹{totalDiscount.toFixed(2)}</span>
+                    <span className="text-success font-bold">-₹{totalDiscount.toFixed(2)}</span>
                   </div>
                 )}
 

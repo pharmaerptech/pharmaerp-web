@@ -499,40 +499,54 @@ export const CreatePurchaseBillDesktopPage = () => {
     }
 
     // 4. Auto-fill Items with rates, batches, expiries, quantities, schemes
-    const itemsToLoad = (bill.cartItems && bill.cartItems.length > 0)
+    const rawItems = (bill.cartItems && bill.cartItems.length > 0)
       ? bill.cartItems
-      : (bill.items || []).map((it) => {
-          const qty = Number(it.qty || it.quantity || 0);
-          const freeQty = Number(it.freeQty || 0);
-          const rate = Number(it.rate || it.unitPrice || it.price || 0);
-          const mrp = Number(it.mrp || rate);
-          const gst = Number(it.gst || it.gstRate || it.hsnTaxpercent || 0);
-          const disc = Number(it.disc || it.discount || it.itemDiscount || 0);
-          const amount = Number(it.amount || it.total || qty * rate);
-          return {
-            id: `${it.productId || it._id || Date.now()}-${Math.random()}`,
-            productId: it.productId || it.product_id || it.workspaceProductId || null,
-            name: it.name || it.productName || it.displayName || "Medicine",
-            pack: it.pack || it.packSize || "",
-            batch: it.batch || it.batchNo || "",
-            expiry: it.expiry || it.expDate || it.expiryDate || "",
-            qty,
-            freeQty,
-            schPct: Number(it.schPct || 0),
-            disc,
-            cRatePct: Number(it.cRatePct || 0),
-            mrp,
-            hsn: it.hsn || it.hsnCode || "3004",
-            gst,
-            rate,
-            amount,
-            rateA: Number(it.rateA || rate),
-            rateB: Number(it.rateB || rate),
-            rateC: Number(it.rateC || rate),
-            retailerMarginPercent: 20,
-            stockistMarginPercent: 10,
-          };
-        });
+      : (bill.items || []);
+
+    const itemsToLoad = rawItems.map((it) => {
+      const qty = Number(it.qty || it.quantity || 0);
+      const freeQty = Number(it.freeQty || 0);
+      const rate = Number(it.rate || it.unitPrice || it.price || 0);
+      const mrp = Number(it.mrp || rate);
+      const gst = Number(it.gst !== undefined && it.gst !== null ? it.gst : (it.gstRate || it.hsnTaxpercent || 0));
+      const disc = Number(it.disc || it.discount || it.itemDiscount || 0);
+      const amount = Number(it.amount || it.total || qty * rate);
+
+      const calculatedSch = (qty > 0 && freeQty > 0)
+        ? Number(((freeQty / (qty + freeQty)) * 100).toFixed(2))
+        : 0;
+      const resolvedScheme = Number(
+        it.schPct !== undefined && it.schPct !== null && it.schPct !== "" && Number(it.schPct) > 0
+          ? it.schPct
+          : (it.saleScheme || it.schemeDiscountPercent || it.schemePercent || it.schemeDisc || it.scheme || calculatedSch || 0)
+      );
+
+      return {
+        id: it.id || `${it.productId || it._id || Date.now()}-${Math.random()}`,
+        productId: it.productId || it.product_id || it.workspaceProductId || null,
+        name: it.name || it.productName || it.displayName || "Medicine",
+        pack: it.pack || it.packSize || "",
+        batch: it.batch || it.batchNo || "",
+        expiry: it.expiry || it.expDate || it.expiryDate || "",
+        qty,
+        freeQty,
+        schPct: resolvedScheme,
+        saleScheme: resolvedScheme,
+        schemeDiscountPercent: resolvedScheme,
+        disc,
+        cRatePct: Number(it.cRatePct || 0),
+        mrp,
+        hsn: it.hsn ? String(it.hsn).trim() : (it.hsnCode ? String(it.hsnCode).trim() : "3004"),
+        gst,
+        rate,
+        amount,
+        rateA: Number(it.rateA || rate),
+        rateB: Number(it.rateB || rate),
+        rateC: Number(it.rateC || rate),
+        retailerMarginPercent: Number(it.retailerMarginPercent) || 20,
+        stockistMarginPercent: Number(it.stockistMarginPercent) || 10,
+      };
+    });
 
     setCart(itemsToLoad);
 
@@ -705,7 +719,10 @@ export const CreatePurchaseBillDesktopPage = () => {
         const mrp = Number(it.mrp || rate);
         const gst = Number(it.gst !== undefined ? it.gst : 5);
         const disc = Number(it.disc || 0);
-        const schPct = Number(it.schPct || 0);
+        const calculatedSch = (qty > 0 && freeQty > 0)
+          ? Number(((freeQty / (qty + freeQty)) * 100).toFixed(2))
+          : 0;
+        const schPct = Number(it.schPct || it.schemeDiscountPercent || it.saleScheme || it.scheme || calculatedSch || 0);
         const amount = Number(it.amount || qty * rate);
 
         let rA = Number(it.rateA || rate);
@@ -892,8 +909,8 @@ export const CreatePurchaseBillDesktopPage = () => {
     return Math.max(0, base - schAmt - discAmt);
   };
 
-  // Legacy/line amount for table line display
-  const getItemAmount = (item) => getItemTaxableAmount(item);
+  // Line amount for table line display: Gross Amount (Rate * Qty), discounts applied in summary
+  const getItemAmount = (item) => getItemBaseAmount(item);
 
   const cartGrossTotal = cart.reduce((acc, item) => acc + getItemBaseAmount(item), 0);
   const cartSchemeDiscount = cart.reduce((acc, item) => acc + getItemSchemeDiscount(item), 0);
@@ -1081,29 +1098,41 @@ export const CreatePurchaseBillDesktopPage = () => {
             if (!rC) rC = computed.rateC || 0;
           }
 
+          const qty = Number(item.qty) || 0;
+          const freeQty = Number(item.freeQty) || 0;
+          const calculatedFreeScheme = (qty > 0 && freeQty > 0)
+            ? Number(((freeQty / (qty + freeQty)) * 100).toFixed(2))
+            : 0;
+          const resolvedScheme = Number(
+            item.saleScheme !== undefined && item.saleScheme !== null && item.saleScheme !== "" && Number(item.saleScheme) > 0
+              ? item.saleScheme
+              : (item.schPct || calculatedFreeScheme || 0)
+          );
+
           return {
             productId: item.productId || null,
             name: item.name,
             pack: item.pack,
             batch: item.batch,
             expiry: item.expiry,
-            qty: Number(item.qty) || 0,
-            freeQty: Number(item.freeQty) || 0,
-            schPct: Number(item.schPct) || 0,
+            qty,
+            freeQty,
+            schPct: Number(item.schPct) || resolvedScheme,
             disc: Number(item.disc) || 0,
             cRatePct: Number(item.cRatePct) || 0,
             mrp: Number(item.mrp) || 0,
-            hsn: item.hsn || "",
+            hsn: item.hsn ? String(item.hsn).trim() : "3004",
             gst: item.gst !== undefined && item.gst !== null && item.gst !== "" ? Number(item.gst) : 0,
             rate: Number(item.rate) || 0,
-            amount: getItemTaxableAmount(item),
+            amount: getItemBaseAmount(item),
             rateA: rA,
             rateB: rB,
             rateC: rC,
             finalRateA: rA,
             finalRateB: rB,
             finalRateC: rC,
-            saleScheme: Number(item.saleScheme) || 0,
+            saleScheme: resolvedScheme,
+            schemeDiscountPercent: resolvedScheme,
           };
         }),
         extraDiscountPct: Number(extraDiscountPct) || 0,

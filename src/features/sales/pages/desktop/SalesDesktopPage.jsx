@@ -94,61 +94,7 @@ import useBranch from "@/features/branch/hooks/useBranch";
 import useCompany from "@/features/company/hooks/useCompany";
 import { useActiveShift } from "@/features/operations/shifts/hooks/useActiveShift";
 import { fetchBranchCash } from "@/features/finance/treasury/cash-management/branch-cash/store/branchCashThunk";
-
-/** Safe number parser */
-const safeNum = (v) => {
-  const n = Number(v);
-  return isNaN(n) ? 0 : n;
-};
-
-/**
- * Compute scheme discount for a given qty and scheme %.
- * Applies schemePercent as a direct discount (no free qty).
- * Uses quarter/half/full threshold tiers.
- */
-const computeSchemeDiscount = (qty, schemePercent) => {
-  const normalizedQty = safeNum(qty);
-  const normalizedScheme = safeNum(schemePercent);
-  if (normalizedQty <= 0 || normalizedScheme <= 0) {
-    return { freeQty: 0, schemeDiscountPercent: 0, finalDiscountPercent: 0, schemeApply: false };
-  }
-
-  // Special case: 50% scheme — apply full discount directly when qty >= 2
-  if (normalizedScheme === 50) {
-    if (normalizedQty < 2) {
-      return { freeQty: 0, schemeDiscountPercent: 0, finalDiscountPercent: 0, schemeApply: false };
-    }
-    return { freeQty: 0, schemeDiscountPercent: normalizedScheme, finalDiscountPercent: normalizedScheme, schemeApply: true };
-  }
-
-  const fullFreeQty = (normalizedQty * normalizedScheme) / (100 - normalizedScheme);
-  const quarterThreshold = (normalizedScheme / (100 - normalizedScheme)) / 0.4;
-  const halfThreshold = quarterThreshold * 2;
-  const fullThreshold = quarterThreshold * 4;
-
-  let discountFraction = 0;
-  let schemeApply = false;
-
-  if (fullFreeQty >= fullThreshold) {
-    discountFraction = 1;
-    schemeApply = true;
-  } else if (fullFreeQty >= halfThreshold) {
-    discountFraction = 0.5;
-    schemeApply = true;
-  } else if (fullFreeQty >= quarterThreshold) {
-    discountFraction = 0.25;
-    schemeApply = true;
-  }
-
-  const finalDiscountPercent = schemeApply ? normalizedScheme * discountFraction : 0;
-
-  return {
-    freeQty: 0,
-    schemeDiscountPercent: finalDiscountPercent,
-    finalDiscountPercent,
-    schemeApply,
-  };
-};
+import { safeNum, computeSchemeDiscount } from "../../utils/schemeCalculator";
 
 const QuickCreateCustomerModal = ({ open, onClose, defaultName, customerType, billingMode = "B2C", onSuccess }) => {
   const [name, setName] = useState(defaultName || "");
@@ -2185,7 +2131,7 @@ export const SalesDesktopPage = () => {
                 </thead>
                 <tbody className="divide-y divide-border/40">
                   {cart.map((item, idx) => {
-                    const lineAmt = getItemAmount(item);
+                    const lineGrossAmt = (Number(item.price) || 0) * Math.max(1, Number(item.qty) || 1);
                     return (
                       <tr key={item.id} className="hover:bg-surface-hover/60 transition-colors group">
                         {/* # */}
@@ -2317,9 +2263,9 @@ export const SalesDesktopPage = () => {
                           {item.expiry || item.expDate || item.expiryDate || "—"}
                         </td>
 
-                        {/* Amount */}
+                        {/* Amount (Rate * Qty) */}
                         <td className="py-1.5 px-2 font-mono text-right font-black text-primary text-[13px] sm:text-[14px] tabular-nums">
-                          ₹{lineAmt.toFixed(2)}
+                          ₹{lineGrossAmt.toFixed(2)}
                         </td>
 
                         {/* Remove */}
@@ -2483,7 +2429,7 @@ export const SalesDesktopPage = () => {
                         <span className="text-text-muted truncate max-w-[145px]">
                           {item.name} <span className="font-mono text-text-muted">×{item.qty}</span>
                         </span>
-                        <span className="font-mono font-bold text-text tabular-nums shrink-0 ml-2">₹{getItemAmount(item).toFixed(0)}</span>
+                        <span className="font-mono font-bold text-text tabular-nums shrink-0 ml-2">₹{((Number(item.price) || 0) * (Number(item.qty) || 1)).toFixed(0)}</span>
                       </div>
                     ))}
                   </div>

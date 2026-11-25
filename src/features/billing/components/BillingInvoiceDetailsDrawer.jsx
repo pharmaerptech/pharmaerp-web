@@ -1089,16 +1089,25 @@ export const BillingInvoiceDetailsDrawer = ({
                     <th className="py-2.5 px-3">Item Name & Brand</th>
                     <th className="py-2.5 px-2 font-mono">Batch</th>
                     <th className="py-2.5 px-2 font-mono">Expiry</th>
+                    <th className="py-2.5 px-2 font-mono text-center">Qty</th>
+                    <th className="py-2.5 px-2.5 font-mono text-right">MRP</th>
+                    <th className="py-2.5 px-2.5 font-mono text-right">Unit Rate</th>
+                    <th className="py-2.5 px-2 font-mono text-center">Disc %</th>
+                    <th className="py-2.5 px-2 font-mono text-center text-emerald-600 dark:text-emerald-400">Scheme %</th>
                     <th className="py-2.5 px-2 font-mono text-center">GST %</th>
-                    <th className="py-2.5 px-2 text-right">Qty</th>
-                    <th className="py-2.5 px-3 text-right">Unit Rate</th>
-                    <th className="py-2.5 px-3 text-right">Amount</th>
+                    <th className="py-2.5 px-3 font-mono text-right">Amount</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {items.length > 0 ? (
                     items.map((item, idx) => {
                       const soldQty = Number(item.qty || 1);
+                      const mrp = Number(item.mrp || item.price || 0);
+                      const unitRate = Number(item.price || item.rate || item.unitPrice || 0);
+                      const itemDisc = Number(item.disc || item.discount || item.itemDiscount || 0);
+                      const schemePct = Number(item.schemeDiscountPercent || item.schemePercent || item.saleScheme || 0);
+                      const gstRate = Number(item.gst !== undefined && item.gst !== null ? item.gst : (item.gstRate || 5));
+                      const grossLineAmt = soldQty * unitRate;
 
                       return (
                         <tr key={idx} className="hover:bg-surface-hover/50">
@@ -1106,22 +1115,58 @@ export const BillingInvoiceDetailsDrawer = ({
                             <span className="font-bold text-text block">
                               {item.name}
                             </span>
-                            <span className="text-[10px] text-text-muted">{item.brand || "Pharma"} • {item.category || "Medicine"}</span>
+                            <span className="text-[10px] text-text-muted">
+                              {[item.brand || "Pharma", item.category || "Medicine", item.pack ? `Pk:${item.pack}` : null, item.rack ? `Rk:${item.rack}` : null]
+                                .filter(Boolean)
+                                .join(" • ")}
+                            </span>
                           </td>
                           <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted font-semibold">{item.batch || "—"}</td>
                           <td className="py-2.5 px-2 font-mono text-[11px] text-text-muted">{item.expiry || item.expiryDate || item.expDate || "—"}</td>
-                          <td className="py-2.5 px-2 font-mono text-center font-bold text-purple-600 dark:text-purple-400">{item.gst || 5}%</td>
-                          <td className="py-2.5 px-2 font-mono text-right font-bold text-text tabular-nums">
-                            {soldQty}
+                          <td className="py-2.5 px-2 font-mono text-center font-bold text-text tabular-nums">
+                            <span className="inline-block px-1.5 py-0.5 rounded border bg-surface-alt border-border/80 text-[11px]">
+                              {soldQty}
+                            </span>
                           </td>
-                          <td className="py-2.5 px-3 font-mono text-right text-text-muted tabular-nums">₹{Number(item.price || 0).toFixed(2)}</td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-right text-primary tabular-nums">₹{(soldQty * Number(item.price || 0)).toFixed(2)}</td>
+                          <td className="py-2.5 px-2.5 font-mono text-right text-[11px] text-text-muted tabular-nums">
+                            ₹{mrp.toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-2.5 font-mono text-right text-[11.5px] font-bold text-text tabular-nums">
+                            ₹{unitRate.toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-2 font-mono text-center text-[10.5px]">
+                            {itemDisc > 0 ? (
+                              <span className="text-success font-bold font-mono">
+                                {itemDisc}%
+                              </span>
+                            ) : (
+                              <span className="text-text-muted/50">—</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-2 font-mono text-center text-[10.5px]">
+                            {schemePct > 0 ? (
+                              <span
+                                className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
+                                title={`Scheme ${schemePct}% applied`}
+                              >
+                                {schemePct}%
+                              </span>
+                            ) : (
+                              <span className="text-text-muted/50">—</span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-2 font-mono text-center font-bold text-purple-600 dark:text-purple-400">
+                            {gstRate}%
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-black text-right text-primary tabular-nums text-[12.5px]">
+                            ₹{grossLineAmt.toFixed(2)}
+                          </td>
                         </tr>
                       );
                     })
                   ) : (
                     <tr>
-                      <td colSpan={7} className="py-6 text-center text-text-muted">
+                      <td colSpan={10} className="py-6 text-center text-text-muted">
                         No line items recorded for this invoice.
                       </td>
                     </tr>
@@ -1173,20 +1218,53 @@ export const BillingInvoiceDetailsDrawer = ({
               <span className="text-text-muted font-sans font-medium">Subtotal Amount:</span>
               <span className="font-bold">₹{Number(invoice.subtotal || invoice.amount || 0).toFixed(2)}</span>
             </div>
-            {invoice.discount > 0 && (
+            {Number(invoice.itemDiscount || 0) > 0 && (
+              <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                <span className="font-sans font-medium">Item Discount:</span>
+                <span>-₹{Number(invoice.itemDiscount).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(invoice.schemeDiscount || 0) > 0 && (
+              <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20">
+                <span className="font-sans font-medium flex items-center gap-1.5">
+                  <Tag className="size-3.5" />
+                  Scheme Discount:
+                </span>
+                <span className="tabular-nums">-₹{Number(invoice.schemeDiscount).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(invoice.discount || 0) > 0 && !invoice.itemDiscount && !invoice.schemeDiscount && (
               <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
                 <span className="font-sans font-medium">Total Discount Applied:</span>
                 <span>-₹{Number(invoice.discount || 0).toFixed(2)}</span>
+              </div>
+            )}
+            {Number(invoice.extraDiscount || 0) > 0 && (
+              <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                <span className="font-sans font-medium">Extra Discount:</span>
+                <span>-₹{Number(invoice.extraDiscount).toFixed(2)}</span>
+              </div>
+            )}
+            {invoice.taxableAmount !== undefined && invoice.taxableAmount !== null && (
+              <div className="flex justify-between text-text-muted pt-1 border-t border-border/60">
+                <span className="font-sans font-medium">Taxable Subtotal:</span>
+                <span className="text-text font-bold">₹{Number(invoice.taxableAmount || 0).toFixed(2)}</span>
               </div>
             )}
             <div className="flex justify-between text-purple-600 dark:text-purple-400">
               <span className="font-sans font-medium">GST Tax Included:</span>
               <span>₹{Number(invoice.tax || 0).toFixed(2)}</span>
             </div>
+            {invoice.roundOff !== undefined && Number(invoice.roundOff || 0) !== 0 && (
+              <div className="flex justify-between text-text-muted text-[11px]">
+                <span className="font-sans font-medium">Round Off:</span>
+                <span>{Number(invoice.roundOff) > 0 ? "+" : "-"}₹{Math.abs(Number(invoice.roundOff)).toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm font-extrabold text-text pt-2 border-t border-border">
               <span className="font-sans">Grand Total:</span>
               <span className="text-primary font-mono text-base font-bold">
-                ₹{Number(invoice.amount || 0).toFixed(2)}
+                ₹{Number(invoice.grandTotal || invoice.amount || 0).toFixed(2)}
               </span>
             </div>
           </div>
