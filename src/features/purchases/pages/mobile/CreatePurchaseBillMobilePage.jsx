@@ -1,6 +1,6 @@
 // src/features/purchases/pages/mobile/CreatePurchaseBillMobilePage.jsx
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Search,
@@ -11,9 +11,12 @@ import {
   Receipt,
   CheckCircle2,
   FileSpreadsheet,
-  ArrowLeft
+  ArrowLeft,
+  Loader2,
+  Sparkles,
+  X
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   UICard,
   UIButton,
@@ -22,19 +25,121 @@ import {
 } from "@/components";
 import { cn } from "@/lib/utils";
 import { SupplierSearchBar } from "@/components";
+import purchaseBillService from "@/features/purchases/services/purchaseBillService";
+import { ImportPurchaseBillModal } from "@/features/purchases/components/ImportPurchaseBillModal";
 
 export const CreatePurchaseBillMobilePage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("details"); // "details" | "catalog" | "cart"
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const [cart, setCart] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
   const [purchaseBillNo, setPurchaseBillNo] = useState("");
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [rateBasis, setRateBasis] = useState("PTS");
+
+  // Inter-Company Sale Bill Auto-fill
+  const [matchingSaleBills, setMatchingSaleBills] = useState([]);
+  const [isSearchingSaleBills, setIsSearchingSaleBills] = useState(false);
+  const [showSaleBillDropdown, setShowSaleBillDropdown] = useState(false);
+  const [originSaleInvoiceId, setOriginSaleInvoiceId] = useState(null);
+  const [originCompanyId, setOriginCompanyId] = useState(null);
+  const [originCompanyName, setOriginCompanyName] = useState("");
+
+  useEffect(() => {
+    const trimmed = (supplierInvoiceNo || "").trim();
+    if (!trimmed || trimmed.length < 1) {
+      setMatchingSaleBills([]);
+      setShowSaleBillDropdown(false);
+      return;
+    }
+
+    if (originSaleInvoiceId) return;
+
+    const timer = setTimeout(async () => {
+      setIsSearchingSaleBills(true);
+      try {
+        const res = await purchaseBillService.getIncomingConsignments({
+          search: trimmed,
+          status: "PENDING",
+          limit: 5,
+        });
+        const raw = res.data?.data;
+        const bills = Array.isArray(raw) ? raw : (raw?.data || []);
+        setMatchingSaleBills(bills);
+        setShowSaleBillDropdown(bills.length > 0);
+      } catch (err) {
+        console.error("Failed to search matching sale bills on mobile:", err);
+      } finally {
+        setIsSearchingSaleBills(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [supplierInvoiceNo, originSaleInvoiceId]);
+
+  const handleSelectMatchingSaleBill = (bill) => {
+    if (!bill) return;
+
+    setSupplierInvoiceNo(bill.invoiceNo);
+
+    if (bill.supplier) {
+      setSelectedSupplier({
+        ...bill.supplier,
+        id: bill.supplier._id || bill.supplier.id,
+        name: bill.supplier.businessName || bill.supplier.name,
+      });
+    }
+
+    if (bill.date) {
+      const d = new Date(bill.date);
+      if (!isNaN(d.getTime())) {
+        setInvoiceDate(d.toISOString().split("T")[0]);
+      }
+    }
+
+    const itemsToLoad = (bill.cartItems && bill.cartItems.length > 0)
+      ? bill.cartItems
+      : (bill.items || []).map((it) => {
+          const qty = Number(it.qty || it.quantity || 0);
+          const freeQty = Number(it.freeQty || 0);
+          const rate = Number(it.rate || it.unitPrice || it.price || 0);
+          const mrp = Number(it.mrp || rate);
+          const gst = Number(it.gst || it.gstRate || it.hsnTaxpercent || 0);
+          const disc = Number(it.disc || it.discount || it.itemDiscount || 0);
+          return {
+            id: `${it.productId || it._id || Date.now()}-${Math.random()}`,
+            productId: it.productId || it.product_id || it.workspaceProductId || null,
+            name: it.name || it.productName || it.displayName || "Medicine",
+            pack: it.pack || it.packSize || "",
+            batch: it.batch || it.batchNo || "",
+            expiry: it.expiry || it.expDate || it.expiryDate || "",
+            qty,
+            freeQty,
+            schPct: Number(it.schPct || 0),
+            disc,
+            mrp,
+            hsn: it.hsn || it.hsnCode || "3004",
+            gst,
+            rate,
+          };
+        });
+
+    setCart(itemsToLoad);
+    setOriginSaleInvoiceId(bill._id);
+    setOriginCompanyId(bill.originCompany?._id || bill.originCompany?.id);
+    setOriginCompanyName(bill.originCompany?.name || "Sister Company");
+
+    setShowSaleBillDropdown(false);
+    setToastMessage(`⚡ Auto-filled ${itemsToLoad.length} items from ${bill.originCompany?.name || "Sale Bill"}`);
+    setActiveTab("cart");
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   const getGstRate = (p) => {
     if (!p) return 0;
@@ -128,6 +233,80 @@ export const CreatePurchaseBillMobilePage = () => {
     }
     return `0${digits[0]}/${digits.slice(1, 3)}`;
   };
+
+  const applyImportedPrefillData = (data) => {
+    if (!data) return;
+
+    // 1. Supplier
+    if (data.matchedSupplier) {
+      setSelectedSupplier({
+        ...data.matchedSupplier,
+        id: data.matchedSupplier._id || data.matchedSupplier.id,
+        name: data.matchedSupplier.businessName || data.matchedSupplier.name,
+      });
+    } else if (data.suggestedSupplier) {
+      setSelectedSupplier({
+        _id: null,
+        id: null,
+        businessName: data.suggestedSupplier.businessName,
+        name: data.suggestedSupplier.businessName,
+        gstNumber: data.suggestedSupplier.gstNumber,
+        mobile: data.suggestedSupplier.mobile,
+      });
+    }
+
+    // 2. Invoice Details
+    if (data.invoice?.invoiceNo) {
+      setSupplierInvoiceNo(data.invoice.invoiceNo);
+    }
+    if (data.invoice?.date) {
+      setInvoiceDate(data.invoice.date);
+    }
+
+    // 3. Cart Items
+    if (data.items && Array.isArray(data.items)) {
+      const itemsToLoad = data.items.map((it, idx) => {
+        const qty = Number(it.qty || 1);
+        const freeQty = Number(it.freeQty || 0);
+        const rate = Number(it.rate || it.pts || 0);
+        const mrp = Number(it.mrp || rate);
+        const gst = Number(it.gst !== undefined ? it.gst : 5);
+        const disc = Number(it.disc || 0);
+        const schPct = Number(it.schPct || 0);
+
+        return {
+          id: it.id || `${it.productId || idx}-${Date.now()}-${Math.random()}`,
+          productId: it.productId || null,
+          name: it.name || it.rawName || "Medicine",
+          pack: it.pack || "10's",
+          hsn: it.hsn ? String(it.hsn) : "3004",
+          batch: it.batch || "",
+          expiry: it.expiry ? formatExpiryInput(it.expiry) : "",
+          qty,
+          freeQty,
+          schPct,
+          disc,
+          mrp,
+          gst,
+          rate,
+        };
+      });
+
+      setCart(itemsToLoad);
+      setActiveTab("cart");
+      setToastMessage(
+        `⚡ Loaded ${itemsToLoad.length} items from imported bill (${data.invoice?.invoiceNo || "Invoice"})`
+      );
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
+
+  useEffect(() => {
+    if (location.state?.prefillData) {
+      applyImportedPrefillData(location.state.prefillData);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleSelectWorkspaceProduct = (prod, details) => {
     const p = details || prod;
@@ -293,11 +472,51 @@ export const CreatePurchaseBillMobilePage = () => {
       }
     }
 
-    setToastMessage(`✅ Purchase Bill submitted.`);
-    setTimeout(() => {
-      setToastMessage(null);
-      navigate("/purchases");
-    }, 2000);
+    try {
+      const payload = {
+        supplierId: selectedSupplier?._id || selectedSupplier?.id,
+        purchaseBillNo,
+        supplierInvoiceNo,
+        invoiceDate,
+        rateBasis,
+        isInterCompany: Boolean(originSaleInvoiceId),
+        originSaleInvoiceId: originSaleInvoiceId || null,
+        originCompanyId: originCompanyId || null,
+        items: cart.map((item) => ({
+          productId: item.productId || null,
+          name: item.name,
+          pack: item.pack,
+          batch: item.batch,
+          expiry: item.expiry,
+          qty: Number(item.qty) || 0,
+          freeQty: Number(item.freeQty) || 0,
+          schPct: Number(item.schPct) || 0,
+          disc: Number(item.disc) || 0,
+          mrp: Number(item.mrp) || 0,
+          hsn: item.hsn || "3004",
+          gst: Number(item.gst) || 0,
+          rate: Number(item.rate) || 0,
+          amount: getItemAmount(item),
+        })),
+        grandTotal: cartGrandTotal,
+      };
+
+      purchaseBillService.createPurchaseBill(payload)
+        .then(() => {
+          setToastMessage(`✅ Purchase Bill submitted successfully.`);
+          setTimeout(() => {
+            setToastMessage(null);
+            navigate("/purchases");
+          }, 1500);
+        })
+        .catch((err) => {
+          console.error("Failed to create purchase bill:", err);
+          setToastMessage(`❌ ${err?.response?.data?.message || err?.message || "Failed to submit"}`);
+          setTimeout(() => setToastMessage(null), 3500);
+        });
+    } catch (err) {
+      console.error("Failed to submit:", err);
+    }
   };
 
   return (
@@ -311,15 +530,27 @@ export const CreatePurchaseBillMobilePage = () => {
 
       {/* Header */}
       <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg bg-surface-alt border border-border">
-            <ArrowLeft className="size-4 text-text-muted" />
-          </button>
-          <div>
-            <h1 className="text-xl font-extrabold text-text tracking-tight flex items-center gap-1.5">
-               Purchase Bill
-            </h1>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className="p-1.5 rounded-lg bg-surface-alt border border-border">
+              <ArrowLeft className="size-4 text-text-muted" />
+            </button>
+            <div>
+              <h1 className="text-xl font-extrabold text-text tracking-tight flex items-center gap-1.5">
+                 Purchase Bill
+              </h1>
+            </div>
           </div>
+          <UIButton
+            type="button"
+            variant="outline"
+            size="sm"
+            startIcon={<Sparkles className="size-3 text-emerald-600" />}
+            onClick={() => setIsImportModalOpen(true)}
+            className="h-8 px-2.5 text-xs font-semibold border-emerald-600/40 text-emerald-600"
+          >
+            Import
+          </UIButton>
         </div>
 
         {/* Tabs */}
@@ -372,17 +603,86 @@ export const CreatePurchaseBillMobilePage = () => {
                     disabled
                   />
                </div>
-               <div>
-                  <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">
-                    Supplier Inv No
-                  </span>
-                  <input
-                    type="text"
-                    className="h-10 text-sm w-full px-3 rounded-xl border border-border bg-surface-alt"
-                    placeholder="INV-001"
-                    value={supplierInvoiceNo}
-                    onChange={(e) => setSupplierInvoiceNo(e.target.value)}
-                  />
+               <div className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                      Supplier Inv No
+                    </span>
+                    {originSaleInvoiceId && (
+                      <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-500/10 px-1 rounded flex items-center gap-0.5">
+                        <Sparkles className="size-2.5" /> Inter-Co
+                      </span>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      className={cn(
+                        "h-10 text-sm w-full px-3 rounded-xl border bg-surface-alt font-mono",
+                        originSaleInvoiceId
+                          ? "border-emerald-500/50 bg-emerald-500/5 focus:border-emerald-500"
+                          : "border-border focus:border-primary"
+                      )}
+                      placeholder="INV-001"
+                      value={supplierInvoiceNo}
+                      onChange={(e) => {
+                        setSupplierInvoiceNo(e.target.value);
+                        if (originSaleInvoiceId) {
+                          setOriginSaleInvoiceId(null);
+                          setOriginCompanyId(null);
+                          setOriginCompanyName("");
+                        }
+                      }}
+                      onFocus={() => {
+                        if (matchingSaleBills.length > 0) setShowSaleBillDropdown(true);
+                      }}
+                    />
+                    {isSearchingSaleBills && (
+                      <Loader2 className="size-3.5 animate-spin absolute right-3 top-3 text-primary pointer-events-none" />
+                    )}
+                  </div>
+
+                  {/* Matching Dropdown for Mobile */}
+                  {showSaleBillDropdown && matchingSaleBills.length > 0 && (
+                    <div className="absolute right-0 left-[-80px] top-full mt-1.5 z-50 bg-surface rounded-xl border border-primary/40 shadow-2xl overflow-hidden animate-in fade-in duration-150">
+                      <div className="bg-primary/10 px-3 py-1.5 border-b border-primary/20 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                          <Sparkles className="size-3.5 text-primary" />
+                          <span>Matching Sale Bill Found</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowSaleBillDropdown(false)}
+                          className="text-text-muted hover:text-text p-0.5"
+                        >
+                          <X className="size-3.5" />
+                        </button>
+                      </div>
+                      <div className="p-1 divide-y divide-border/40 max-h-52 overflow-y-auto">
+                        {matchingSaleBills.map((bill) => (
+                          <div
+                            key={bill._id}
+                            onClick={() => handleSelectMatchingSaleBill(bill)}
+                            className="p-2 hover:bg-primary/5 active:bg-primary/10 cursor-pointer rounded-lg text-left space-y-0.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono font-bold text-xs text-text">{bill.invoiceNo}</span>
+                              <span className="text-[10px] font-bold text-emerald-600">
+                                ₹{Number(bill.grandTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-text-muted flex items-center justify-between">
+                              <span>From: {bill.originCompany?.name || "Sister Co"}</span>
+                              <span>{bill.itemCount || (bill.items || []).length} items</span>
+                            </div>
+                            <div className="text-[9px] font-semibold text-primary pt-0.5">
+                              👉 Tap to auto-fill items & rates
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                </div>
              </div>
              <div>
@@ -424,7 +724,14 @@ export const CreatePurchaseBillMobilePage = () => {
               {cart.map((item) => (
                 <div key={item.id} className="bg-surface border border-border rounded-xl p-3 flex justify-between items-start">
                   <div>
-                    <h3 className="font-bold text-sm text-text">{item.name}</h3>
+                    <div className="flex items-center gap-1.5">
+                      <h3 className="font-bold text-sm text-text">{item.name}</h3>
+                      {!item.productId && (
+                        <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300 px-1 py-0.2 rounded border border-amber-300">
+                          New
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-text-muted font-mono mt-0.5">Batch: {item.batch} | Exp: {item.expiry}</p>
                     <p className="text-xs font-bold text-emerald-600 mt-1">Rate: ₹{item.rate} x {item.qty}</p>
                   </div>
@@ -465,6 +772,12 @@ export const CreatePurchaseBillMobilePage = () => {
         </div>
       )}
 
+      {/* Import Purchase Bill (OCR) Modal */}
+      <ImportPurchaseBillModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onApplyPrefill={applyImportedPrefillData}
+      />
     </section>
   );
 };

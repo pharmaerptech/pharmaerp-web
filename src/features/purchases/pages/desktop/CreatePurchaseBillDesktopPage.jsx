@@ -14,9 +14,10 @@ import {
   FileSpreadsheet,
   ArrowLeft,
   X,
-  Loader2
+  Loader2,
+  Sparkles
 } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   UICard,
   UIButton,
@@ -36,6 +37,7 @@ import { SupplierSearchBar } from "@/components";
 import workspaceProductService from "@/features/workspace-products/services/workspaceProductService";
 import { PurchaseBillSchemeCheckModal } from "@/features/purchases/components/scheme-check/PurchaseBillSchemeCheckModal";
 import { PurchaseBillRateCheckModal } from "@/features/purchases/components/rate-check/PurchaseBillRateCheckModal";
+import { ImportPurchaseBillModal } from "@/features/purchases/components/ImportPurchaseBillModal";
 import { computeRateCheckRow } from "@/features/purchases/utils/rateCheckUtils";
 import useBranch from "@/features/branch/hooks/useBranch";
 
@@ -337,6 +339,7 @@ const QuickCreateSupplierModal = ({ open, onClose, defaultName, onSuccess }) => 
 
 export const CreatePurchaseBillDesktopPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { billId } = useParams();
   const { currentBranch } = useBranch();
   const currentBranchId = currentBranch?._id || currentBranch?.id || null;
@@ -354,11 +357,21 @@ export const CreatePurchaseBillDesktopPage = () => {
   const [supplierInvoiceNo, setSupplierInvoiceNo] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => new Date().toISOString().split("T")[0]);
 
+  // Inter-Company Sale Bill Auto-fill
+  const [matchingSaleBills, setMatchingSaleBills] = useState([]);
+  const [isSearchingSaleBills, setIsSearchingSaleBills] = useState(false);
+  const [showSaleBillDropdown, setShowSaleBillDropdown] = useState(false);
+  const [originSaleInvoiceId, setOriginSaleInvoiceId] = useState(null);
+  const [originCompanyId, setOriginCompanyId] = useState(null);
+  const [originCompanyName, setOriginCompanyName] = useState("");
+
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [isSchemeCheckModalOpen, setIsSchemeCheckModalOpen] = useState(false);
   const [isRateCheckModalOpen, setIsRateCheckModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isQuickCreateModalOpen, setIsQuickCreateModalOpen] = useState(false);
   const [quickCreateProductName, setQuickCreateProductName] = useState("");
+  const [quickCreateItemTargetId, setQuickCreateItemTargetId] = useState(null);
   const [isQuickCreateSupplierModalOpen, setIsQuickCreateSupplierModalOpen] = useState(false);
   const [quickCreateSupplierName, setQuickCreateSupplierName] = useState("");
 
@@ -374,6 +387,18 @@ export const CreatePurchaseBillDesktopPage = () => {
   const searchBarRef = useRef(null);
   const supplierSearchBarRef = useRef(null);
   const previewButtonRef = useRef(null);
+  const consignmentDropdownRef = useRef(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (consignmentDropdownRef.current && !consignmentDropdownRef.current.contains(e.target)) {
+        setShowSaleBillDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Load existing bill if billId is present (Edit Mode)
   useEffect(() => {
@@ -413,6 +438,114 @@ export const CreatePurchaseBillDesktopPage = () => {
     };
     loadBill();
   }, [billId]);
+
+  // Debounced search for matching inter-company sale bills
+  useEffect(() => {
+    const trimmed = (supplierInvoiceNo || "").trim();
+    if (!trimmed || trimmed.length < 1) {
+      setMatchingSaleBills([]);
+      setShowSaleBillDropdown(false);
+      return;
+    }
+
+    // Skip auto-searching if we've already selected this exact bill
+    if (originSaleInvoiceId) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingSaleBills(true);
+      try {
+        const res = await purchaseBillService.getIncomingConsignments({
+          search: trimmed,
+          status: "PENDING",
+          limit: 5,
+        });
+        const raw = res.data?.data;
+        const bills = Array.isArray(raw) ? raw : (raw?.data || []);
+        setMatchingSaleBills(bills);
+        setShowSaleBillDropdown(bills.length > 0);
+      } catch (err) {
+        console.error("Failed to search matching sale bills:", err);
+      } finally {
+        setIsSearchingSaleBills(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [supplierInvoiceNo, originSaleInvoiceId]);
+
+  const handleSelectMatchingSaleBill = (bill) => {
+    if (!bill) return;
+
+    // 1. Supplier Invoice Number
+    setSupplierInvoiceNo(bill.invoiceNo);
+
+    // 2. Auto-fill Supplier
+    if (bill.supplier) {
+      setSelectedSupplier({
+        ...bill.supplier,
+        id: bill.supplier._id || bill.supplier.id,
+        name: bill.supplier.businessName || bill.supplier.name,
+      });
+    }
+
+    // 3. Auto-fill Invoice Date
+    if (bill.date) {
+      const d = new Date(bill.date);
+      if (!isNaN(d.getTime())) {
+        setInvoiceDate(d.toISOString().split("T")[0]);
+      }
+    }
+
+    // 4. Auto-fill Items with rates, batches, expiries, quantities, schemes
+    const itemsToLoad = (bill.cartItems && bill.cartItems.length > 0)
+      ? bill.cartItems
+      : (bill.items || []).map((it) => {
+          const qty = Number(it.qty || it.quantity || 0);
+          const freeQty = Number(it.freeQty || 0);
+          const rate = Number(it.rate || it.unitPrice || it.price || 0);
+          const mrp = Number(it.mrp || rate);
+          const gst = Number(it.gst || it.gstRate || it.hsnTaxpercent || 0);
+          const disc = Number(it.disc || it.discount || it.itemDiscount || 0);
+          const amount = Number(it.amount || it.total || qty * rate);
+          return {
+            id: `${it.productId || it._id || Date.now()}-${Math.random()}`,
+            productId: it.productId || it.product_id || it.workspaceProductId || null,
+            name: it.name || it.productName || it.displayName || "Medicine",
+            pack: it.pack || it.packSize || "",
+            batch: it.batch || it.batchNo || "",
+            expiry: it.expiry || it.expDate || it.expiryDate || "",
+            qty,
+            freeQty,
+            schPct: Number(it.schPct || 0),
+            disc,
+            cRatePct: Number(it.cRatePct || 0),
+            mrp,
+            hsn: it.hsn || it.hsnCode || "3004",
+            gst,
+            rate,
+            amount,
+            rateA: Number(it.rateA || rate),
+            rateB: Number(it.rateB || rate),
+            rateC: Number(it.rateC || rate),
+            retailerMarginPercent: 20,
+            stockistMarginPercent: 10,
+          };
+        });
+
+    setCart(itemsToLoad);
+
+    // 5. Link origin metadata
+    setOriginSaleInvoiceId(bill._id);
+    setOriginCompanyId(bill.originCompany?._id || bill.originCompany?.id);
+    setOriginCompanyName(bill.originCompany?.name || "Sister Company");
+
+    // 6. Dismiss dropdown and notify
+    setShowSaleBillDropdown(false);
+    setToastMessage(`⚡ Auto-filled ${itemsToLoad.length} items from ${bill.originCompany?.name || "Sale Bill"} (${bill.invoiceNo})`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   // Auto-focus handler
   useEffect(() => {
@@ -527,6 +660,100 @@ export const CreatePurchaseBillDesktopPage = () => {
     }
     return `0${digits[0]}/${digits.slice(1, 3)}`;
   };
+
+  const applyImportedPrefillData = (data) => {
+    if (!data) return;
+
+    // 1. Supplier
+    if (data.matchedSupplier) {
+      setSelectedSupplier({
+        ...data.matchedSupplier,
+        id: data.matchedSupplier._id || data.matchedSupplier.id,
+        name: data.matchedSupplier.businessName || data.matchedSupplier.name,
+      });
+    } else if (data.suggestedSupplier) {
+      setSelectedSupplier({
+        _id: null,
+        id: null,
+        businessName: data.suggestedSupplier.businessName,
+        name: data.suggestedSupplier.businessName,
+        gstNumber: data.suggestedSupplier.gstNumber,
+        mobile: data.suggestedSupplier.mobile,
+      });
+    }
+
+    // 2. Invoice Details
+    if (data.invoice?.invoiceNo) {
+      setSupplierInvoiceNo(data.invoice.invoiceNo);
+    }
+    if (data.invoice?.date) {
+      setInvoiceDate(data.invoice.date);
+    }
+
+    // 3. Extra Discount
+    if (data.totals?.discount && data.totals?.subtotal && data.totals.subtotal > 0) {
+      const discPct = Math.round((data.totals.discount / data.totals.subtotal) * 100 * 10) / 10;
+      if (discPct > 0) setExtraDiscountPct(discPct);
+    }
+
+    // 4. Cart Items
+    if (data.items && Array.isArray(data.items)) {
+      const itemsToLoad = data.items.map((it, idx) => {
+        const qty = Number(it.qty || 1);
+        const freeQty = Number(it.freeQty || 0);
+        const rate = Number(it.rate || it.pts || 0);
+        const mrp = Number(it.mrp || rate);
+        const gst = Number(it.gst !== undefined ? it.gst : 5);
+        const disc = Number(it.disc || 0);
+        const schPct = Number(it.schPct || 0);
+        const amount = Number(it.amount || qty * rate);
+
+        let rA = Number(it.rateA || rate);
+        let rB = Number(it.rateB || mrp || rate);
+        let rC = Number(it.rateC || rate);
+
+        return {
+          id: it.id || `${it.productId || idx}-${Date.now()}-${Math.random()}`,
+          productId: it.productId || null,
+          name: it.name || it.rawName || "Medicine",
+          pack: it.pack || "10's",
+          hsn: it.hsn ? String(it.hsn) : "3004",
+          batch: it.batch || "",
+          expiry: it.expiry ? formatExpiryInput(it.expiry) : "",
+          qty,
+          freeQty,
+          schPct,
+          disc,
+          cRatePct: 0,
+          mrp,
+          gst,
+          rate,
+          amount,
+          rateA: rA,
+          rateB: rB,
+          rateC: rC,
+          retailerMarginPercent: 20,
+          stockistMarginPercent: 10,
+          isMatched: Boolean(it.isMatched),
+          isNewProduct: Boolean(it.isNewProduct),
+          matchedProductName: it.matchedProductName || null,
+        };
+      });
+
+      setCart(itemsToLoad);
+      setToastMessage(
+        `⚡ Loaded ${itemsToLoad.length} items from imported bill (${data.invoice?.invoiceNo || "Invoice"})`
+      );
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
+
+  useEffect(() => {
+    if (location.state?.prefillData) {
+      applyImportedPrefillData(location.state.prefillData);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleSelectWorkspaceProduct = (prod, details) => {
     const p = details || prod;
@@ -839,6 +1066,9 @@ export const CreatePurchaseBillDesktopPage = () => {
         supplierInvoiceNo,
         invoiceDate,
         rateBasis,
+        isInterCompany: Boolean(originSaleInvoiceId),
+        originSaleInvoiceId: originSaleInvoiceId || null,
+        originCompanyId: originCompanyId || null,
         items: cart.map((item) => {
           let rA = Number(item.rateA) || 0;
           let rB = Number(item.rateB) || 0;
@@ -948,6 +1178,19 @@ export const CreatePurchaseBillDesktopPage = () => {
             </p>
           </div>
         </div>
+
+        <div className="flex items-center gap-2">
+          <UIButton
+            type="button"
+            variant="outline"
+            size="sm"
+            startIcon={<Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />}
+            onClick={() => setIsImportModalOpen(true)}
+            className="h-9 px-3.5 text-xs font-semibold border-emerald-600/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 shadow-2xs"
+          >
+            Import Bill (OCR)
+          </UIButton>
+        </div>
       </div>
 
       {/* Details Bar */}
@@ -990,17 +1233,102 @@ export const CreatePurchaseBillDesktopPage = () => {
                 disabled
               />
             </div>
-            <div>
-              <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">
-                Supplier Invoice No
-              </span>
-              <input
-                type="text"
-                className="h-8.5 text-xs px-2.5 rounded-lg border border-border bg-surface w-32 focus:border-primary focus:outline-none"
-                placeholder="Enter Invoice No"
-                value={supplierInvoiceNo}
-                onChange={(e) => setSupplierInvoiceNo(e.target.value)}
-              />
+            <div ref={consignmentDropdownRef} className="relative">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block">
+                  Supplier Invoice No
+                </span>
+                {originSaleInvoiceId && (
+                  <span className="text-[9px] font-semibold text-emerald-600 bg-emerald-500/10 px-1 rounded flex items-center gap-0.5">
+                    <Sparkles className="size-2.5" /> Inter-Co
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  className={cn(
+                    "h-8.5 text-xs px-2.5 rounded-lg border bg-surface w-40 font-mono text-text focus:outline-none transition-colors",
+                    originSaleInvoiceId
+                      ? "border-emerald-500/50 bg-emerald-500/5 focus:border-emerald-500"
+                      : "border-border focus:border-primary"
+                  )}
+                  placeholder="Enter Invoice No"
+                  value={supplierInvoiceNo}
+                  onChange={(e) => {
+                    setSupplierInvoiceNo(e.target.value);
+                    if (originSaleInvoiceId) {
+                      setOriginSaleInvoiceId(null);
+                      setOriginCompanyId(null);
+                      setOriginCompanyName("");
+                    }
+                  }}
+                  onFocus={() => {
+                    if (matchingSaleBills.length > 0) setShowSaleBillDropdown(true);
+                  }}
+                />
+                {isSearchingSaleBills && (
+                  <Loader2 className="size-3 animate-spin absolute right-2.5 top-2.5 text-primary pointer-events-none" />
+                )}
+              </div>
+
+              {!showSaleBillDropdown && matchingSaleBills.length > 0 && !originSaleInvoiceId && (
+                <button
+                  type="button"
+                  onClick={() => setShowSaleBillDropdown(true)}
+                  className="mt-1 text-[10px] font-bold text-primary flex items-center gap-1 hover:underline cursor-pointer"
+                >
+                  <Sparkles className="size-3 text-primary animate-pulse" />
+                  <span>Found {matchingSaleBills.length} matching sale bill{matchingSaleBills.length > 1 ? "s" : ""}</span>
+                </button>
+              )}
+
+              {/* Matching Sale Bill Autocomplete Dropdown */}
+              {showSaleBillDropdown && matchingSaleBills.length > 0 && (
+                <div className="absolute left-0 top-full mt-1.5 z-[100] w-80 bg-surface rounded-xl border border-primary/40 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className="bg-primary/10 px-3 py-2 border-b border-primary/20 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
+                      <Sparkles className="size-3.5 text-primary" />
+                      <span>Matching Sale Bill Found</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSaleBillDropdown(false)}
+                      className="text-text-muted hover:text-text p-0.5 rounded cursor-pointer"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+
+                  <div className="p-1 divide-y divide-border/40 max-h-60 overflow-y-auto">
+                    {matchingSaleBills.map((bill) => (
+                      <div
+                        key={bill._id}
+                        onClick={() => handleSelectMatchingSaleBill(bill)}
+                        className="p-2.5 hover:bg-primary/5 cursor-pointer rounded-lg transition-colors group space-y-1"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-bold text-xs text-text group-hover:text-primary">
+                            {bill.invoiceNo}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                            ₹{Number(bill.grandTotal || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-text-muted flex items-center justify-between">
+                          <span>
+                            From: <strong className="text-text font-medium">{bill.originCompany?.name || "Sister Company"}</strong>
+                          </span>
+                          <span>{bill.itemCount || (bill.items || []).length} items</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-[10px] font-semibold text-primary pt-0.5">
+                          <span>👉 Click to auto-fill items, rates, qty & scheme</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <span className="text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1">
@@ -1156,9 +1484,24 @@ export const CreatePurchaseBillDesktopPage = () => {
                         <tr key={item.id} className="hover:bg-surface-hover/80 transition-colors">
                           {/* 1. Product */}
                           <td className="py-2 px-3">
-                            <span className="font-bold text-text text-xs block truncate max-w-[130px]" title={item.name}>
-                              {item.name}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-text text-xs block truncate max-w-[130px]" title={item.name}>
+                                {item.name}
+                              </span>
+                              {!item.productId && (
+                                <span
+                                  className="text-[9px] font-semibold text-amber-700 bg-amber-50 dark:bg-amber-950/60 dark:text-amber-300 px-1.5 py-0.2 rounded border border-amber-300 dark:border-amber-700 shrink-0 cursor-pointer hover:bg-amber-100"
+                                  title="New Product: Will auto-register in catalog on save, or click to customize"
+                                  onClick={() => {
+                                    setQuickCreateProductName(item.name);
+                                    setQuickCreateItemTargetId(item.id);
+                                    setIsQuickCreateModalOpen(true);
+                                  }}
+                                >
+                                  New
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-text-muted block">{item.pack || "Pack"}</span>
                           </td>
 
@@ -1647,9 +1990,33 @@ export const CreatePurchaseBillDesktopPage = () => {
 
       <QuickCreateProductModal
         open={isQuickCreateModalOpen}
-        onClose={() => setIsQuickCreateModalOpen(false)}
+        onClose={() => {
+          setIsQuickCreateModalOpen(false);
+          setQuickCreateItemTargetId(null);
+        }}
         defaultName={quickCreateProductName}
-        onSuccess={handleSelectWorkspaceProduct}
+        onSuccess={(newProduct) => {
+          if (quickCreateItemTargetId) {
+            setCart((prev) =>
+              prev.map((it) => {
+                if (it.id === quickCreateItemTargetId) {
+                  return {
+                    ...it,
+                    productId: newProduct._id || newProduct.id,
+                    name: newProduct.name || it.name,
+                    pack: newProduct.pack || it.pack,
+                    isNewProduct: false,
+                    isMatched: true,
+                  };
+                }
+                return it;
+              })
+            );
+            setQuickCreateItemTargetId(null);
+          } else {
+            handleSelectWorkspaceProduct(newProduct);
+          }
+        }}
       />
 
       <QuickCreateSupplierModal
@@ -1662,6 +2029,13 @@ export const CreatePurchaseBillDesktopPage = () => {
             searchBarRef.current?.focus();
           }, 100);
         }}
+      />
+
+      {/* Import Purchase Bill (OCR) Modal */}
+      <ImportPurchaseBillModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onApplyPrefill={applyImportedPrefillData}
       />
     </section>
   );

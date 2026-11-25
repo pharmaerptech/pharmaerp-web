@@ -1,15 +1,16 @@
 // src/layouts/app/desktop/AppDesktopHeader.jsx
 
-import { useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Sparkles, Plus, Settings, HelpCircle } from "lucide-react";
+import { Sparkles, Plus, Settings, HelpCircle, Layers } from "lucide-react";
 
 import { ROUTES } from "@/constants";
 import { useWorkMode } from "@/contexts";
 import { useNavigationPipeline } from "@/contexts/NavigationPipelineContext";
 import { useSetupStatus } from "@/features/setup/hooks/useSetupStatus";
 import usePermission from "@/hooks/usePermission";
+import { ProductFacilityTableDialog } from "@/components";
 import {
   HeaderSearchBar,
   HeaderNotifications,
@@ -252,6 +253,27 @@ export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240, onOpenS
     [location.pathname]
   );
 
+  // State for Stock Matrix dialog
+  const [isStockMatrixOpen, setIsStockMatrixOpen] = useState(false);
+
+  // Global Keyboard Shortcut: Shift + I -> Open Stock Matrix Dialog
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.shiftKey && (e.key === "I" || e.key === "i")) {
+        // Prevent typing Shift+I inside input / textarea fields
+        const targetTag = e.target?.tagName?.toLowerCase();
+        if (targetTag === "input" || targetTag === "textarea" || e.target?.isContentEditable) {
+          return;
+        }
+        e.preventDefault();
+        setIsStockMatrixOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // ── Neutral Default Header (When workMode is null / Choose Mode screen) ──
   if (!workMode) {
     return (
@@ -351,6 +373,18 @@ export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240, onOpenS
             </Link>
           ) : null}
 
+          {/* Product Facility Stock Matrix Button */}
+          <button
+            type="button"
+            id="header-facility-matrix-btn"
+            onClick={() => setIsStockMatrixOpen(true)}
+            className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-surface hover:bg-surface-hover text-xs font-semibold text-text shadow-2xs transition-all hover:border-primary/40 cursor-pointer"
+            title="Stock Matrix (Shift + I)"
+          >
+            <Layers className="size-3.5 text-primary" />
+            <span>Stock Matrix</span>
+          </button>
+
           {isSetupComplete && <HeaderNotifications />}
 
           {canQuickPosLaunch && (
@@ -363,6 +397,12 @@ export const AppDesktopHeader = ({ sidebarCollapsed, sidebarWidth = 240, onOpenS
               <Plus className="size-5 text-white dark:text-white" color="white" />
             </Link>
           )}
+
+          {/* Product Facility Table Dialog */}
+          <ProductFacilityTableDialog
+            open={isStockMatrixOpen}
+            onClose={() => setIsStockMatrixOpen(false)}
+          />
         </div>
       </div>
     </header>

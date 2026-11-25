@@ -307,6 +307,15 @@ export const SalesReturnDetailsDrawer = ({ open, isOpen: propIsOpen, onClose, re
                   >
                     {isB2B ? "B2B Sales Return" : "B2C Sales Return"}
                   </UIBadge>
+                  {itemToDisplay?.isInterCompany && (
+                    <UIBadge
+                      variant="outline"
+                      color="purple"
+                      className="text-[10px] font-bold uppercase tracking-wider bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30"
+                    >
+                      Inter-Company
+                    </UIBadge>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-xs text-text-muted mt-0.5">
                   <span className="flex items-center gap-1 font-medium">
@@ -376,6 +385,34 @@ export const SalesReturnDetailsDrawer = ({ open, isOpen: propIsOpen, onClose, re
               <span className="text-[10.5px] text-text-muted truncate block">Reference Memo</span>
             </div>
           </div>
+
+          {/* Inter-Company Sales Return Origin Banner */}
+          {itemToDisplay?.isInterCompany && (
+            <div className="p-3.5 rounded-xl bg-purple-500/[0.08] dark:bg-purple-500/[0.12] border border-purple-500/30 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="size-8 rounded-lg bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                  <Building2 className="size-4" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-purple-700 dark:text-purple-400 uppercase tracking-wider block">
+                    Inter-Company Sales Return
+                  </span>
+                  <p className="font-bold text-text text-sm flex items-center gap-2">
+                    <span>Returned by: {itemToDisplay?.originCompany?.name || customerName}</span>
+                  </p>
+                  <span className="text-[10.5px] text-text-muted">
+                    Origin Company GSTIN: {itemToDisplay?.originCompany?.gstin || customerGstin || "—"} • Inverted from Buyer's Purchase Return
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] text-text-muted block">Classification</span>
+                <UIBadge variant="soft" color="info" size="sm" className="font-semibold text-purple-700 dark:text-purple-300">
+                  Supplier Credit Note
+                </UIBadge>
+              </div>
+            </div>
+          )}
 
           {/* Automatic Scrap Store Transfer Order Card */}
           {itemToDisplay?.transferOrderNo && (

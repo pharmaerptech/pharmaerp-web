@@ -16,6 +16,7 @@ import {
   RotateCcw,
   Receipt,
   CreditCard,
+  Sparkles,
 } from "lucide-react";
 import {
   UIButton,
@@ -38,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { PurchaseBillPreviewModal } from "../../components/PurchaseBillPreviewModal";
 import { MakePaymentModal } from "../../components/MakePaymentModal";
 import { BulkPaymentModal } from "../../components/BulkPaymentModal";
+import { ImportPurchaseBillModal } from "../../components/ImportPurchaseBillModal";
 import { BranchFilterSelect, BranchBadge } from "@/components/shared";
 import { useBranchFilter } from "@/hooks";
 import purchaseBillService from "../../services/purchaseBillService";
@@ -95,6 +97,7 @@ export const PurchasesDesktopPage = () => {
   const [selectedBill, setSelectedBill] = useState(null);
   const [paymentBill, setPaymentBill] = useState(null);
   const [isBulkPaymentOpen, setIsBulkPaymentOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState(null);
 
   // Initial Fetch & Filter Application
@@ -436,6 +439,23 @@ export const PurchasesDesktopPage = () => {
             Bulk Payment
           </UIButton>
 
+          {/* Import Purchase Bill (PDF/OCR) */}
+          <PermissionGate
+            permission="purchase:create"
+            fallback={null}
+          >
+            <UIButton
+              type="button"
+              variant="outline"
+              size="md"
+              startIcon={<Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />}
+              onClick={() => setIsImportModalOpen(true)}
+              className="h-10 px-3.5 text-xs font-semibold border-emerald-600/40 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+            >
+              Import Bill (OCR)
+            </UIButton>
+          </PermissionGate>
+
           {/* Enter Purchase Bill Button */}
           <PermissionGate
             permission="purchase:create"
@@ -647,6 +667,12 @@ export const PurchasesDesktopPage = () => {
           setToastMessage("✅ Bulk payment allocated successfully!");
           setTimeout(() => setToastMessage(null), 4000);
         }}
+      />
+
+      {/* Import Purchase Bill (OCR) Modal */}
+      <ImportPurchaseBillModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
       />
     </div>
   );

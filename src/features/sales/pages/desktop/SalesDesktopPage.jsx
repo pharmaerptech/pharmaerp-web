@@ -775,6 +775,43 @@ export const SalesDesktopPage = () => {
     };
   };
 
+  const handleSwitchBillingMode = (newMode) => {
+    if (newMode === billingMode) return;
+
+    setBillingMode(newMode);
+
+    if (newMode === "B2C") {
+      setSelectedB2bParty(null);
+    }
+
+    // Dynamic price recalculation for cart items on mode switch
+    setCart((prevCart) => {
+      if (!prevCart || prevCart.length === 0) return prevCart;
+      return prevCart.map((item) => {
+        let updatedPrice = item.price;
+        if (newMode === "B2B") {
+          updatedPrice = Number(item.rateB || item.rateb || item.price || 0);
+          if (selectedB2bParty?.defaultDiscount) {
+            updatedPrice = Math.round(updatedPrice * (1 - selectedB2bParty.defaultDiscount / 100));
+          }
+        } else {
+          updatedPrice = Number(item.rateC || item.ratec || item.mrp || item.price || 0);
+        }
+        return {
+          ...item,
+          price: updatedPrice,
+        };
+      });
+    });
+
+    setToastMessage(
+      newMode === "B2B"
+        ? "Switched to B2B Commercial. Cart updated to Rate B pricing with active scheme benefits."
+        : "Switched to B2C Retail. Cart updated to Rate C pricing."
+    );
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   const activeShiftId = activeShift?._id || activeShift?.id || null;
 
   // Auto-load priority automatic hold on return / refresh (or resolve explicit resume from Billing)
@@ -1314,6 +1351,8 @@ export const SalesDesktopPage = () => {
           if (selectedB2bParty?.defaultDiscount) {
             basePrice = Math.round(basePrice * (1 - selectedB2bParty.defaultDiscount / 100));
           }
+        } else {
+          basePrice = Number(item.rateC || item.ratec || item.price || 0);
         }
 
         const finalItem = {
@@ -1417,18 +1456,44 @@ export const SalesDesktopPage = () => {
     clearFormDraftState();
   };
 
-  // Line item amount calculation
-  // B2B: Rate * Qty (no disc deducted here — all discounts applied in Invoice Preview)
+  // Line item amount calculation:
+  // B2B: Rate * Qty * (1 - Disc/100) * (1 - SchemeDisc/100)
   // B2C: Rate * Qty * (1 - Disc/100)
   const getItemAmount = (item) => {
     const rate = Number(item.price) || 0;
     const qty = Math.max(1, Number(item.qty) || 1);
-    if (billingMode === "B2B") {
-      return rate * qty;
-    }
     const disc = Math.max(0, Math.min(100, Number(item.disc) || 0));
+    if (billingMode === "B2B") {
+      const rawSchemePct = Number(item.schemeDiscountPercent) || 0;
+      const schemeCheck = computeSchemeDiscount(qty, rawSchemePct);
+      const schemePct = schemeCheck.schemeApply ? schemeCheck.finalDiscountPercent : 0;
+      return rate * qty * (1 - disc / 100) * (1 - schemePct / 100);
+    }
     return rate * qty * (1 - disc / 100);
   };
+
+  const totalSchemeDiscount = billingMode === "B2B" ? cart.reduce((acc, item) => {
+    const rawSchemePct = Number(item.schemeDiscountPercent) || 0;
+    if (rawSchemePct <= 0) return acc;
+    const qty = Math.max(1, Number(item.qty) || 1);
+    const rate = Number(item.price) || 0;
+    const schemeCheck = computeSchemeDiscount(qty, rawSchemePct);
+    if (!schemeCheck.schemeApply) return acc;
+    return acc + (rate * qty * schemeCheck.finalDiscountPercent) / 100;
+  }, 0) : 0;
+
+  const totalItemDiscount = billingMode === "B2B" ? cart.reduce((acc, item) => {
+    const disc = Number(item.disc) || 0;
+    if (disc <= 0) return acc;
+    const qty = Math.max(1, Number(item.qty) || 1);
+    const rate = Number(item.price) || 0;
+    return acc + (rate * qty * disc) / 100;
+  }, 0) : 0;
+
+  const cartGrossSubtotal = cart.reduce(
+    (acc, item) => acc + (Number(item.price) || 0) * Math.max(1, Number(item.qty) || 1),
+    0
+  );
 
   const cartSubtotal = cart.reduce((acc, item) => acc + getItemAmount(item), 0);
   const cartItemCount = cart.reduce((acc, item) => acc + (Number(item.qty) || 1), 0);
@@ -1791,7 +1856,7 @@ export const SalesDesktopPage = () => {
             <div className="flex items-center gap-1 bg-surface p-1 rounded-xl border border-border shadow-2xs">
               <button
                 type="button"
-                onClick={() => setBillingMode("B2C")}
+                onClick={() => handleSwitchBillingMode("B2C")}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
                   billingMode === "B2C"
@@ -1804,7 +1869,7 @@ export const SalesDesktopPage = () => {
               </button>
               <button
                 type="button"
-                onClick={() => setBillingMode("B2B")}
+                onClick={() => handleSwitchBillingMode("B2B")}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer",
                   billingMode === "B2B"
@@ -2052,12 +2117,7 @@ export const SalesDesktopPage = () => {
                   },
                 ]}
                 activeTab={billingMode}
-                onChange={(modeId) => {
-                  setBillingMode(modeId);
-                  if (modeId === "B2C") {
-                    setSelectedB2bParty(null);
-                  }
-                }}
+                onChange={(modeId) => handleSwitchBillingMode(modeId)}
                 variant="segmented"
                 size="sm"
                 className="border border-border/80 shadow-2xs"
@@ -2111,8 +2171,8 @@ export const SalesDesktopPage = () => {
                     <th className="py-2 px-1.5 w-[48px] font-mono">GST%</th>
                     {billingMode === "B2C" ? (
                       <th className="py-2 px-1.5 w-[48px] font-mono">Rate%</th>
-                    ) : cart.some((i) => Number(i.schemeDiscountPercent) > 0) && (
-                      <th className="py-2 px-1.5 w-[56px] font-mono">Schm%</th>
+                    ) : (
+                      <th className="py-2 px-1.5 w-[56px] font-mono text-center">Schm%</th>
                     )}
                     <th className="py-2 px-1.5 w-[64px] font-mono text-right">MRP</th>
                     <th className="py-2 px-1.5 w-[70px] font-mono text-right">Rate</th>
@@ -2161,16 +2221,35 @@ export const SalesDesktopPage = () => {
                         {/* Rate % (B2C) / Scheme % (B2B) */}
                         {billingMode === "B2C" ? (
                           <td className="py-1.5 px-1.5 font-mono text-[10.5px] text-success font-semibold">
-                            {item.rateCPercentage !== undefined && item.rateCPercentage !== null ? `${item.rateCPercentage}%` : item.ratePct}
+                            {item.rateCPercentage !== undefined && item.rateCPercentage !== null ? `${item.rateCPercentage}%` : item.ratePct || "—"}
                           </td>
-                        ) : cart.some((i) => Number(i.schemeDiscountPercent) > 0) && (() => {
-                          const schemeCheck = computeSchemeDiscount(Number(item.qty) || 1, Number(item.schemeDiscountPercent) || 0);
-                          return (
-                            <td className="py-1.5 px-1.5 font-mono text-[10.5px] text-success font-semibold">
-                              {schemeCheck.schemeApply ? item.schemeDiscountPercent : "—"}
-                            </td>
-                          );
-                        })()}
+                        ) : (
+                          <td className="py-1.5 px-1.5 font-mono text-[10.5px] text-center">
+                            {(() => {
+                              const rawScheme = Number(item.schemeDiscountPercent) || 0;
+                              if (rawScheme <= 0) return <span className="text-text-muted">—</span>;
+                              const schemeCheck = computeSchemeDiscount(Number(item.qty) || 1, rawScheme);
+                              if (schemeCheck.schemeApply) {
+                                return (
+                                  <span
+                                    className="font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20"
+                                    title={`Scheme discount of ${schemeCheck.finalDiscountPercent}% applied`}
+                                  >
+                                    {schemeCheck.finalDiscountPercent}%
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span
+                                  className="text-amber-600 dark:text-amber-400 text-[10px] font-semibold"
+                                  title={`Min qty threshold not met for ${rawScheme}% scheme`}
+                                >
+                                  {rawScheme}%
+                                </span>
+                              );
+                            })()}
+                          </td>
+                        )}
 
                         {/* MRP */}
                         <td className="py-1.5 px-1.5 font-mono text-right text-[10.5px] text-text-muted">
@@ -2340,10 +2419,38 @@ export const SalesDesktopPage = () => {
 
                 <div className="border-t border-border/60" />
 
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-xs text-text-muted">Subtotal</span>
-                  <span className="text-xs font-bold text-text font-mono tabular-nums">₹{cartSubtotal.toFixed(2)}</span>
-                </div>
+                {billingMode === "B2B" && (totalItemDiscount > 0 || totalSchemeDiscount > 0) ? (
+                  <>
+                    <div className="flex items-center justify-between py-1">
+                      <span className="text-xs text-text-muted">Gross Subtotal</span>
+                      <span className="text-xs font-bold text-text font-mono tabular-nums">₹{cartGrossSubtotal.toFixed(2)}</span>
+                    </div>
+
+                    {totalItemDiscount > 0 && (
+                      <div className="flex items-center justify-between py-0.5 text-success">
+                        <span className="text-xs">Item Disc.</span>
+                        <span className="text-xs font-bold font-mono tabular-nums">-₹{totalItemDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    {totalSchemeDiscount > 0 && (
+                      <div className="flex items-center justify-between py-0.5 text-emerald-600 dark:text-emerald-400">
+                        <span className="text-xs">Scheme Disc.</span>
+                        <span className="text-xs font-bold font-mono tabular-nums">-₹{totalSchemeDiscount.toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between py-1">
+                      <span className="text-xs text-text-muted">Taxable Subtotal</span>
+                      <span className="text-xs font-bold text-text font-mono tabular-nums">₹{cartSubtotal.toFixed(2)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-xs text-text-muted">Subtotal</span>
+                    <span className="text-xs font-bold text-text font-mono tabular-nums">₹{cartSubtotal.toFixed(2)}</span>
+                  </div>
+                )}
 
                 {billingMode === "B2B" && estTax > 0 && (
                   <div className="flex items-center justify-between py-1">

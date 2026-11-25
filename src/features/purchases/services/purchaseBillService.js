@@ -36,6 +36,25 @@ const purchaseBillService = {
       },
     });
   },
+
+  getIncomingConsignments(params = {}) {
+    return apiClient.get(`/catalog/purchase-bills/incoming-consignments`, { params });
+  },
+
+  acceptIncomingConsignment(invoiceId, payload = {}) {
+    return apiClient.post(`/catalog/purchase-bills/incoming-consignments/${invoiceId}/accept`, payload);
+  },
+
+  parsePurchaseBillImport(data) {
+    if (data instanceof FormData) {
+      return apiClient.post(`/catalog/purchase-bills/parse-import`, data, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+    }
+    return apiClient.post(`/catalog/purchase-bills/parse-import`, data);
+  },
 };
 
 export default purchaseBillService;

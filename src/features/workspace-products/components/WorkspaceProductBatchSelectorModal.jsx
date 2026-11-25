@@ -355,10 +355,11 @@ export const WorkspaceProductBatchSelectorModal = ({
         const bExp = b.expiry || b.expiryDate || b.expDate || "";
         const bMrp = Number(b.mrp ?? b.MRP ?? p.mrp ?? p.mrpPrice ?? 0);
         const bRateA = Number(b.rateA ?? b.ratea ?? b.rate ?? p.rateA ?? 0);
-        const bRateB = Number(b.rateB ?? b.rateb ?? b.ptr ?? p.rateB ?? 0);
+        const bRateB = Number(b.rateB ?? b.rateb ?? b.ptr ?? p.rateB ?? p.rateb ?? p.ptr ?? 0);
         const bRateC = Number(b.rateC ?? b.ratec ?? b.price ?? b.saleRate ?? p.rateC ?? p.price ?? bMrp);
         const bRack = b.rack || p.rack || "";
         const bPack = b.pack || p.pack || "";
+        const bSchemeDiscountPercent = Number(b.schemeDiscountPercent ?? p.schemeDiscountPercent ?? 0);
 
         return {
           ...b,
@@ -370,12 +371,13 @@ export const WorkspaceProductBatchSelectorModal = ({
           expiry: bExp,
           expiryDate: bExp,
           mrp: bMrp,
-          price: bRateC,
+          price: billingMode === "B2B" && bRateB > 0 ? bRateB : bRateC,
           rateC: bRateC,
           rateB: bRateB,
           rateA: bRateA,
           rack: bRack,
           pack: bPack,
+          schemeDiscountPercent: bSchemeDiscountPercent,
         };
       });
 
@@ -409,13 +411,15 @@ export const WorkspaceProductBatchSelectorModal = ({
         const baseStock = Number(p.stock || 0);
 
         if (baseStock > 0) {
+          const baseRateB = Number(p.rateB ?? p.rateb ?? p.ptr ?? 0);
           matchedList = [
             {
               id: `b-${p._id || p.id || "1"}`,
               batchNo: baseBatchNo,
               mrp: baseMrp,
-              price: basePrice,
-              rateB: Number(p.rateB ?? p.rateb ?? p.ptr ?? 0),
+              price: billingMode === "B2B" && baseRateB > 0 ? baseRateB : basePrice,
+              rateB: baseRateB,
+              rateC: basePrice,
               rateA: Number(p.rateA ?? p.ratea ?? 0),
               stock: baseStock,
               batchQty: baseStock,
@@ -602,8 +606,16 @@ export const WorkspaceProductBatchSelectorModal = ({
   const totalCombinedAmount = selectedBatchesList.reduce((acc, b) => {
     const bId = b.id || b._id || b.batchNo;
     const q = allocations[bId] || 0;
-    const rate = Number(b.rateC ?? b.rate ?? b.price ?? b.saleRate ?? b.rateA ?? product.rateC ?? product.price ?? 134.4);
-    return acc + rate * q;
+    const bRateB = Number(b.rateB ?? b.rateb ?? b.ptr ?? product.rateB ?? product.rateb ?? product.ptr ?? 0);
+    const rate = Number(
+      billingMode === "B2B"
+        ? (bRateB > 0 ? bRateB : (b.rateC ?? b.price ?? product.price ?? 134.4))
+        : (b.rateC ?? b.rate ?? b.price ?? b.saleRate ?? b.rateA ?? product.rateC ?? product.price ?? 134.4)
+    );
+    const bSchemeDiscount = Number(b.schemeDiscountPercent ?? product.schemeDiscountPercent ?? 0);
+    const schemeResult = computeSchemeDiscount(q, safeNum(bSchemeDiscount), b.stock, undefined);
+    const finalRate = billingMode === "B2B" && schemeResult.schemeApply ? rate * (1 - schemeResult.finalDiscountPercent / 100) : rate;
+    return acc + finalRate * q;
   }, 0);
 
   const handleConfirmAdd = () => {
@@ -612,7 +624,14 @@ export const WorkspaceProductBatchSelectorModal = ({
     const itemsToAdd = selectedBatchesList.map((b) => {
       const bId = b.id || b._id || b.batchNo;
       const bNo = b.batchNo || b.batchNumber || b.batch || "STANDARD";
-      const bRate = Number(b.rateC ?? b.rate ?? b.price ?? b.saleRate ?? b.rateA ?? product.rateC ?? product.price);
+      const bRateB = Number(b.rateB ?? b.rateb ?? b.ptr ?? product.rateB ?? product.rateb ?? product.ptr ?? 0);
+      const bRateA = Number(b.rateA ?? b.ratea ?? product.rateA ?? product.ratea ?? 0);
+      const bRateC = Number(b.rateC ?? b.rate ?? b.price ?? b.saleRate ?? product.rateC ?? product.price ?? product.mrp);
+      const bRate = Number(
+        billingMode === "B2B"
+          ? (bRateB > 0 ? bRateB : (b.price ?? bRateC))
+          : bRateC
+      );
       const bMrp = Number(b.mrp ?? product.mrp);
       const bExp = b.expiry || b.expiryDate || b.expDate || "";
       const bRack = b.rack || product.rack;
@@ -623,8 +642,6 @@ export const WorkspaceProductBatchSelectorModal = ({
       const bRateCPercentage = b.rateCPercentage !== undefined && b.rateCPercentage !== null ? b.rateCPercentage : product.rateCPercentage;
       const bStock = Number(b.stock ?? b.batchQty ?? b.qty ?? 0);
 
-      const bRateB = Number(b.rateB ?? b.rateb ?? b.ptr ?? product.rateB ?? product.rateb ?? product.ptr ?? 0);
-      const bRateA = Number(b.rateA ?? b.ratea ?? product.rateA ?? product.ratea ?? 0);
       const bSchemeDiscountPercent = Number(b.schemeDiscountPercent ?? product.schemeDiscountPercent ?? 0);
 
       // Compute scheme discount for this batch's allocated qty
@@ -655,11 +672,13 @@ export const WorkspaceProductBatchSelectorModal = ({
         price: bRate,
         rateB: bRateB,
         rateA: bRateA,
-        disc: 0, // Set to 0 by default instead of schemeResult.finalDiscountPercent
+        rateC: bRateC,
+        disc: 0,
         qty: batchQty,
         schemeDiscountPercent: bSchemeDiscountPercent,
         freeQty: schemeResult.freeQty,
-        schemeApply: schemeResult.schemeApply,
+        schemeApply: billingMode === "B2B" ? schemeResult.schemeApply : false,
+        schemeDiscountAmount: billingMode === "B2B" && schemeResult.schemeApply ? (bRate * batchQty * schemeResult.finalDiscountPercent) / 100 : 0,
         workspaceProduct: product,
       };
     });
@@ -692,6 +711,16 @@ export const WorkspaceProductBatchSelectorModal = ({
                 </h3>
                 <span className="inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-bold bg-primary-soft text-primary border border-primary/20 shrink-0">
                   <MapPin className="size-3.5" /> {branchName}
+                </span>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-bold border shrink-0",
+                    billingMode === "B2B"
+                      ? "bg-purple-500/10 text-purple-700 dark:text-purple-300 border-purple-500/30"
+                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                  )}
+                >
+                  {billingMode === "B2B" ? "B2B (Rate B)" : "B2C (Retail)"}
                 </span>
               </div>
               <p className="text-xs text-text-muted truncate mt-0.5 font-medium">
@@ -807,19 +836,20 @@ export const WorkspaceProductBatchSelectorModal = ({
 
                 const bNo = b.batchNo || b.batchNumber || b.batch || "STANDARD";
                 const bMrp = Number(b.mrp ?? product.mrp ?? 0);
+                const bRateB = Number(b.rateB ?? b.rateb ?? b.ptr ?? product.rateB ?? product.rateb ?? product.ptr ?? 0);
                 const bRate = Number(
                   billingMode === "B2C"
                     ? (b.rateC ?? b.rate ?? b.price ?? b.saleRate ?? product.rateC ?? product.price ?? bMrp)
-                    : (b.price ?? b.rate ?? b.rateC ?? product.price ?? bMrp)
+                    : (bRateB > 0 ? bRateB : (b.price ?? b.rate ?? b.rateC ?? product.price ?? bMrp))
                 );
                 const bStock = Number(b.stock ?? b.batchQty ?? b.qty ?? 0);
                 const bExp = b.expiry || b.expiryDate || b.expDate || "";
                 const bRack = b.rack || product.rack;
-                const bSchemeDiscount = b.schemeDiscountPercent || product.schemeDiscountPercent;
+                const bSchemeDiscount = Number(b.schemeDiscountPercent ?? product.schemeDiscountPercent ?? 0);
 
                 // --- Scheme Discount Calculation ---
                 const schemeResult = computeSchemeDiscount(
-                  allocated,
+                  allocated || 0,
                   safeNum(bSchemeDiscount),
                   bStock,
                   undefined // no override calculatedFreeQty
@@ -873,20 +903,21 @@ export const WorkspaceProductBatchSelectorModal = ({
                               </span>
                             )
                           }
-                          {
-                            billingMode === "B2B" && bSchemeDiscount ? (
-                              <span>
-                                Scheme: <strong className="text-text font-mono font-bold">{safeNum(bSchemeDiscount).toFixed(2)}%</strong>
-                              </span>
-                            ) : null
-                          }
-
-
-                          {billingMode === "B2B" && schemeResult.schemeApply && discountPercent > 0 && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-wider">
-                              sch dis: ₹{discountedRate.toFixed(2)}
+                          {billingMode === "B2B" && bSchemeDiscount > 0 ? (
+                            <span className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-purple-700 dark:text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                              Scheme: <strong className="font-bold">{safeNum(bSchemeDiscount).toFixed(2)}%</strong>
                             </span>
-                          )}
+                          ) : null}
+
+                          {billingMode === "B2B" && schemeResult.schemeApply && discountPercent > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full border border-emerald-500/30 uppercase tracking-wider">
+                              Sch Disc: ₹{discountedRate.toFixed(2)} (-{discountPercent}%)
+                            </span>
+                          ) : billingMode === "B2B" && bSchemeDiscount > 0 ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 dark:text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">
+                              Min qty for scheme
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -895,7 +926,9 @@ export const WorkspaceProductBatchSelectorModal = ({
                     <div className="flex items-center gap-4 shrink-0 text-right">
                       <div className="font-mono">
                         <div className="text-base font-extrabold text-primary">₹{bRate.toFixed(2)}</div>
-                        <div className="text-xs text-text-muted">MRP ₹{bMrp.toFixed(2)}</div>
+                        <div className="text-xs text-text-muted">
+                          {billingMode === "B2B" ? `Rate B · MRP ₹${bMrp.toFixed(2)}` : `MRP ₹${bMrp.toFixed(2)}`}
+                        </div>
                       </div>
 
                       <div

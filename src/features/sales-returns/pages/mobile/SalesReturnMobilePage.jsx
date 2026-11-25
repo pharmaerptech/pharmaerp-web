@@ -211,10 +211,15 @@ export const SalesReturnMobilePage = () => {
                 className="p-3 rounded-xl border border-border bg-surface shadow-xs active:bg-surface-alt/50 transition-colors"
               >
                 <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="font-mono font-bold text-xs text-rose-600 dark:text-rose-400">
                       {returnNo}
                     </span>
+                    {item.isInterCompany && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold uppercase">
+                        Inter-Co
+                      </span>
+                    )}
                     <span className="text-[10px] text-text-muted">· {formatDate(item.date)}</span>
                   </div>
                   <div className="font-mono font-extrabold text-sm text-rose-600 dark:text-rose-400">
@@ -223,7 +228,14 @@ export const SalesReturnMobilePage = () => {
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
-                  <div className="text-text-primary font-medium truncate max-w-[200px]">{cName}</div>
+                  <div className="text-text-primary font-medium truncate max-w-[200px]">
+                    {cName}
+                    {item.isInterCompany && (
+                      <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-normal ml-1">
+                        (Inter-Co)
+                      </span>
+                    )}
+                  </div>
                   <div>
                     {isAdv ? (
                       <span className="text-[10px] text-blue-600 font-semibold">Advance</span>

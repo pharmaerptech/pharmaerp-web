@@ -560,7 +560,18 @@ export const SalesReturnDesktopPage = () => {
 
                       {/* Return Memo Number */}
                       <UITableCell className="py-2.5 px-3 font-mono font-bold text-xs text-rose-600 dark:text-rose-400">
-                        {returnNo}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{returnNo}</span>
+                          {item.isInterCompany && (
+                            <UIBadge
+                              variant="soft"
+                              color="indigo"
+                              className="text-[9.5px] px-1.5 py-0 font-bold uppercase tracking-wider"
+                            >
+                              Inter-Co
+                            </UIBadge>
+                          )}
+                        </div>
                       </UITableCell>
 
                       {/* Branch Badge (Only Company Level) */}
@@ -582,8 +593,15 @@ export const SalesReturnDesktopPage = () => {
 
                       {/* Customer Name & Phone */}
                       <UITableCell className="py-2.5 px-3">
-                        <div className="font-semibold text-xs text-text truncate max-w-[200px]">
-                          {cName}
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-xs text-text truncate max-w-[180px]">
+                            {cName}
+                          </span>
+                          {item.isInterCompany && (
+                            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+                              (Inter-Company)
+                            </span>
+                          )}
                         </div>
                         {cPhone && (
                           <div className="text-[10.5px] text-text-muted font-mono truncate">
