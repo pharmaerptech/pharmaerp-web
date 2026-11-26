@@ -458,6 +458,7 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
         returnType: refundMode === "Credit" ? "credit_note" : "cash_refund",
         paymentMethod: refundMode === "Credit" ? "Credit Note" : "Cash",
         refundMethod: refundMode === "Credit" ? "Credit Note" : "Cash",
+        returnMotive: "general",
         notes: notes || `Returned from bill #${originalInvoice?.invoiceNo}`,
         items: activeReturnItems.map((i) => {
           const rawPid = i.productId?._id || i.productId || i._id || i.id;
@@ -475,6 +476,7 @@ export const CreateSalesReturnModal = ({ open, isOpen, onClose, onSuccess }) => 
             qty: i.returnQty,
             gst: i.tax,
             total: i.price * i.returnQty,
+            motive: i.motive || "general",
           };
         }),
         denominations: Object.entries(cashDenominations)

@@ -66,12 +66,25 @@ const formatTime = (val) => {
   });
 };
 
-const getStatusBadge = (status) => {
+const getStatusBadge = (status, isApproved = false) => {
+  if (status === "APPROVED" || (isApproved && status === "ACTIVE")) {
+    return (
+      <UIBadge variant="soft" color="success" className="font-semibold text-xs flex items-center gap-1">
+        <CheckCircle2 className="size-3" /> Approved
+      </UIBadge>
+    );
+  }
   switch (status) {
     case "ACTIVE":
       return (
         <UIBadge variant="soft" color="success" className="font-semibold text-xs flex items-center gap-1">
           <CheckCircle2 className="size-3" /> Active
+        </UIBadge>
+      );
+    case "APPROVED":
+      return (
+        <UIBadge variant="soft" color="success" className="font-semibold text-xs flex items-center gap-1">
+          <CheckCircle2 className="size-3" /> Approved
         </UIBadge>
       );
     case "PARTIALLY_REDEEMED":
@@ -213,7 +226,10 @@ export const CreditNoteDetailsDialog = ({
   const balanceAmount = Number(item.balanceAmount || 0);
   const isFullyRedeemed = status === "FULLY_REDEEMED";
   const isCancelled = status === "CANCELLED";
-  const canCancel = (status === "ACTIVE" || status === "PARTIALLY_REDEEMED") && redeemedAmount === 0 && !isCancelled;
+  const canCancel =
+    (status === "ACTIVE" || status === "APPROVED" || status === "PARTIALLY_REDEEMED") &&
+    redeemedAmount === 0 &&
+    !isCancelled;
 
   const isSupplier = item.partyType === "SUPPLIER" || Boolean(item.supplierId) || item.source === "PURCHASE_RETURN";
   const customer = item.customerId;
@@ -257,7 +273,12 @@ export const CreditNoteDetailsDialog = ({
                 <h2 className="text-xl font-bold tracking-tight font-mono text-text">
                   {noteNo}
                 </h2>
-                {getStatusBadge(status)}
+                {getStatusBadge(status, item.isApproved)}
+                {item.isApproved && status !== "APPROVED" && (
+                  <UIBadge variant="soft" color="success" className="font-semibold text-xs flex items-center gap-1">
+                    <ShieldCheck className="size-3" /> Approved
+                  </UIBadge>
+                )}
                 {item.billingMode && (
                   <UIBadge variant="soft" color="neutral" className="font-semibold text-xs">
                     {item.billingMode}
@@ -332,6 +353,33 @@ export const CreditNoteDetailsDialog = ({
               {item.cancelledAt && (
                 <p className="text-[10.5px] opacity-75">
                   Cancelled on {formatDate(item.cancelledAt)} at {formatTime(item.cancelledAt)}
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Approved Authorization Banner ────────────────────────────── */}
+        {item.isApproved && (
+          <div className="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 text-xs text-emerald-800 dark:text-emerald-200 flex items-start gap-3">
+            <ShieldCheck className="size-4.5 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold">Credit Note Approved & Verified</span>
+                {item.approvedAt && (
+                  <span className="text-[11px] opacity-80 font-normal">
+                    • {formatDate(item.approvedAt)} at {formatTime(item.approvedAt)}
+                  </span>
+                )}
+              </div>
+              {item.approvedByName && (
+                <p className="text-[11px] opacity-90">
+                  Approved by: <span className="font-semibold">{item.approvedByName}</span>
+                </p>
+              )}
+              {item.approvalNote && (
+                <p className="text-[11.5px] mt-1 pt-1 border-t border-emerald-500/20 italic">
+                  &ldquo;{item.approvalNote}&rdquo;
                 </p>
               )}
             </div>
@@ -479,6 +527,16 @@ export const CreditNoteDetailsDialog = ({
             </div>
           </div>
         </div>
+
+        {/* ── Notes / Remarks (If Any) ─────────────────────────── */}
+        {item.notes && !item.approvalNote && (
+          <div className="p-3.5 rounded-xl border border-border bg-surface-alt/30 text-xs space-y-1">
+            <span className="font-bold text-text-muted uppercase tracking-wider text-[11px] block">
+              Notes & Remarks
+            </span>
+            <p className="text-text whitespace-pre-line text-[11.5px]">{item.notes}</p>
+          </div>
+        )}
 
         {/* ── 6. Returned Items Table (If Any) ─────────────────────────── */}
         {items.length > 0 && (

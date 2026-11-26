@@ -282,8 +282,9 @@ export const CreateSalesReturnDesktopPage = () => {
       const newCart = [...prevCart];
 
       for (const item of itemsToAdd) {
-        // Unique line key by invoiceId + productId + batch
-        const lineKey = `${item.invoiceId}-${item.productId}-${item.batch}`;
+        // Unique line key by invoiceId + productId + batch + motive
+        const itemMotive = item.motive || "general";
+        const lineKey = `${item.invoiceId}-${item.productId}-${item.batch}-${itemMotive}`;
         const existingIdx = newCart.findIndex((i) => i.lineKey === lineKey);
 
         if (existingIdx >= 0) {
@@ -346,7 +347,7 @@ export const CreateSalesReturnDesktopPage = () => {
     const prodId = typeof rawPid === "string" && rawPid.includes("-") ? rawPid.split("-")[0] : rawPid;
     const name = item.name || item.productName || "Medicine";
     const batch = item.batch || item.batchNo || "STANDARD";
-    const lineKey = `${invoice._id}-${prodId}-${batch}`;
+    const lineKey = `${invoice._id}-${prodId}-${batch}-general`;
 
     setCart((prev) => {
       const existingIdx = prev.findIndex((i) => i.lineKey === lineKey);
@@ -399,7 +400,11 @@ export const CreateSalesReturnDesktopPage = () => {
 
   const handleCartMotiveChange = (lineKey, motive) => {
     setCart((prev) =>
-      prev.map((item) => (item.lineKey === lineKey ? { ...item, motive } : item))
+      prev.map((item) => {
+        if (item.lineKey !== lineKey) return item;
+        const newLineKey = `${item.originalInvoiceId}-${item.productId}-${item.batch}-${motive}`;
+        return { ...item, motive, lineKey: newLineKey };
+      })
     );
   };
 
@@ -533,11 +538,12 @@ export const CreateSalesReturnDesktopPage = () => {
         paymentMethod: refundMode,
         refundMethod: refundMode,
         notes: notes || `Sales return memo for ${selectedCustomer?.name || "Customer"}`,
-        returnMotive: cart.some((i) => i.motive === "expired" || i.motive === "broken")
-          ? cart.some((i) => i.motive === "general")
+        returnMotive: (() => {
+          const distinctMotives = new Set(cart.map((i) => i.motive || "general"));
+          return distinctMotives.size > 1
             ? "mixed"
-            : cart.find((i) => i.motive === "expired" || i.motive === "broken")?.motive || "expired"
-          : "general",
+            : (distinctMotives.values().next().value || "general");
+        })(),
         items: cart.map((i) => ({
           originalInvoiceId: i.originalInvoiceId,
           originalInvoiceNo: i.originalInvoiceNo,

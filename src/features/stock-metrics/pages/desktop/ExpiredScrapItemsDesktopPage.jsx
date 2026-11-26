@@ -49,6 +49,7 @@ import {
   UITableLoading,
   UIConfirmDialog,
   UIInfiniteScroll,
+  UITooltip,
 } from "@/components/ui";
 import { IncomingItemBadge, GroupByDropdown, groupInventoryItems } from "@/components/common";
 import { cn } from "@/lib/utils";
@@ -361,9 +362,17 @@ export const ExpiredScrapItemsDesktopPage = () => {
       category,
       branchName: rowBranchName,
       isIncoming: Boolean(b.isIncoming),
-      sourceBranchId: b.sourceBranchId || null,
-      sourceBranchName: b.sourceBranchName || "",
-      sourceBranchCode: b.sourceBranchCode || "",
+      sourceBranchId: b.sourceBranchId?._id || b.sourceBranchId || null,
+      sourceBranchName:
+        b.sourceBranchName ||
+        b.sourceBranchId?.name ||
+        branches.find((br) => (br._id || br.id) === (b.sourceBranchId?._id || b.sourceBranchId))?.name ||
+        "",
+      sourceBranchCode:
+        b.sourceBranchCode ||
+        b.sourceBranchId?.branchCode ||
+        b.sourceBranchId?.code ||
+        "",
       sourceTransferOrderNo: b.sourceTransferOrderNo || "",
       sourceTransferOrderId: b.sourceTransferOrderId || null,
     };
@@ -372,7 +381,13 @@ export const ExpiredScrapItemsDesktopPage = () => {
   // Fetch expired and scrap items with server-side pagination
   const fetchExpiredItems = useCallback(
     async (pageToFetch = 1, isReset = true) => {
-      if (isReset) {
+      const safePage =
+        typeof pageToFetch === "number" && !isNaN(pageToFetch) && pageToFetch > 0
+          ? pageToFetch
+          : 1;
+      const safeReset = typeof isReset === "boolean" ? isReset : true;
+
+      if (safeReset) {
         setIsLoading(true);
       } else {
         setIsLoadingMore(true);
@@ -380,7 +395,7 @@ export const ExpiredScrapItemsDesktopPage = () => {
 
       try {
         const payload = {
-          page: pageToFetch,
+          page: safePage,
           limit: PAGE_LIMIT,
           companyId: activeCompanyId,
           search: debouncedSearch || undefined,
@@ -452,6 +467,24 @@ export const ExpiredScrapItemsDesktopPage = () => {
     const nextPage = currentPage + 1;
     await fetchExpiredItems(nextPage, false);
   }, [isLoading, isLoadingMore, hasMore, currentPage, fetchExpiredItems]);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Dedicated refresh handler for the refresh button
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    setSelectedIds([]);
+    try {
+      await fetchExpiredItems(1, true);
+      setToastMessage("Scrap register refreshed successfully.");
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch {
+      setToastMessage("Failed to refresh scrap register.");
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchExpiredItems]);
 
   // Filtered Items (Search, Motive Tab & Expiry Date Range)
   const filteredItems = useMemo(() => {
@@ -613,16 +646,18 @@ export const ExpiredScrapItemsDesktopPage = () => {
 
   // Overall statistics for KPI cards
   const overallStats = useMemo(() => {
-    let shelfExpiredCount = tabCounts.shelfExpired;
+    let shelfExpiredCount = 0;
     let shelfExpiredQty = 0;
-    let scrapBinCount = tabCounts.all;
+    let scrapBinCount = 0;
     let scrapBinQty = 0;
     let totalLossValue = 0;
 
     items.forEach((i) => {
       if (i.category === "shelf_expired") {
+        shelfExpiredCount += 1;
         shelfExpiredQty += i.shelfStock;
       } else {
+        scrapBinCount += 1;
         scrapBinQty += i.affectedQty;
       }
       totalLossValue += i.lossValue;
@@ -636,7 +671,7 @@ export const ExpiredScrapItemsDesktopPage = () => {
       scrapBinQty,
       totalLossValue,
     };
-  }, [items, tabCounts, totalCount]);
+  }, [items, totalCount]);
 
   // Active filter count and reset
   const hasActiveFilters = Boolean(
@@ -1123,27 +1158,10 @@ export const ExpiredScrapItemsDesktopPage = () => {
   };
 
   const MOTIVE_TABS = [
-    { id: "all", label: "All Expired & Scrap", count: tabCounts.all },
-    {
-      id: "fresh_return",
-      label: "Fresh Returns",
-      count: tabCounts.freshReturn,
-    },
-    {
-      id: "shelf_expired",
-      label: "Shelf Expired",
-      count: tabCounts.shelfExpired,
-    },
-    {
-      id: "scrap_expired",
-      label: "Scrap Bin: Expired",
-      count: tabCounts.scrapExpired,
-    },
-    {
-      id: "broken",
-      label: "Scrap Bin: Broken",
-      count: tabCounts.broken,
-    },
+    { id: "all", label: "All Expired & Scrap" },
+    { id: "shelf_expired", label: "Shelf Expired" },
+    { id: "scrap_expired", label: "Scrap Bin: Expired" },
+    { id: "broken", label: "Scrap Bin: Broken" },
   ];
 
   return (
@@ -1400,13 +1418,16 @@ export const ExpiredScrapItemsDesktopPage = () => {
             <UIButton
               variant="ghost"
               size="sm"
-              onClick={fetchExpiredItems}
-              disabled={isLoading}
+              onClick={handleRefresh}
+              disabled={isLoading || isRefreshing}
               className="h-10 w-10 p-0 text-text-muted hover:text-text rounded-lg border border-border/60"
               title="Refresh register"
             >
               <RefreshCw
-                className={cn("size-3.5", isLoading && "animate-spin text-primary")}
+                className={cn(
+                  "size-3.5",
+                  (isLoading || isRefreshing) && "animate-spin text-primary"
+                )}
               />
             </UIButton>
           </div>
@@ -1430,16 +1451,6 @@ export const ExpiredScrapItemsDesktopPage = () => {
                   )}
                 >
                   <span>{tab.label}</span>
-                  <span
-                    className={cn(
-                      "px-1.5 py-0.2 rounded-full text-[10px] font-bold font-mono transition-colors",
-                      isSelected
-                        ? "bg-rose-600 text-white"
-                        : "bg-surface-alt/80 text-text-muted"
-                    )}
-                  >
-                    {tab.count}
-                  </span>
                 </button>
               );
             })}
@@ -1717,17 +1728,40 @@ export const ExpiredScrapItemsDesktopPage = () => {
                           {row.pack}
                         </UITableCell>
 
-                        {/* Batch No with Incoming 📦 Badge */}
-                        <UITableCell className="font-mono text-xs text-text font-medium">
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Batch No with Incoming 📦 icon after */}
+                        <UITableCell className="font-mono text-xs text-text font-medium whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5 whitespace-nowrap">
                             <span>{row.batchNo}</span>
                             {row.isIncoming && (
-                              <IncomingItemBadge
-                                isIncoming={row.isIncoming}
-                                sourceBranchName={row.sourceBranchName}
-                                sourceTransferOrderNo={row.sourceTransferOrderNo}
-                                compact
-                              />
+                              <UITooltip
+                                content={
+                                  <div className="text-xs space-y-0.5">
+                                    <div className="font-semibold text-amber-300 flex items-center gap-1">
+                                      <span>📦</span>
+                                      <span>Incoming Inter-Branch Stock</span>
+                                    </div>
+                                    {row.sourceBranchName && (
+                                      <div className="text-gray-200">
+                                        Source: <span className="font-medium">{row.sourceBranchName}</span>
+                                      </div>
+                                    )}
+                                    {row.sourceTransferOrderNo && (
+                                      <div className="text-gray-400 text-[11px]">
+                                        Ref: #{row.sourceTransferOrderNo}
+                                      </div>
+                                    )}
+                                  </div>
+                                }
+                                position="top"
+                              >
+                                <span
+                                  role="img"
+                                  aria-label="Incoming Box"
+                                  className="text-xs shrink-0 cursor-help select-none"
+                                >
+                                  📦
+                                </span>
+                              </UITooltip>
                             )}
                           </div>
                         </UITableCell>

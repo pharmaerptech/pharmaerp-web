@@ -81,6 +81,7 @@ const formatTime = (val) => {
 
 const STATUS_SELECT_OPTIONS = [
   { label: "All Statuses", value: "all" },
+  { label: "Approved", value: "APPROVED" },
   { label: "Active", value: "ACTIVE" },
   { label: "Partially Used", value: "PARTIALLY_REDEEMED" },
   { label: "Fully Redeemed", value: "FULLY_REDEEMED" },
@@ -396,12 +397,25 @@ export const CreditNotesDesktopPage = () => {
   };
 
   // Status Badge Helper
-  const renderStatusBadge = (status) => {
+  const renderStatusBadge = (status, isApproved = false) => {
+    if (status === "APPROVED" || (isApproved && status === "ACTIVE")) {
+      return (
+        <UIBadge variant="soft" color="success" className="font-semibold text-[11px] px-2 py-0.5 inline-flex items-center gap-1">
+          <CheckCircle2 className="size-3" /> Approved
+        </UIBadge>
+      );
+    }
     switch (status) {
       case "ACTIVE":
         return (
           <UIBadge variant="soft" color="success" className="font-semibold text-[11px] px-2 py-0.5">
             Active
+          </UIBadge>
+        );
+      case "APPROVED":
+        return (
+          <UIBadge variant="soft" color="success" className="font-semibold text-[11px] px-2 py-0.5 inline-flex items-center gap-1">
+            <CheckCircle2 className="size-3" /> Approved
           </UIBadge>
         );
       case "PARTIALLY_REDEEMED":
@@ -791,7 +805,7 @@ export const CreditNotesDesktopPage = () => {
 
                       {/* 7. Status */}
                       <UITableCell align="center" className="whitespace-nowrap">
-                        {renderStatusBadge(cnItem.status)}
+                        {renderStatusBadge(cnItem.status, cnItem.isApproved)}
                       </UITableCell>
                     </UITableRow>
                   );

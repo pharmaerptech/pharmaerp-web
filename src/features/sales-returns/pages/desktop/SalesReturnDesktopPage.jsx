@@ -12,6 +12,8 @@ import {
   Banknote,
   Wallet,
   Receipt,
+  Truck,
+  CheckCircle2,
   RotateCcw as RotateIcon,
 } from "lucide-react";
 import {
@@ -497,11 +499,9 @@ export const SalesReturnDesktopPage = () => {
                 {isCompanyLevel && (
                   <UITableHead sticky className="min-w-[130px]">Branch</UITableHead>
                 )}
-                <UITableHead sticky className="min-w-[140px]">Original Invoice</UITableHead>
+                <UITableHead sticky className="min-w-[140px]">Debit Note No</UITableHead>
                 <UITableHead sticky className="min-w-[180px]">Customer</UITableHead>
                 <UITableHead sticky align="center" className="min-w-[130px]">Refund Mode</UITableHead>
-                <UITableHead sticky align="right" className="min-w-[100px]">Taxable</UITableHead>
-                <UITableHead sticky align="right" className="min-w-[90px]">GST Adj.</UITableHead>
                 <UITableHead sticky align="right" className="min-w-[110px]">Total Refund</UITableHead>
                 <UITableHead sticky align="center" className="min-w-[80px]">Actions</UITableHead>
               </UITableRow>
@@ -509,10 +509,10 @@ export const SalesReturnDesktopPage = () => {
 
             <UITableBody>
               {isLoading ? (
-                <UITableLoading colSpan={isCompanyLevel ? 10 : 9} rows={8} />
+                <UITableLoading colSpan={isCompanyLevel ? 8 : 7} rows={8} />
               ) : returns.length === 0 ? (
                 <UITableEmpty
-                  colSpan={isCompanyLevel ? 10 : 9}
+                  colSpan={isCompanyLevel ? 8 : 7}
                   title="No sales return records found"
                   description="When items are returned, credit memos and refund transactions appear here."
                 />
@@ -529,6 +529,12 @@ export const SalesReturnDesktopPage = () => {
                     if (itOrig) origBill = itOrig.originalInvoiceNo;
                   }
                   origBill = origBill || "—";
+                  const debitNo =
+                    item.debitNoteNo ||
+                    item.debitNo ||
+                    (item.isInterCompany ? item.returnNo : null) ||
+                    origBill ||
+                    "—";
                   const cName =
                     item.customerId?.name ||
                     item.customerName ||
@@ -539,8 +545,6 @@ export const SalesReturnDesktopPage = () => {
                   const isAdv = rType.includes("advance");
                   const isCred = rType.includes("credit");
                   const gTotal = Math.abs(Number(item.grandTotal || item.returnAmount || 0));
-                  const tax = Math.abs(Number(item.tax || 0));
-                  const sub = Math.abs(Number(item.subtotal || gTotal - tax));
 
                   return (
                     <UITableRow
@@ -566,9 +570,21 @@ export const SalesReturnDesktopPage = () => {
                             <UIBadge
                               variant="soft"
                               color="indigo"
-                              className="text-[9.5px] px-1.5 py-0 font-bold uppercase tracking-wider"
+                              className="px-1.5 py-0.5 inline-flex items-center justify-center"
+                              title="Inter-Company Consignment"
                             >
-                              Inter-Co
+                              <Truck className="size-3" />
+                            </UIBadge>
+                          )}
+                          {item.isInterCompany && item.isApproved && (
+                            <UIBadge
+                              variant="soft"
+                              color="success"
+                              className="px-1.5 py-0.5 inline-flex items-center gap-1 text-[9.5px] font-bold"
+                              title={item.approvalNote ? `Approved: ${item.approvalNote}` : "Approved"}
+                            >
+                              <CheckCircle2 className="size-2.5 text-emerald-600 dark:text-emerald-400" />
+                              Approved
                             </UIBadge>
                           )}
                         </div>
@@ -586,23 +602,16 @@ export const SalesReturnDesktopPage = () => {
                         </UITableCell>
                       )}
 
-                      {/* Original Invoice Reference */}
+                      {/* Debit Note Reference (Printed on Box Label) */}
                       <UITableCell className="py-2.5 px-3 font-mono text-xs text-text-muted">
-                        {origBill}
+                        {debitNo}
                       </UITableCell>
 
                       {/* Customer Name & Phone */}
                       <UITableCell className="py-2.5 px-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-semibold text-xs text-text truncate max-w-[180px]">
-                            {cName}
-                          </span>
-                          {item.isInterCompany && (
-                            <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
-                              (Inter-Company)
-                            </span>
-                          )}
-                        </div>
+                        <span className="font-semibold text-xs text-text truncate max-w-[180px] block">
+                          {cName}
+                        </span>
                         {cPhone && (
                           <div className="text-[10.5px] text-text-muted font-mono truncate">
                             {cPhone}
@@ -625,16 +634,6 @@ export const SalesReturnDesktopPage = () => {
                             Cash Refund
                           </UIBadge>
                         )}
-                      </UITableCell>
-
-                      {/* Taxable */}
-                      <UITableCell align="right" className="py-2.5 px-3 font-mono text-xs text-text-muted">
-                        {formatCurrency(sub)}
-                      </UITableCell>
-
-                      {/* GST */}
-                      <UITableCell align="right" className="py-2.5 px-3 font-mono text-xs text-text-muted">
-                        {formatCurrency(tax)}
                       </UITableCell>
 
                       {/* Grand Total */}
@@ -705,6 +704,7 @@ export const SalesReturnDesktopPage = () => {
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         returnItem={selectedReturn}
+        onUpdated={fetchReturns}
       />
 
       {/* Printable Receipt Modal */}

@@ -351,9 +351,17 @@ export const ExpiredScrapItemsMobilePage = () => {
       category,
       branchName: rowBranchName,
       isIncoming: Boolean(b.isIncoming),
-      sourceBranchId: b.sourceBranchId || null,
-      sourceBranchName: b.sourceBranchName || "",
-      sourceBranchCode: b.sourceBranchCode || "",
+      sourceBranchId: b.sourceBranchId?._id || b.sourceBranchId || null,
+      sourceBranchName:
+        b.sourceBranchName ||
+        b.sourceBranchId?.name ||
+        branches.find((br) => (br._id || br.id) === (b.sourceBranchId?._id || b.sourceBranchId))?.name ||
+        "",
+      sourceBranchCode:
+        b.sourceBranchCode ||
+        b.sourceBranchId?.branchCode ||
+        b.sourceBranchId?.code ||
+        "",
       sourceTransferOrderNo: b.sourceTransferOrderNo || "",
       sourceTransferOrderId: b.sourceTransferOrderId || null,
     };
@@ -362,7 +370,13 @@ export const ExpiredScrapItemsMobilePage = () => {
   // Fetch expired and scrap items with server-side pagination
   const fetchExpiredItems = useCallback(
     async (pageToFetch = 1, isReset = true) => {
-      if (isReset) {
+      const safePage =
+        typeof pageToFetch === "number" && !isNaN(pageToFetch) && pageToFetch > 0
+          ? pageToFetch
+          : 1;
+      const safeReset = typeof isReset === "boolean" ? isReset : true;
+
+      if (safeReset) {
         setIsLoading(true);
       } else {
         setIsLoadingMore(true);
@@ -370,7 +384,7 @@ export const ExpiredScrapItemsMobilePage = () => {
 
       try {
         const payload = {
-          page: pageToFetch,
+          page: safePage,
           limit: PAGE_LIMIT,
           companyId: activeCompanyId,
           search: debouncedSearch || undefined,
@@ -441,6 +455,24 @@ export const ExpiredScrapItemsMobilePage = () => {
     const nextPage = currentPage + 1;
     await fetchExpiredItems(nextPage, false);
   }, [isLoading, isLoadingMore, hasMore, currentPage, fetchExpiredItems]);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Dedicated refresh handler for the refresh button
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    setSelectedIds([]);
+    try {
+      await fetchExpiredItems(1, true);
+      setToastMessage("Scrap register refreshed successfully.");
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch {
+      setToastMessage("Failed to refresh scrap register.");
+      setTimeout(() => setToastMessage(null), 3000);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [fetchExpiredItems]);
 
   // Filtered list (Search, Motive Tab & Expiry Date Range)
   const filteredItems = useMemo(() => {
@@ -944,27 +976,18 @@ export const ExpiredScrapItemsMobilePage = () => {
     {
       id: "all",
       label: "All Scrap Items",
-      count: tabCounts.all,
-    },
-    {
-      id: "fresh_return",
-      label: "Fresh Returns",
-      count: tabCounts.freshReturn,
     },
     {
       id: "shelf_expired",
       label: "Shelf Expired",
-      count: tabCounts.shelfExpired,
     },
     {
       id: "scrap_expired",
       label: "Scrap Returns",
-      count: tabCounts.scrapExpired,
     },
     {
       id: "broken",
       label: "Broken",
-      count: tabCounts.broken,
     },
   ];
 
@@ -1035,12 +1058,17 @@ export const ExpiredScrapItemsMobilePage = () => {
           <UIButton
             variant="ghost"
             size="sm"
-            onClick={fetchExpiredItems}
-            disabled={isLoading}
+            onClick={handleRefresh}
+            disabled={isLoading || isRefreshing}
             className="size-9 p-0 text-text-muted border border-border rounded-lg"
             title="Refresh"
           >
-            <RefreshCw className={cn("size-4", isLoading && "animate-spin text-primary")} />
+            <RefreshCw
+              className={cn(
+                "size-4",
+                (isLoading || isRefreshing) && "animate-spin text-primary"
+              )}
+            />
           </UIButton>
         </div>
       </div>
@@ -1182,7 +1210,6 @@ export const ExpiredScrapItemsMobilePage = () => {
                 )}
               >
                 <span>{tab.label}</span>
-                <span className="text-[10px] font-mono font-bold">({tab.count})</span>
               </button>
             );
           })}
@@ -1274,12 +1301,14 @@ export const ExpiredScrapItemsMobilePage = () => {
                       <span className="text-text-muted">Batch:</span>
                       <strong className="text-text">{item.batchNo}</strong>
                       {item.isIncoming && (
-                        <IncomingItemBadge
-                          isIncoming={item.isIncoming}
-                          sourceBranchName={item.sourceBranchName}
-                          sourceTransferOrderNo={item.sourceTransferOrderNo}
-                          compact
-                        />
+                        <span
+                          role="img"
+                          aria-label="Incoming Box"
+                          className="text-xs shrink-0 select-none"
+                          title={item.sourceBranchName ? `Incoming From: ${item.sourceBranchName}` : "Incoming Stock"}
+                        >
+                          📦
+                        </span>
                       )}
                     </div>
 

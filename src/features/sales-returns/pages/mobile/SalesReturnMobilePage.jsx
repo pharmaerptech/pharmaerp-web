@@ -10,6 +10,8 @@ import {
   Wallet,
   Receipt,
   Banknote,
+  Truck,
+  CheckCircle2,
   X,
 } from "lucide-react";
 import { UIButton, UIBadge } from "@/components/ui";
@@ -194,6 +196,12 @@ export const SalesReturnMobilePage = () => {
               if (itOrig) origBill = itOrig.originalInvoiceNo;
             }
             origBill = origBill || "—";
+            const debitNo =
+              item.debitNoteNo ||
+              item.debitNo ||
+              (item.isInterCompany ? item.returnNo : null) ||
+              origBill ||
+              "—";
             const cName =
               item.customerId?.name || item.customerName || item.customer?.name || "Walk-in";
             const gTotal = Math.abs(Number(item.grandTotal || item.returnAmount || 0));
@@ -216,8 +224,20 @@ export const SalesReturnMobilePage = () => {
                       {returnNo}
                     </span>
                     {item.isInterCompany && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-bold uppercase">
-                        Inter-Co
+                      <span
+                        className="inline-flex items-center justify-center p-0.5 px-1 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20"
+                        title="Inter-Company Consignment"
+                      >
+                        <Truck className="size-3" />
+                      </span>
+                    )}
+                    {item.isInterCompany && item.isApproved && (
+                      <span
+                        className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[9px] font-bold"
+                        title={item.approvalNote ? `Approved: ${item.approvalNote}` : "Approved"}
+                      >
+                        <CheckCircle2 className="size-2.5" />
+                        Approved
                       </span>
                     )}
                     <span className="text-[10px] text-text-muted">· {formatDate(item.date)}</span>
@@ -230,11 +250,6 @@ export const SalesReturnMobilePage = () => {
                 <div className="flex items-center justify-between text-xs">
                   <div className="text-text-primary font-medium truncate max-w-[200px]">
                     {cName}
-                    {item.isInterCompany && (
-                      <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-normal ml-1">
-                        (Inter-Co)
-                      </span>
-                    )}
                   </div>
                   <div>
                     {isAdv ? (
@@ -248,7 +263,7 @@ export const SalesReturnMobilePage = () => {
                 </div>
 
                 <div className="mt-1 text-[11px] text-text-muted font-mono flex items-center justify-between">
-                  <span>Against Bill: <span className="text-primary font-semibold">{origBill}</span></span>
+                  <span>Debit Note: <span className="text-primary font-semibold">{debitNo}</span></span>
                   {isCompanyLevel && item.branchId && (
                     <BranchBadge branch={item.branchId} />
                   )}
@@ -264,6 +279,7 @@ export const SalesReturnMobilePage = () => {
         open={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         returnItem={selectedReturn}
+        onUpdated={fetchReturns}
       />
 
       {/* Print Modal */}

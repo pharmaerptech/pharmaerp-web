@@ -43,12 +43,25 @@ const formatDate = (val) => {
   });
 };
 
-const getStatusBadge = (status) => {
+const getStatusBadge = (status, isApproved = false) => {
+  if (status === "APPROVED" || (isApproved && status === "ACTIVE")) {
+    return (
+      <UIBadge variant="soft" color="success" className="font-semibold text-[10.5px] px-2 py-0.5 inline-flex items-center gap-1">
+        <CheckCircle2 className="size-3" /> Approved
+      </UIBadge>
+    );
+  }
   switch (status) {
     case "ACTIVE":
       return (
         <UIBadge variant="soft" color="success" className="font-semibold text-[10.5px] px-2 py-0.5">
           Active
+        </UIBadge>
+      );
+    case "APPROVED":
+      return (
+        <UIBadge variant="soft" color="success" className="font-semibold text-[10.5px] px-2 py-0.5 inline-flex items-center gap-1">
+          <CheckCircle2 className="size-3" /> Approved
         </UIBadge>
       );
     case "PARTIALLY_REDEEMED":
@@ -248,6 +261,7 @@ export const CreditNotesMobilePage = () => {
       <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs no-scrollbar">
         {[
           { id: "all", label: "All" },
+          { id: "APPROVED", label: "Approved" },
           { id: "ACTIVE", label: "Active" },
           { id: "PARTIALLY_REDEEMED", label: "Partial" },
           { id: "FULLY_REDEEMED", label: "Redeemed" },
@@ -314,7 +328,7 @@ export const CreditNotesMobilePage = () => {
                       </span>
                     )}
                   </div>
-                  {getStatusBadge(cnItem.status)}
+                  {getStatusBadge(cnItem.status, cnItem.isApproved)}
                 </div>
 
                 <div className="flex items-center justify-between text-xs">
